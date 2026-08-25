@@ -12,7 +12,7 @@ const providers: Record<string, MarketDataProvider> = {
 
 // Default provider for this slice, per Task 7's spike result. Swap via
 // MARKET_DATA_PROVIDER=EODHD in .env.local — no code change needed to fall back.
-function activeProvider(): MarketDataProvider {
+export function activeProvider(): MarketDataProvider {
   const name = (process.env.MARKET_DATA_PROVIDER ?? "YAHOO").toUpperCase();
   const provider = providers[name];
   if (!provider) {

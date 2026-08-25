@@ -33,4 +33,22 @@ export const yahooProvider: MarketDataProvider = {
       adjustedClose: latest.adjclose ?? latest.close!,
     };
   },
+  async fetchHistoricalEod(ticker: string, _assetClass, from: string, to: string): Promise<EodPricePoint[]> {
+    const symbol = ticker.toUpperCase();
+    const result = await yahooFinance.chart(symbol, { period1: from, period2: to, interval: "1d" });
+    // Only result.quotes (the close-price series) is read here. Yahoo's chart
+    // response can also carry result.events.splits / .dividends — those are
+    // never touched by this path: raw vendor split/dividend data must not
+    // write directly to transactions, cost basis, or corporate_actions.
+    // Splits enter the ledger only through the reviewed corporate-action
+    // entry path; this loader only ever observes their effect on price via
+    // the TDD §3.1 split-corruption guard.
+    return result.quotes
+      .filter((q) => q.close != null)
+      .map((q) => ({
+        date: new Date(q.date).toISOString().slice(0, 10),
+        close: q.close!,
+        adjustedClose: q.adjclose ?? q.close!,
+      }));
+  },
 };

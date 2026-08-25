@@ -40,4 +40,28 @@ export const eodhdProvider: MarketDataProvider = {
     }
     return { date: rows[0].date, close: rows[0].close, adjustedClose: rows[0].adjusted_close };
   },
+  async fetchHistoricalEod(
+    ticker: string,
+    assetClass: AssetClass,
+    from: string,
+    to: string
+  ): Promise<EodPricePoint[]> {
+    const apiKey = process.env.EODHD_API_KEY;
+    if (!apiKey) {
+      throw new Error("EODHD_API_KEY is not set — check .env.local");
+    }
+    const symbol = toEodhdSymbol(ticker, assetClass);
+    const url = `https://eodhd.com/api/eod/${symbol}?api_token=${apiKey}&fmt=json&period=d&order=d&from=${from}&to=${to}`;
+    const res = await fetch(url);
+    if (res.status === 402 || res.status === 429) {
+      throw new EodhdQuotaExceededError(res.status);
+    }
+    if (!res.ok) {
+      throw new Error(`EODHD request failed: ${res.status}`);
+    }
+    // The plain /eod endpoint returns only close/adjusted_close — no split or
+    // dividend event payload to accidentally consume here.
+    const rows = (await res.json()) as { date: string; close: number; adjusted_close: number }[];
+    return rows.map((r) => ({ date: r.date, close: r.close, adjustedClose: r.adjusted_close }));
+  },
 };

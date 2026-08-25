@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -H 127.0.0.1",
     "test": "vitest run",
-    "migrate": "tsx scripts/migrate.ts"
+    "migrate": "tsx scripts/migrate.ts",
+    "record-split": "tsx scripts/record-corporate-action.ts"
   },
   "dependencies": {
     "decimal.js": "^10.4.3",
