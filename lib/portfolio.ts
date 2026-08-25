@@ -12,6 +12,7 @@ export interface PositionView {
   costBasisUsd: Decimal;
   latestPriceUsd: Decimal | null;
   priceDate: string | null;
+  priceSourceId: number | null;
   marketValueUsd: Decimal | null;
   unrealisedPlUsd: Decimal | null;
 }
@@ -31,14 +32,19 @@ export async function getPortfolioView(): Promise<PortfolioView> {
       pc.account_id, a.name AS account_name,
       pc.asset_id, ast.primary_symbol AS symbol, ast.name AS asset_name,
       pc.quantity, pc.avg_cost_usd, pc.cost_basis_usd,
-      lp.close AS latest_price, lp.price_date
+      lp.close AS latest_price, lp.price_date, lp.source_id AS price_source_id
     FROM positions_current pc
     JOIN accounts a ON a.id = pc.account_id
     JOIN assets ast ON ast.id = pc.asset_id
     LEFT JOIN LATERAL (
-      SELECT close, price_date FROM prices_daily
+      -- prices_daily's PK is (asset_id, price_date, source_id), so the same
+      -- asset/date can hold one row per provider. price_date DESC alone is
+      -- not a deterministic tiebreaker among same-date rows from different
+      -- sources — break ties with retrieved_at DESC (most recently fetched
+      -- wins) and surface source_id so callers can see provenance.
+      SELECT close, price_date, source_id FROM prices_daily
       WHERE asset_id = pc.asset_id
-      ORDER BY price_date DESC LIMIT 1
+      ORDER BY price_date DESC, retrieved_at DESC LIMIT 1
     ) lp ON true
     WHERE pc.quantity <> 0
     ORDER BY ast.primary_symbol
@@ -75,6 +81,7 @@ export async function getPortfolioView(): Promise<PortfolioView> {
       costBasisUsd,
       latestPriceUsd,
       priceDate,
+      priceSourceId: row.price_source_id ?? null,
       marketValueUsd,
       unrealisedPlUsd,
     };
