@@ -51,6 +51,18 @@ export async function getPortfolioView(): Promise<PortfolioView> {
     const latestPriceUsd = row.latest_price ? new Decimal(row.latest_price) : null;
     const marketValueUsd = latestPriceUsd ? quantity.mul(latestPriceUsd) : null;
     const unrealisedPlUsd = marketValueUsd ? marketValueUsd.sub(costBasisUsd) : null;
+    // node-postgres parses `date` columns into JS Date objects (not strings) by
+    // default, but this view's contract (and app/page.tsx, which renders this
+    // value directly as JSX text) is a plain ISO date string. pg constructs
+    // that Date from the date's own year/month/day as LOCAL time components
+    // (not UTC midnight), so we must read it back with the local getters —
+    // toISOString() converts to UTC first and would shift the date by one day
+    // on any machine whose local timezone is behind UTC.
+    const priceDate: string | null = row.price_date
+      ? row.price_date instanceof Date
+        ? `${row.price_date.getFullYear()}-${String(row.price_date.getMonth() + 1).padStart(2, "0")}-${String(row.price_date.getDate()).padStart(2, "0")}`
+        : String(row.price_date)
+      : null;
 
     return {
       accountId: row.account_id,
@@ -62,7 +74,7 @@ export async function getPortfolioView(): Promise<PortfolioView> {
       avgCostUsd,
       costBasisUsd,
       latestPriceUsd,
-      priceDate: row.price_date,
+      priceDate,
       marketValueUsd,
       unrealisedPlUsd,
     };
