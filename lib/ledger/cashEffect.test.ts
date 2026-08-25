@@ -46,4 +46,21 @@ describe("computeCashEffectUsd", () => {
       computeCashEffectUsd({ txnType: "BUY", feesUsd: new Decimal(0) })
     ).toThrow();
   });
+
+  it("computes ADJUSTMENT as the explicit signed grossAmountUsd (opening cash)", () => {
+    const result = computeCashEffectUsd({
+      txnType: "ADJUSTMENT",
+      feesUsd: new Decimal(0),
+      grossAmountUsd: new Decimal(50000),
+    });
+    expect(result.toFixed(2)).toBe("50000.00");
+  });
+
+  it("computes ADJUSTMENT as zero when no grossAmountUsd is given (opening position)", () => {
+    const result = computeCashEffectUsd({
+      txnType: "ADJUSTMENT",
+      feesUsd: new Decimal(0),
+    });
+    expect(result.toFixed(2)).toBe("0.00");
+  });
 });

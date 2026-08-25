@@ -53,12 +53,81 @@ describe("applyTransaction integration", () => {
     expect(new Decimal(posRow.rows[0].avg_cost_usd).toFixed(4)).toBe("110.1000");
   });
 
+  it("applies an opening-position ADJUSTMENT directly (quantity x trusted avg cost, zero cash effect, stored as ADJUSTMENT not BUY)", async () => {
+    const account = await createAccount("Cutover Brokerage", "Fidelity");
+    const asset = await resolveOrCreateAsset("ZZZTEST", "equity", "Smoke Test Corp");
+
+    const { transactionId } = await applyTransaction({
+      accountId: account.id, assetId: asset.id, txnType: "ADJUSTMENT",
+      tradeDate: "2026-01-01", quantity: new Decimal(100), priceUsd: new Decimal(42.5),
+      feesUsd: new Decimal(0), grossAmountUsd: new Decimal(0), note: "OPENING IMPORT: cutover",
+    });
+
+    const pool = getPool();
+    const txnRow = await pool.query(`SELECT txn_type, cash_effect_usd FROM transactions WHERE id = $1`, [
+      transactionId,
+    ]);
+    expect(txnRow.rows[0].txn_type).toBe("ADJUSTMENT");
+    expect(new Decimal(txnRow.rows[0].cash_effect_usd).toFixed(2)).toBe("0.00");
+
+    const posRow = await pool.query(
+      `SELECT quantity, cost_basis_usd, avg_cost_usd FROM positions_current WHERE account_id = $1 AND asset_id = $2`,
+      [account.id, asset.id]
+    );
+    expect(new Decimal(posRow.rows[0].quantity).toFixed(4)).toBe("100.0000");
+    expect(new Decimal(posRow.rows[0].cost_basis_usd).toFixed(2)).toBe("4250.00");
+    expect(new Decimal(posRow.rows[0].avg_cost_usd).toFixed(2)).toBe("42.50");
+
+    const cashRow = await pool.query(`SELECT cash_usd FROM account_cash WHERE account_id = $1`, [account.id]);
+    expect(new Decimal(cashRow.rows[0].cash_usd).toFixed(2)).toBe("0.00"); // opening position must not touch cash
+  });
+
+  it("applies an opening-cash ADJUSTMENT directly (cash changes, no position row created)", async () => {
+    const account = await createAccount("Cutover Brokerage", "Fidelity");
+
+    const { transactionId } = await applyTransaction({
+      accountId: account.id, assetId: null, txnType: "ADJUSTMENT",
+      tradeDate: "2026-01-01", quantity: null, priceUsd: null,
+      feesUsd: new Decimal(0), grossAmountUsd: new Decimal(50000), note: "OPENING IMPORT: cutover cash",
+    });
+
+    const pool = getPool();
+    const txnRow = await pool.query(`SELECT txn_type, cash_effect_usd FROM transactions WHERE id = $1`, [
+      transactionId,
+    ]);
+    expect(txnRow.rows[0].txn_type).toBe("ADJUSTMENT");
+    expect(new Decimal(txnRow.rows[0].cash_effect_usd).toFixed(2)).toBe("50000.00");
+
+    const cashRow = await pool.query(`SELECT cash_usd FROM account_cash WHERE account_id = $1`, [account.id]);
+    expect(new Decimal(cashRow.rows[0].cash_usd).toFixed(2)).toBe("50000.00");
+
+    const posRows = await pool.query(`SELECT 1 FROM positions_current WHERE account_id = $1`, [account.id]);
+    expect(posRows.rows).toHaveLength(0); // no asset touched, no position row
+  });
+
   it("rejects UPDATE and DELETE on transactions (append-only, AC-L5)", async () => {
     const account = await createAccount("Trigger Test", null);
     const { transactionId } = await applyTransaction({
       accountId: account.id, assetId: null, txnType: "DEPOSIT",
       tradeDate: "2026-01-01", quantity: null, priceUsd: null,
       feesUsd: new Decimal(0), grossAmountUsd: new Decimal(100), note: null,
+    });
+
+    const pool = getPool();
+    await expect(
+      pool.query(`UPDATE transactions SET note = 'x' WHERE id = $1`, [transactionId])
+    ).rejects.toThrow();
+    await expect(
+      pool.query(`DELETE FROM transactions WHERE id = $1`, [transactionId])
+    ).rejects.toThrow();
+  });
+
+  it("rejects UPDATE and DELETE on an ADJUSTMENT row too — append-only is type-agnostic", async () => {
+    const account = await createAccount("Trigger Test ADJUSTMENT", null);
+    const { transactionId } = await applyTransaction({
+      accountId: account.id, assetId: null, txnType: "ADJUSTMENT",
+      tradeDate: "2026-01-01", quantity: null, priceUsd: null,
+      feesUsd: new Decimal(0), grossAmountUsd: new Decimal(100), note: "OPENING IMPORT: trigger test",
     });
 
     const pool = getPool();

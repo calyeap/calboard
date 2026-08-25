@@ -1,4 +1,5 @@
 import { getPool } from "../db";
+import { isValidCalendarDate } from "../dateValidation";
 
 export interface RecordSplitInput {
   ticker: string;
@@ -12,15 +13,6 @@ export interface RecordSplitResult {
   assetId: string;
   actionType: "split" | "reverse_split";
   resolvedFlagIds: string[];
-}
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function isValidCalendarDate(dateStr: string): boolean {
-  if (!DATE_RE.test(dateStr)) return false;
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
 }
 
 // Phase B's smallest safe administrative path for confirming a genuine

@@ -5,6 +5,7 @@ import Decimal from "decimal.js";
 import { createAccount } from "@/lib/accounts";
 import { resolveOrCreateAsset, type AssetClass } from "@/lib/assets";
 import { applyTransaction } from "@/lib/ledger/applyTransaction";
+import { applyOpeningCashAdjustment, applyOpeningPositionAdjustment } from "@/lib/ledger/openingImport";
 import { upsertLatestPrice } from "@/lib/marketdata";
 
 export async function createAccountAction(formData: FormData) {
@@ -90,5 +91,53 @@ export async function createTransactionAction(formData: FormData) {
     }
   }
 
+  revalidatePath("/");
+}
+
+// Phase B spot-only cutover: one-time opening-import path. Deliberately
+// separate from createTransactionAction — these two cases (opening cash,
+// opening position) have their own validation (OPENING IMPORT: note
+// required, no existing non-zero position) enforced in
+// lib/ledger/openingImport.ts, not just here.
+
+export async function createOpeningCashAdjustmentAction(formData: FormData) {
+  const accountId = Number(formData.get("accountId"));
+  if (!Number.isInteger(accountId) || accountId <= 0) {
+    throw new Error("A valid account must be selected");
+  }
+  const tradeDate = String(formData.get("tradeDate"));
+  // allowZero, not allowNegative: the UI only supports the ordinary opening-
+  // balance case. lib/ledger/openingImport.ts itself accepts any signed
+  // Decimal for a CLI/future entry point that needs a negative opening cash.
+  const cashEffectUsd = parseDecimalField(formData, "cashEffectUsd", { required: true, allowZero: true });
+  const note = String(formData.get("note") ?? "").trim();
+
+  await applyOpeningCashAdjustment({ accountId, tradeDate, cashEffectUsd, note });
+  revalidatePath("/");
+}
+
+export async function createOpeningPositionAdjustmentAction(formData: FormData) {
+  const accountId = Number(formData.get("accountId"));
+  if (!Number.isInteger(accountId) || accountId <= 0) {
+    throw new Error("A valid account must be selected");
+  }
+  const tickerRaw = formData.get("ticker");
+  const ticker = tickerRaw ? String(tickerRaw).toUpperCase().trim() : "";
+  if (!ticker) throw new Error("Ticker is required");
+  const assetClass = String(formData.get("assetClass")) as AssetClass;
+  const tradeDate = String(formData.get("tradeDate"));
+  const quantity = parseDecimalField(formData, "quantity", { required: true, allowZero: false });
+  const avgCostUsd = parseDecimalField(formData, "avgCostUsd", { required: true, allowZero: false });
+  const note = String(formData.get("note") ?? "").trim();
+
+  const asset = await resolveOrCreateAsset(ticker, assetClass, ticker);
+  await applyOpeningPositionAdjustment({
+    accountId,
+    assetId: asset.id,
+    tradeDate,
+    quantity,
+    avgCostUsd,
+    note,
+  });
   revalidatePath("/");
 }

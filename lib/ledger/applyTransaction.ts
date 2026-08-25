@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 import { getPool } from "../db";
 import { computeCashEffectUsd, SupportedTxnType } from "./cashEffect";
-import { EMPTY_POSITION, applyBuy, applySell, avgCostUsd, PositionState } from "./positions";
+import { EMPTY_POSITION, applyBuy, applySell, applyAdjustment, avgCostUsd, PositionState } from "./positions";
 
 export interface NewTransactionInput {
   accountId: number;
@@ -29,6 +29,11 @@ export async function applyTransaction(input: NewTransactionInput): Promise<{ tr
   try {
     await client.query("BEGIN");
 
+    // For DEPOSIT/WITHDRAWAL/BUY/SELL this column is always a non-negative
+    // magnitude. For an opening-cash ADJUSTMENT it instead carries
+    // grossAmountUsd verbatim — the caller's signed cash effect — since
+    // that's the only value available; do not assume gross_amount_usd >= 0
+    // when reading ADJUSTMENT rows.
     const grossAmount =
       input.quantity && input.priceUsd
         ? input.quantity.mul(input.priceUsd)
@@ -69,7 +74,7 @@ export async function applyTransaction(input: NewTransactionInput): Promise<{ tr
     );
 
     // Recompute positions_current for this (account, asset) if this txn touches a position.
-    if (input.assetId && (input.txnType === "BUY" || input.txnType === "SELL")) {
+    if (input.assetId && (input.txnType === "BUY" || input.txnType === "SELL" || input.txnType === "ADJUSTMENT")) {
       const priorRow = await client.query<{
         quantity: string; cost_basis_usd: string; realised_pl_usd: string; first_acquired: string | null;
       }>(
@@ -87,10 +92,17 @@ export async function applyTransaction(input: NewTransactionInput): Promise<{ tr
         : EMPTY_POSITION;
       const firstAcquired = hasPrior ? priorRow.rows[0].first_acquired : input.tradeDate;
 
+      // priceUsd carries the trade price for BUY/SELL, but for ADJUSTMENT it
+      // carries the trusted opening average cost per unit — applyAdjustment
+      // sets the position directly rather than accumulating it as a trade,
+      // so an opening-position import is never recorded as though it were
+      // a purchase at a market price.
       const next =
         input.txnType === "BUY"
           ? applyBuy(prior, input.quantity!, input.priceUsd!, input.feesUsd)
-          : applySell(prior, input.quantity!, input.priceUsd!, input.feesUsd);
+          : input.txnType === "SELL"
+            ? applySell(prior, input.quantity!, input.priceUsd!, input.feesUsd)
+            : applyAdjustment(prior, input.quantity!, input.priceUsd!);
 
       const avg = avgCostUsd(next);
 

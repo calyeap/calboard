@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export type SupportedTxnType = "DEPOSIT" | "WITHDRAWAL" | "BUY" | "SELL";
+export type SupportedTxnType = "DEPOSIT" | "WITHDRAWAL" | "BUY" | "SELL" | "ADJUSTMENT";
 
 export interface CashEffectInput {
   txnType: SupportedTxnType;
@@ -37,6 +37,14 @@ export function computeCashEffectUsd(input: CashEffectInput): Decimal {
         throw new Error("WITHDRAWAL requires grossAmountUsd");
       }
       return grossAmountUsd.neg();
+    }
+    case "ADJUSTMENT": {
+      // Unlike DEPOSIT/WITHDRAWAL, grossAmountUsd here is already the signed
+      // cash effect (not an unsigned amount the type implies a sign for) —
+      // an opening-cash adjustment passes it explicitly; an opening-position
+      // adjustment omits it, defaulting to zero (opening a position must not
+      // consume cash).
+      return grossAmountUsd ?? new Decimal(0);
     }
   }
 }

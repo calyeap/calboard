@@ -8,7 +8,8 @@
     "start": "next start -H 127.0.0.1",
     "test": "vitest run",
     "migrate": "tsx scripts/migrate.ts",
-    "record-split": "tsx scripts/record-corporate-action.ts"
+    "record-split": "tsx scripts/record-corporate-action.ts",
+    "record-reconciliation": "tsx scripts/record-reconciliation.ts"
   },
   "dependencies": {
     "decimal.js": "^10.4.3",

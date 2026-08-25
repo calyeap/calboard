@@ -48,6 +48,23 @@ export function applySell(
   };
 }
 
+// Directly sets quantity and cost basis from a trusted opening quantity and
+// average cost per unit — distinct from applyBuy so an opening-position
+// import is never recorded as though a purchase occurred at a market price;
+// it declares a known existing position instead. Realised P&L is carried
+// through unchanged (an adjustment corrects the position, not its history).
+export function applyAdjustment(
+  prior: PositionState,
+  quantity: Decimal,
+  openingAvgCostUsd: Decimal
+): PositionState {
+  return {
+    quantity,
+    costBasisUsd: quantity.mul(openingAvgCostUsd),
+    realisedPlUsd: prior.realisedPlUsd,
+  };
+}
+
 export function avgCostUsd(state: PositionState): Decimal | null {
   if (state.quantity.eq(0)) return null;
   return state.costBasisUsd.div(state.quantity);

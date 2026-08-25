@@ -1,6 +1,11 @@
 import { listAccounts } from "@/lib/accounts";
 import { getPortfolioView } from "@/lib/portfolio";
-import { createAccountAction, createTransactionAction } from "./actions";
+import {
+  createAccountAction,
+  createTransactionAction,
+  createOpeningCashAdjustmentAction,
+  createOpeningPositionAdjustmentAction,
+} from "./actions";
 
 export default async function DashboardPage() {
   const accounts = await listAccounts();
@@ -86,6 +91,47 @@ export default async function DashboardPage() {
           <input name="feesUsd" placeholder="Fees USD" defaultValue="0" />
           <input name="note" placeholder="Note (optional)" />
           <button type="submit">Add transaction</button>
+        </form>
+      </section>
+
+      <section>
+        <h2>Phase B opening import (one-time cutover only)</h2>
+        <p>
+          For declaring a known opening cash balance or a known existing position at cutover —
+          not for ongoing trades. Both require a note starting with <code>OPENING IMPORT:</code>.
+        </p>
+
+        <h3>Opening cash</h3>
+        <form action={createOpeningCashAdjustmentAction}>
+          <select name="accountId" required>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+          <input name="tradeDate" type="date" required />
+          <input name="cashEffectUsd" placeholder="Opening cash balance (USD)" required />
+          <input name="note" placeholder="OPENING IMPORT: ..." defaultValue="OPENING IMPORT: " required />
+          <button type="submit">Set opening cash</button>
+        </form>
+
+        <h3>Opening position</h3>
+        <form action={createOpeningPositionAdjustmentAction}>
+          <select name="accountId" required>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+          <input name="tradeDate" type="date" required />
+          <input name="ticker" placeholder="Ticker" required />
+          <select name="assetClass">
+            <option value="equity">Equity</option>
+            <option value="etf">ETF</option>
+            <option value="crypto">Crypto</option>
+          </select>
+          <input name="quantity" placeholder="Quantity" required />
+          <input name="avgCostUsd" placeholder="Trusted average cost per unit (USD)" required />
+          <input name="note" placeholder="OPENING IMPORT: ..." defaultValue="OPENING IMPORT: " required />
+          <button type="submit">Set opening position</button>
         </form>
       </section>
     </main>
