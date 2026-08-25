@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: calboard
+      POSTGRES_PASSWORD: calboard_dev_local_only
+      POSTGRES_DB: calboard
+    ports:
+      - "5432:5432"
+    volumes:
+      - calboard_pgdata:/var/lib/postgresql/data
+
+volumes:
+  calboard_pgdata:
