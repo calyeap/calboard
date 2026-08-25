@@ -1,0 +1,9 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Dependencies / build output (placeholder for M1 scaffolding)
+node_modules/
+.next/
+dist/
