@@ -5,7 +5,7 @@ import { EMPTY_POSITION, applyBuy, applySell, avgCostUsd, PositionState } from "
 
 export interface NewTransactionInput {
   accountId: number;
-  assetId: number | null;
+  assetId: string | null; // BIGINT — node-postgres returns int8 as string, never Number
   txnType: SupportedTxnType;
   tradeDate: string; // ISO date, e.g. "2026-01-15"
   quantity: Decimal | null;
@@ -15,7 +15,7 @@ export interface NewTransactionInput {
   note: string | null;
 }
 
-export async function applyTransaction(input: NewTransactionInput): Promise<{ transactionId: number }> {
+export async function applyTransaction(input: NewTransactionInput): Promise<{ transactionId: string }> {
   const cashEffectUsd = computeCashEffectUsd({
     txnType: input.txnType,
     quantity: input.quantity,
@@ -34,7 +34,7 @@ export async function applyTransaction(input: NewTransactionInput): Promise<{ tr
         ? input.quantity.mul(input.priceUsd)
         : input.grossAmountUsd;
 
-    const txnResult = await client.query<{ id: number }>(
+    const txnResult = await client.query<{ id: string }>(
       `INSERT INTO transactions
          (account_id, asset_id, txn_type, trade_date, quantity, price_usd,
           gross_amount_usd, fees_usd, cash_effect_usd, note)

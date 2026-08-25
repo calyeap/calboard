@@ -3,7 +3,7 @@ import { getPool } from "./db";
 export type AssetClass = "equity" | "etf" | "crypto";
 
 export interface Asset {
-  id: number;
+  id: string; // BIGINT — node-postgres returns int8 as string, never Number
   assetClass: AssetClass;
   primarySymbol: string;
   name: string;
@@ -20,7 +20,7 @@ export async function resolveOrCreateAsset(
   const symbol = ticker.toUpperCase();
 
   const existing = await pool.query<{
-    id: number; asset_class: AssetClass; primary_symbol: string; name: string;
+    id: string; asset_class: AssetClass; primary_symbol: string; name: string;
   }>(
     `SELECT id, asset_class, primary_symbol, name FROM assets WHERE primary_symbol = $1`,
     [symbol]
@@ -33,7 +33,7 @@ export async function resolveOrCreateAsset(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const inserted = await client.query<{ id: number }>(
+    const inserted = await client.query<{ id: string }>(
       `INSERT INTO assets (asset_class, primary_symbol, name) VALUES ($1, $2, $3) RETURNING id`,
       [assetClass, symbol, name]
     );

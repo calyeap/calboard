@@ -31,7 +31,7 @@ export function isPriceCacheFresh(retrievedAt: Date, now: Date = new Date()): bo
 }
 
 export async function upsertLatestPrice(
-  assetId: number,
+  assetId: string, // BIGINT — node-postgres returns int8 as string, never Number
   ticker: string,
   assetClass: AssetClass
 ): Promise<{ fromCache: boolean; provider: string }> {
@@ -51,7 +51,9 @@ export async function upsertLatestPrice(
   // Reuse a recent stored price instead of calling the provider again — this
   // is the free-tier protection: fetch only assets actually being
   // transacted, and only once per freshness window, regardless of provider.
-  const cached = await pool.query<{ retrieved_at: string }>(
+  // retrieved_at is TIMESTAMPTZ (OID 1184) — node-postgres parses this to a
+  // JS Date object by default (we don't override that parser), not a string.
+  const cached = await pool.query<{ retrieved_at: Date }>(
     `SELECT retrieved_at FROM prices_daily
      WHERE asset_id = $1 AND source_id = $2
      ORDER BY price_date DESC LIMIT 1`,
@@ -70,8 +72,13 @@ export async function upsertLatestPrice(
     [
       assetId,
       point.date,
-      new Decimal(point.close).toFixed(10),
-      new Decimal(point.adjustedClose).toFixed(10),
+      // Providers serve these as native JS `number` (float32/float64-derived
+      // JSON), so raw values carry precision noise past a handful of decimal
+      // places (e.g. a real close of 487.31 can arrive as 487.3099975586).
+      // Round to a sane price scale at the ingest boundary before persisting
+      // to NUMERIC(28,10) — 6dp is generous for any real equity/ETF/crypto price.
+      new Decimal(point.close).toDecimalPlaces(6).toFixed(10),
+      new Decimal(point.adjustedClose).toDecimalPlaces(6).toFixed(10),
       sourceId,
     ]
   );
