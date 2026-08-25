@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: calboard_dev_local_only
       POSTGRES_DB: calboard
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - calboard_pgdata:/var/lib/postgresql/data
 
