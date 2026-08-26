@@ -18,3 +18,5 @@ if (!/_test$/.test(dbName)) {
   );
 }
 process.env.DATABASE_URL = url;
+
+import "@testing-library/jest-dom/vitest";
