@@ -46,7 +46,7 @@ Carried directly from this session's explicit instructions and the spec's §10 "
 - `lib/accounts.ts` — *modify*: `createAccount` gains an optional injected `client`.
 - `lib/ledger/applyTransaction.ts` — *modify*: `applyTransaction` gains an optional injected `client`.
 - `lib/ledger/openingImport.ts` — *modify*: both functions gain an optional injected `client`.
-- `lib/ledger/setupAccount.ts` — *new*: atomic account-setup orchestrator (spec §3.2).
+- `lib/ledger/setupAccount.ts` — *new*: atomic account-setup orchestrator (spec §3.2), plus the `SetupCommitUncertainError` error class for a genuinely ambiguous COMMIT outcome (this session's final-review correction).
 - `lib/ledger/verifySetup.ts` — *new*: read-back verification (spec §3.3).
 - `lib/portfolio.ts` — *modify*: price-status classification + total-exclusion disclosure (spec §8).
 - `lib/holdings.ts` — *new*: `getAccountHoldings` for the Sell picker (spec §6). (Reconcile-page reuse deferred — Tasks 19–20.)
@@ -70,7 +70,7 @@ Carried directly from this session's explicit instructions and the spec's §10 "
 
 ## Task order at a glance (visual-inspection-first)
 
-1. Component-testing infra · 2. `isFutureDate`/`localTodayIso`/`normalizePgDate` · 3. Dashboard shell (empty) · 4. Accounts shell (empty) · 5. Transactions shell (empty) · 6. injected-`client` param · 7. `setupAccount` + rollback test · 8. `verifySetup` (+ account-row/opening-date checks) · 9. `resolveTickerAction`/`checkAccountNameAction` · **10. Wizard Step 1 (visible)** · 11. cost-basis/duplicate-ticker pure fns · **12. Wizard Step 2 + opening-cash validation (visible)** · **13. Wizard Step 3 + cost-basis-mode lock (visible)** · 14. `setupAccountAction` (3-way outcome) · **15. Wizard Step 4 + save + verify + render-safety (visible, wizard fully functional)** · 16. price-status classification · **17. Dashboard price-health upgrade (visible)** · 18. `getAccountHoldings` (Sell picker) · 19–20. *deferred — Reconcile link/page not built this pass* · 21. duplicate-transaction check · 22. cash-preview pure fn · 23. cash-map/history reads · 24. `submitTransactionAction` · **25. Transactions full form + cash refresh after success (visible)** · 26. cleanup + full regression.
+1. Component-testing infra · 2. `isFutureDate`/`localTodayIso`/`normalizePgDate` · 3. Dashboard shell (empty, dynamic) · 4. Accounts shell (empty, dynamic) · 5. Transactions shell (empty, dynamic) · 6. injected-`client` param · 7. `setupAccount` + rollback test + uncertain-commit/rollback-masking hardening · 8. `verifySetup` (+ account-row/opening-date checks) · 9. `resolveTickerAction`/`checkAccountNameAction` · **10. Wizard Step 1 (visible)** · 11. cost-basis/duplicate-ticker pure fns · **12. Wizard Step 2 + opening-cash validation (visible)** · **13. Wizard Step 3 + cost-basis-mode lock + ticker-staleness guard (visible)** · 14. `setupAccountAction` (4-way outcome, pre-verify revalidation, quantity-precision normalization) · **15. Wizard Step 4 + save + verify + render-safety + rejection/uncertain-outcome handling (visible, wizard fully functional)** · 16. price-status classification · **17. Dashboard price-health upgrade (visible)** · 18. `getAccountHoldings` (Sell picker) · 19–20. *deferred — Reconcile link/page not built this pass* · 21. duplicate-transaction check · 22. cash-preview pure fn · 23. cash-map/history reads · 24. `submitTransactionAction` (strictly-positive price) · **25. Transactions full form + cash refresh, ticker-staleness guard, rejection handling, holdings race guard (visible)** · 26. cleanup + full regression.
 
 ---
 
@@ -348,6 +348,15 @@ import { NavBar, buttonLinkStyle } from "./components/NavBar";
 import { listAccounts } from "@/lib/accounts";
 import { getPortfolioView } from "@/lib/portfolio";
 
+// Always render dynamically — this page reads live DB state (accounts,
+// portfolio positions) on every request and must never be frozen as a
+// static build-time snapshot. Per this session's final-review correction,
+// this is stated explicitly rather than relied on implicitly, so the
+// revalidatePath("/") calls in app/actions/setup.ts (Task 14) and
+// app/actions/prices.ts (Task 17) always have a per-request render to
+// invalidate.
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const accounts = await listAccounts();
   const portfolio = accounts.length > 0 ? await getPortfolioView() : null;
@@ -450,6 +459,9 @@ import Link from "next/link";
 import { NavBar, buttonLinkStyle } from "../components/NavBar";
 import { listAccounts } from "@/lib/accounts";
 
+// Always render dynamically — see app/page.tsx (Task 3) for why.
+export const dynamic = "force-dynamic";
+
 export default async function AccountsPage() {
   const accounts = await listAccounts();
 
@@ -510,6 +522,10 @@ git commit -m "feat: Accounts page empty-state shell"
 import Link from "next/link";
 import { NavBar, buttonLinkStyle } from "../components/NavBar";
 import { listAccounts } from "@/lib/accounts";
+
+// Always render dynamically — see app/page.tsx (Task 3) for why. Carried
+// forward when Task 25 replaces this file's contents in full.
+export const dynamic = "force-dynamic";
 
 export default async function TransactionsPage() {
   const accounts = await listAccounts();
@@ -930,18 +946,22 @@ git commit -m "feat: optional injected client param on createAccount/applyTransa
 
 **Interfaces:**
 - Consumes: `createAccount`, `applyOpeningCashAdjustment`, `applyOpeningPositionAdjustment` (Task 6).
-- Produces: `SetupHoldingInput { assetId: string; quantity: Decimal; avgCostUsd: Decimal }`, `SetupAccountInput { name, custodian, portfolioAsOfDate, openingCashUsd: Decimal, holdings: SetupHoldingInput[] }`, `SetupAccountResult { accountId: number; openingCashTransactionId: string | null; holdingTransactionIds: string[] }`, `setupAccount(input): Promise<SetupAccountResult>`. Consumed by Task 8's `verifySetup` test and Task 14's `setupAccountAction`.
+- Produces: `SetupHoldingInput { assetId: string; quantity: Decimal; avgCostUsd: Decimal }`, `SetupAccountInput { name, custodian, portfolioAsOfDate, openingCashUsd: Decimal, holdings: SetupHoldingInput[] }`, `SetupAccountResult { accountId: number; openingCashTransactionId: string | null; holdingTransactionIds: string[] }`, `setupAccount(input): Promise<SetupAccountResult>`, `SetupCommitUncertainError` (thrown instead of a normal error when the COMMIT itself fails in a way that leaves the write outcome ambiguous). Consumed by Task 8's `verifySetup` test and Task 14's `setupAccountAction` (which maps `SetupCommitUncertainError` to a distinct `status: "save_unknown"`, never `"save_failed"`).
+
+Per this session's final-review correction, `setupAccount` also hardens two failure paths beyond the happy-path/pre-COMMIT-failure cases already covered by the rollback test below:
+- **A failing ROLLBACK must never mask the original error.** If `client.query("BEGIN")` or any statement before `COMMIT` throws, that error is what actually explains why nothing was saved — a `ROLLBACK` is still attempted (to release locks / abort the aborted transaction cleanly), but if `ROLLBACK` itself also throws, that secondary failure is attached as diagnostic detail rather than replacing the original thrown error.
+- **A failure of `COMMIT` itself is fundamentally different from every earlier failure.** Every failure before `COMMIT` is issued means Postgres never received a commit instruction — `ROLLBACK` is safe and the account definitely wasn't saved. But if the `COMMIT` command itself throws (e.g. the connection drops between sending it and receiving Postgres's acknowledgement), Postgres's actual server-side outcome is unknown — it may have applied the commit before the failure. Issuing a `ROLLBACK` in that state is meaningless (there may be nothing left to roll back) and could itself throw without telling us anything new, so none is attempted; instead this case throws the distinct `SetupCommitUncertainError`, which Task 14 maps to its own honest `"save_unknown"` outcome rather than a false "nothing was saved" claim. Per this session's explicit instruction: this outcome must **never** be inferred by checking whether an account of the given name now exists — duplicate account names are intentionally allowed, so a name match proves nothing about whether *this* attempt is the one that succeeded.
 
 - [ ] **Step 1: Write the failing test**
 
 Create `lib/ledger/setupAccount.test.ts`:
 
 ```ts
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import Decimal from "decimal.js";
 import { getPool } from "../db";
 import { resolveOrCreateAsset } from "../assets";
-import { setupAccount } from "./setupAccount";
+import { setupAccount, SetupCommitUncertainError } from "./setupAccount";
 
 beforeEach(async () => {
   const pool = getPool();
@@ -1037,6 +1057,74 @@ describe("setupAccount", () => {
     const posRow = await pool.query(`SELECT id FROM positions_current`);
     expect(posRow.rows).toHaveLength(0);
   });
+
+  it("throws SetupCommitUncertainError — never a normal rollback — when COMMIT itself fails, and never attempts ROLLBACK on that ambiguous outcome", async () => {
+    const pool = getPool();
+    const realClient = await pool.connect();
+    const originalQuery = realClient.query.bind(realClient);
+    const querySpy = vi.spyOn(realClient, "query").mockImplementation(((text: unknown, ...rest: unknown[]) => {
+      if (typeof text === "string" && text.trim() === "COMMIT") {
+        return Promise.reject(new Error("simulated: connection dropped during COMMIT"));
+      }
+      return (originalQuery as (...a: unknown[]) => unknown)(text, ...rest);
+    }) as typeof realClient.query);
+    const connectSpy = vi.spyOn(pool, "connect").mockResolvedValueOnce(realClient);
+
+    await expect(
+      setupAccount({
+        name: "Commit Uncertain Test",
+        custodian: null,
+        portfolioAsOfDate: "2026-01-01",
+        openingCashUsd: new Decimal(100),
+        holdings: [],
+      })
+    ).rejects.toBeInstanceOf(SetupCommitUncertainError);
+
+    expect(querySpy.mock.calls.some(([q]) => typeof q === "string" && q.trim() === "ROLLBACK")).toBe(false);
+
+    querySpy.mockRestore();
+    connectSpy.mockRestore();
+    realClient.release();
+  });
+
+  it("propagates the ORIGINAL error even when the ROLLBACK issued in response to it also fails", async () => {
+    const pool = getPool();
+    const dupAsset = await resolveOrCreateAsset("RBM", "equity", "Rollback Masking Corp");
+    const realClient = await pool.connect();
+    const originalQuery = realClient.query.bind(realClient);
+    let sawRollbackAttempt = false;
+    const querySpy = vi.spyOn(realClient, "query").mockImplementation(((text: unknown, ...rest: unknown[]) => {
+      if (typeof text === "string" && text.trim() === "ROLLBACK") {
+        sawRollbackAttempt = true;
+        return Promise.reject(new Error("simulated: ROLLBACK itself failed (e.g. connection already dropped)"));
+      }
+      return (originalQuery as (...a: unknown[]) => unknown)(text, ...rest);
+    }) as typeof realClient.query);
+    const connectSpy = vi.spyOn(pool, "connect").mockResolvedValueOnce(realClient);
+
+    await expect(
+      setupAccount({
+        name: "Rollback Masking Test",
+        custodian: null,
+        portfolioAsOfDate: "2026-01-01",
+        openingCashUsd: new Decimal(100),
+        // A duplicate asset across two holdings makes the 2nd
+        // applyOpeningPositionAdjustment reject with the ORIGINAL error
+        // this test asserts on — a genuine, pre-COMMIT failure that must
+        // still trigger a ROLLBACK attempt (which this test then makes fail).
+        holdings: [
+          { assetId: dupAsset.id, quantity: new Decimal(1), avgCostUsd: new Decimal(1) },
+          { assetId: dupAsset.id, quantity: new Decimal(1), avgCostUsd: new Decimal(1) },
+        ],
+      })
+    ).rejects.toThrow(/already has a non-zero position/);
+
+    expect(sawRollbackAttempt).toBe(true);
+
+    querySpy.mockRestore();
+    connectSpy.mockRestore();
+    realClient.release();
+  });
 });
 ```
 
@@ -1080,6 +1168,24 @@ export interface SetupAccountResult {
 // that implementation vocabulary anywhere in the wizard's own UI copy.
 const SETUP_NOTE = "OPENING IMPORT: initial account setup";
 
+// Thrown only when the COMMIT command itself failed in a way that leaves
+// the write outcome genuinely ambiguous (e.g. the connection dropped
+// between sending COMMIT and receiving Postgres's acknowledgement).
+// Postgres may have applied the commit before the failure — a ROLLBACK in
+// this state would be meaningless (there may be nothing left to roll back)
+// and could itself throw without telling us anything new, so none is
+// attempted. Callers (Task 14's setupAccountAction) must treat this as a
+// distinct, honest "unknown" outcome — never as "nothing was saved," and
+// never inferred by checking whether an account of this name now exists
+// (duplicate account names are intentionally allowed, so a name match
+// proves nothing about whether this particular attempt succeeded).
+export class SetupCommitUncertainError extends Error {
+  constructor(message: string, public readonly cause: unknown) {
+    super(message);
+    this.name = "SetupCommitUncertainError";
+  }
+}
+
 // Spec §3.2: the single moment real setup data is written, and it is
 // genuinely atomic — one client, one BEGIN/COMMIT/ROLLBACK around
 // createAccount + (optional) opening cash + every opening-position holding.
@@ -1121,10 +1227,30 @@ export async function setupAccount(input: SetupAccountInput): Promise<SetupAccou
       holdingTransactionIds.push(result.transactionId);
     }
 
-    await client.query("COMMIT");
+    try {
+      await client.query("COMMIT");
+    } catch (commitErr) {
+      throw new SetupCommitUncertainError(
+        "The setup commit could not be confirmed — the account may or may not have been saved.",
+        commitErr
+      );
+    }
     return { accountId: account.id, openingCashTransactionId, holdingTransactionIds };
   } catch (err) {
-    await client.query("ROLLBACK");
+    if (err instanceof SetupCommitUncertainError) {
+      // No ROLLBACK attempt — the outcome is already ambiguous, and issuing
+      // one here could itself throw without telling us anything new.
+      throw err;
+    }
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackErr) {
+      // A failing ROLLBACK must never mask the ORIGINAL error — attach the
+      // rollback failure as diagnostic detail without replacing what's thrown.
+      if (err instanceof Error) {
+        (err as Error & { rollbackError?: unknown }).rollbackError = rollbackErr;
+      }
+    }
     throw err;
   } finally {
     client.release();
@@ -1135,16 +1261,16 @@ export async function setupAccount(input: SetupAccountInput): Promise<SetupAccou
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run lib/ledger/setupAccount.test.ts`
-Expected: PASS, 4 tests.
+Expected: PASS, 6 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add lib/ledger/setupAccount.ts lib/ledger/setupAccount.test.ts
-git commit -m "feat: atomic account-setup orchestration (spec 3.2)"
+git commit -m "feat: atomic account-setup orchestration, with a distinct uncertain-commit outcome and rollback-masking protection (spec 3.2)"
 ```
 
-**Functional acceptance check:** `npx vitest run lib/ledger/setupAccount.test.ts` PASS, 4/4 — including the explicit atomic-rollback test required by this session's instructions.
+**Functional acceptance check:** `npx vitest run lib/ledger/setupAccount.test.ts` PASS, 6/6 — including the explicit atomic-rollback test required by this session's instructions, plus this session's final-review tests for `SetupCommitUncertainError` (no ROLLBACK attempted on an ambiguous COMMIT failure) and rollback-masking protection (the original error survives a ROLLBACK that itself fails).
 **UX acceptance check:** none — not wired to any UI yet (Task 15).
 
 ---
@@ -1160,6 +1286,8 @@ git commit -m "feat: atomic account-setup orchestration (spec 3.2)"
 - Produces: `VerifyHolding { assetId: string; quantity: Decimal; avgCostUsd: Decimal }`, `VerifySetupInput { accountId: number; expectedName: string; expectedCustodian: string | null; expectedPortfolioAsOfDate: string; expectedCashUsd: Decimal; expectedHoldings: VerifyHolding[] }`, `VerifySetupResult { matches: boolean; mismatches: string[] }`, `verifySetup(input): Promise<VerifySetupResult>`. Consumed by Task 14's `setupAccountAction`.
 
 Per this session's correction: the approved design's read-back check must also confirm the account row itself was written correctly, not only cash and positions — and, where practical, that the "portfolio as of" date was actually persisted. This task now additionally re-reads the `accounts` row (name/custodian) and the `trade_date` on every opening-import transaction this setup wrote.
+
+**Precision contract (this session's final-review correction, enforced by the caller — Task 14):** `positions_current.quantity` is `NUMERIC(28,10)`, so anything `applyTransaction` writes is silently rounded to 10 decimal places on the way in. `verifySetup` compares `expectedHoldings[].quantity` against that stored, already-rounded value with an exact `Decimal.eq()` — it does no rounding of its own. If a caller ever passed an un-rounded `expectedHoldings[].quantity` (e.g. a value entered with more than 10 decimal places) while the same un-rounded value was what actually got written and rounded by `applyTransaction`, the two would diverge and this function would report a mismatch that looks like a system bug rather than an expected, disclosable rounding of entered precision. Task 14 avoids this entirely by normalizing every holding's quantity to `.toDecimalPlaces(10)` **once**, before it is used for both the write and this function's `expectedHoldings` — so `verifySetup` itself needs no quantity-rounding logic of its own.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1459,7 +1587,7 @@ git commit -m "feat: automatic saved-data read-back verification, now including 
 - Test: `app/actions/setup.test.ts`
 
 **Interfaces:**
-- Consumes: `resolveOrCreateAsset` (`lib/assets.ts`), `upsertLatestPrice` (`lib/marketdata`).
+- Consumes: `resolveOrCreateAsset` (`lib/assets.ts`), `upsertLatestPrice` (`lib/marketdata`), `normalizePgDate` (Task 2).
 - Produces: `TickerResolutionResult`, `resolveTickerAction(ticker, assetClass)`, `checkAccountNameAction(name)`. Consumed by Task 13's wizard Step 3, Task 10's wizard Step 1, and Task 25's `TransactionForm.tsx` (`resolveTickerAction` is reused for Buy, per spec §6).
 
 Per this session's instruction to keep every backend behaviour under real automated test, this Server Action file gets a Vitest integration test against the real local Postgres (node environment) — the same treatment as `lib/`. No live network call is made: the test pre-seeds a fresh `prices_daily` row so `upsertLatestPrice`'s existing freshness-cache check short-circuits before reaching the provider, matching this repo's existing convention (`lib/marketdata/index.test.ts` only ever tests the pure cache-freshness helper).
@@ -1545,6 +1673,7 @@ import Decimal from "decimal.js";
 import { getPool } from "@/lib/db";
 import { resolveOrCreateAsset, type AssetClass } from "@/lib/assets";
 import { upsertLatestPrice } from "@/lib/marketdata";
+import { normalizePgDate } from "@/lib/dateValidation";
 
 export type TickerResolutionResult =
   | { ok: true; assetId: string; assetClass: AssetClass; priceUsd: string; priceDate: string }
@@ -1590,7 +1719,12 @@ export async function resolveTickerAction(ticker: string, assetClass: AssetClass
     assetId: asset.id,
     assetClass,
     priceUsd: new Decimal(priceRow.rows[0].close).toFixed(2),
-    priceDate: String(priceRow.rows[0].price_date),
+    // Per this session's final-review correction: reuse the shared
+    // normalizePgDate helper for every new DATE read rather than a
+    // duplicated String(...)/ad hoc conversion — String() on a value
+    // node-postgres has decoded into a JS Date would format via toString()
+    // in the SERVER's local zone, not the app's single date convention.
+    priceDate: normalizePgDate(priceRow.rows[0].price_date),
   };
 }
 
@@ -2115,6 +2249,8 @@ git commit -m "feat: setup wizard Step 2 — opening cash balance, with validati
 
 Per this session's correction: `avgCostFor(h)` interprets every holding's stored `costInput` using the **current** `costBasisMode` state, not whatever mode was active when that holding was added. If the mode could be freely toggled after holdings already exist, switching it would silently reinterpret an already-added holding's cost basis (e.g. a `costInput` of `42.50` entered as an average cost, later re-read as a total cost basis divided by quantity). The simplest safe fix — and the one used here — is to **lock the mode once the first holding has been added**: both radios become `disabled` while `holdings.length > 0`, with a visible note explaining why, so `costBasisMode` cannot change out from under any holding already in the list. Removing every holding un-disables the radios, giving an explicit, deliberate way to change the mode rather than a silent one.
 
+Per this session's final-review correction (CRITICAL item 1): resolved ticker/asset identity must never go stale. `holdingDraft.assetId` — the identity `addHolding` actually saves — is set once, on blur, by `resolveTickerAction`. Without a fix, editing the ticker text afterward (e.g. resolving "AAPL," then typing over it to "MSFT" without tabbing out again) would leave `assetId` pointing at AAPL while the visible field reads MSFT, and `addHolding` would silently save MSFT's row under AAPL's asset id. The fix tracks the normalized symbol that was actually resolved (`resolvedTicker`), clears both `holdingDraft.assetId` and `resolvedTicker` the instant the ticker text OR the asset type changes (its own `onChange`, not waiting for the next blur), and has `addHolding` require the current normalized ticker to still equal `resolvedTicker` before allowing a save.
+
 - [ ] **Step 1: Write the failing test**
 
 Append to `app/accounts/new/SetupWizard.test.tsx` — first extend the `@/app/actions/setup` mock at the top of the file to include `resolveTickerAction`:
@@ -2214,6 +2350,31 @@ describe("SetupWizard — Step 3 (current holdings)", () => {
     // re-derived under a different (never-actually-applied) mode.
     expect(screen.getByText("$50.00")).toBeInTheDocument();
   });
+
+  it("blocks adding a holding when the ticker was edited after resolution without re-resolving (resolved AAPL, edited to MSFT)", async () => {
+    resolveTickerActionMock.mockResolvedValue({
+      ok: true, assetId: "1", assetClass: "equity", priceUsd: "228.50", priceDate: "2026-08-25",
+    });
+    goToStep3();
+
+    fireEvent.change(screen.getByLabelText(/ticker symbol/i), { target: { value: "AAPL" } });
+    fireEvent.blur(screen.getByLabelText(/ticker symbol/i));
+    await waitFor(() => expect(screen.getByText(/Resolved — last price \$228.50/)).toBeInTheDocument());
+
+    // Edit the ticker text WITHOUT triggering another blur/resolve.
+    fireEvent.change(screen.getByLabelText(/ticker symbol/i), { target: { value: "MSFT" } });
+
+    // The stale AAPL confirmation must be gone immediately — before any blur.
+    expect(screen.queryByText(/Resolved — last price \$228.50/)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/quantity you hold/i), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText(/average cost per unit \(usd\)/i), { target: { value: "150" } });
+    fireEvent.click(screen.getByText("+ Add holding"));
+
+    expect(screen.getByText(/resolve the ticker first/i)).toBeInTheDocument();
+    // Never silently saved MSFT's row under AAPL's already-resolved assetId.
+    expect(screen.queryByText("MSFT")).not.toBeInTheDocument();
+  });
 });
 ```
 
@@ -2259,6 +2420,13 @@ Add Step 3 state — insert after the `openingCashUsd` state line:
   const [holdingResolution, setHoldingResolution] = useState<TickerResolutionResult | null>(null);
   const [resolving, setResolving] = useState(false);
   const [holdingError, setHoldingError] = useState<string | null>(null);
+  // The normalized ticker text that holdingDraft.assetId was actually
+  // resolved for (per this session's final-review correction). Ticker
+  // text and asset class can change after a resolution completes; without
+  // tracking this separately and re-checking it in addHolding(), an edit
+  // from a resolved "AAPL" to "MSFT" could submit MSFT's ticker text with
+  // AAPL's already-resolved assetId.
+  const [resolvedTicker, setResolvedTicker] = useState<string | null>(null);
 ```
 
 Update `hasEnteredContent`:
@@ -2272,11 +2440,13 @@ Add the holdings-draft handlers — insert after `goToStep2`:
 
 ```ts
   async function handleHoldingTickerBlur() {
-    if (!holdingDraft.ticker.trim()) return;
+    const normalized = holdingDraft.ticker.trim().toUpperCase();
+    if (!normalized) return;
     setResolving(true);
     const result = await resolveTickerAction(holdingDraft.ticker, holdingDraft.assetClass);
     setResolving(false);
     setHoldingResolution(result);
+    setResolvedTicker(normalized);
     setHoldingDraft((d) => ({ ...d, assetId: result.assetId }));
   }
 
@@ -2288,7 +2458,16 @@ Add the holdings-draft handlers — insert after `goToStep2`:
     setHoldingError(null);
     const ticker = holdingDraft.ticker.trim().toUpperCase();
     if (!ticker) { setHoldingError("Enter a ticker symbol."); return; }
-    if (!holdingDraft.assetId) { setHoldingError("Resolve the ticker first (wait for the checking… state to finish)."); return; }
+    // Per this session's final-review correction: require the CURRENT
+    // normalized ticker to still match what holdingDraft.assetId was
+    // actually resolved for. onChange below already clears assetId the
+    // instant the ticker text or asset type changes, so this is a second,
+    // explicit guard against ever adding a holding whose visible ticker
+    // doesn't match its resolved identity.
+    if (!holdingDraft.assetId || resolvedTicker !== ticker) {
+      setHoldingError("Resolve the ticker first (wait for the checking… state to finish, or re-enter it if you changed it after resolving).");
+      return;
+    }
     if (isDuplicateTickerInDraft(holdings.map((h) => h.ticker), ticker)) {
       setHoldingError(`${ticker} is already in this account's list.`);
       return;
@@ -2308,6 +2487,7 @@ Add the holdings-draft handlers — insert after `goToStep2`:
     setHoldings((hs) => [...hs, { ...holdingDraft, ticker }]);
     setHoldingDraft(emptyHolding());
     setHoldingResolution(null);
+    setResolvedTicker(null);
   }
 
   function removeHolding(key: string) {
@@ -2318,6 +2498,12 @@ Add the holdings-draft handlers — insert after `goToStep2`:
     setHoldings((hs) => hs.filter((x) => x.key !== h.key));
     setHoldingDraft(h);
     setHoldingResolution(null);
+    // h.assetId is already resolved for h.ticker (it was only ever added
+    // via addHolding's own resolvedTicker check above) — carrying that
+    // forward means re-adding it unchanged doesn't spuriously demand a
+    // fresh resolution, while any edit to the ticker text still clears it
+    // via the input's onChange handler below.
+    setResolvedTicker(h.ticker);
   }
 ```
 
@@ -2344,7 +2530,16 @@ Replace the Step 2 block's `<button onClick={() => setStep(3)}>Next: Current hol
           <label>Ticker symbol<br />
             <input
               value={holdingDraft.ticker}
-              onChange={(e) => setHoldingDraft((d) => ({ ...d, ticker: e.target.value }))}
+              onChange={(e) => {
+                // Per this session's final-review correction: the instant
+                // the ticker text changes, any previous resolution is for a
+                // DIFFERENT symbol and must never be reused — clear it
+                // immediately rather than waiting for the next blur.
+                const value = e.target.value;
+                setHoldingDraft((d) => ({ ...d, ticker: value, assetId: null }));
+                setHoldingResolution(null);
+                setResolvedTicker(null);
+              }}
               onBlur={handleHoldingTickerBlur}
               placeholder="e.g. AAPL, VOO, BTC"
             />
@@ -2359,7 +2554,15 @@ Replace the Step 2 block's `<button onClick={() => setStep(3)}>Next: Current hol
           <label>Asset type<br />
             <select
               value={holdingDraft.assetClass}
-              onChange={(e) => setHoldingDraft((d) => ({ ...d, assetClass: e.target.value as AssetClass }))}
+              onChange={(e) => {
+                // Asset class was part of what was resolved (resolveOrCreateAsset
+                // is class-specific) — changing it invalidates the resolution
+                // just like changing the ticker text does.
+                const value = e.target.value as AssetClass;
+                setHoldingDraft((d) => ({ ...d, assetClass: value, assetId: null }));
+                setHoldingResolution(null);
+                setResolvedTicker(null);
+              }}
             >
               <option value="equity">Equity</option>
               <option value="etf">ETF</option>
@@ -2417,7 +2620,7 @@ Replace the Step 2 block's `<button onClick={() => setStep(3)}>Next: Current hol
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run app/accounts/new/SetupWizard.test.tsx`
-Expected: PASS, 14 tests (10 from Tasks 10–12 + 4 new).
+Expected: PASS, 15 tests (10 from Tasks 10–12 + 5 new).
 
 - [ ] **Step 5: Manual verification**
 
@@ -2429,10 +2632,10 @@ Run: `npm run dev`, open `http://localhost:3000/accounts/new`, walk to Step 3.
 
 ```bash
 git add app/accounts/new/SetupWizard.tsx app/accounts/new/SetupWizard.test.tsx
-git commit -m "feat: setup wizard Step 3 — ticker resolution, cost-basis mode (locked once a holding exists), repeatable holdings list"
+git commit -m "feat: setup wizard Step 3 — ticker resolution (staleness-guarded), cost-basis mode (locked once a holding exists), repeatable holdings list"
 ```
 
-**Functional acceptance check:** `npx vitest run app/accounts/new/SetupWizard.test.tsx` PASS, 14/14 — the new lock test directly covers this session's "cost-basis mode after holdings already exist" requirement.
+**Functional acceptance check:** `npx vitest run app/accounts/new/SetupWizard.test.tsx` PASS, 15/15 — the lock test covers this session's "cost-basis mode after holdings already exist" requirement, and the new staleness test covers this session's CRITICAL "resolved ticker/asset identity must never go stale" requirement (resolve A → edit to B → submit blocked).
 **UX acceptance check:** see Step 5 above.
 
 ---
@@ -2444,10 +2647,15 @@ git commit -m "feat: setup wizard Step 3 — ticker resolution, cost-basis mode 
 - Modify: `app/actions/setup.test.ts` (append)
 
 **Interfaces:**
-- Consumes: `setupAccount` (Task 7), `verifySetup` (Task 8), `isValidCalendarDate`/`isFutureDate` (Task 2).
+- Consumes: `setupAccount`, `SetupCommitUncertainError` (Task 7), `verifySetup` (Task 8), `isValidCalendarDate`/`isFutureDate` (Task 2).
 - Produces: `SetupWizardHolding`, `SetupWizardInput`, `SetupWizardResult`, `setupAccountAction(input)`. Consumed by Task 15's wizard Step 4.
 
-Per this session's correction: `setupAccount()` commits before `verifySetup()` runs, so a thrown error from `verifySetup` (or from `revalidatePath`) must never be reported with "nothing was saved" copy — the account genuinely exists at that point. `SetupWizardResult` is now a 3-way discriminated union on a `status` field, and the commit and the post-commit verification are wrapped in **separate** `try/catch` blocks so each failure mode is reported accurately.
+Per this session's correction: `setupAccount()` commits before `verifySetup()` runs, so a thrown error from `verifySetup` (or from `revalidatePath`) must never be reported with "nothing was saved" copy — the account genuinely exists at that point. `SetupWizardResult` is now a 4-way discriminated union on a `status` field, and the commit and the post-commit verification are wrapped in **separate** `try/catch` blocks so each failure mode is reported accurately.
+
+Per this session's final-review correction, this task also fixes three issues reachable only once this action exists:
+- **A genuinely ambiguous commit outcome gets its own status.** `setupAccount` throwing `SetupCommitUncertainError` (Task 7) is neither a definite failure nor a definite success — it is mapped to a new `status: "save_unknown"`, distinct from `"save_failed"`, directing the user to check Accounts rather than either assuming nothing was saved or blindly retrying. This is never inferred by checking whether an account of the given name now exists (duplicate names are intentionally allowed, so that would prove nothing).
+- **Cache revalidation happens BEFORE verification, not after.** The account is genuinely committed the instant `setupAccount()` returns — `revalidatePath` (now covering `/`, `/accounts`, **and** `/transactions`) runs immediately after that, so a subsequent failure in `verifySetup` can never leave the DB-backed pages serving stale cached data for an account that really was saved.
+- **Quantity precision is normalized once, before it can diverge.** `positions_current.quantity` is `NUMERIC(28,10)` — `applyTransaction` already rounds to that on write. Every holding's quantity is rounded to `.toDecimalPlaces(10)` here, before the SAME rounded value is used for both `setupAccount`'s write and `verifySetup`'s `expectedHoldings`, so read-back verification can never falsely report a mismatch purely because of entered precision beyond what the column holds. `SetupWizardResult`'s `saved_verified` variant carries `roundedQuantityAssetIds` so the wizard can disclose this positively rather than let it look like a data-entry error.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2458,10 +2666,11 @@ import { vi } from "vitest";
 import Decimal from "decimal.js";
 import { applyTransaction } from "@/lib/ledger/applyTransaction";
 import * as verifySetupModule from "@/lib/ledger/verifySetup";
+import * as setupAccountModule from "@/lib/ledger/setupAccount";
 import { setupAccountAction } from "./setup";
 ```
 
-`setupAccountAction` needs to be able to force a *post-commit* failure independently of the commit itself, to prove the two are reported differently — that requires spying on the real `verifySetup` without disabling it for every other test. Add this partial mock at the top level of the file (Vitest hoists `vi.mock` calls regardless of where they're written, but placing it near the imports is clearest):
+`setupAccountAction` needs to be able to force a *post-commit* verification failure, and to force `setupAccount` itself to throw `SetupCommitUncertainError`, independently of a real DB failure — that requires spying on both real functions without disabling either for every other test. Add these partial mocks at the top level of the file (Vitest hoists `vi.mock` calls regardless of where they're written, but placing them near the imports is clearest):
 
 ```ts
 vi.mock("@/lib/ledger/verifySetup", async (importOriginal) => {
@@ -2471,12 +2680,41 @@ vi.mock("@/lib/ledger/verifySetup", async (importOriginal) => {
   // .mockRejectedValueOnce/.mockResolvedValueOnce.
   return { ...actual, verifySetup: vi.fn(actual.verifySetup) };
 });
+
+vi.mock("@/lib/ledger/setupAccount", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ledger/setupAccount")>();
+  return { ...actual, setupAccount: vi.fn(actual.setupAccount) };
+});
+```
+
+Per this session's final-review correction (item 8): a queued `.mockRejectedValueOnce()` on either mock must never leak into a LATER test that doesn't intend to simulate a failure — if some earlier assertion changes and the action under test returns before ever calling the mocked function, the queued rejection would sit unconsumed and fire unexpectedly on the next test that does call it. Add an explicit `beforeEach` inside the `describe("setupAccountAction", ...)` block below (Step 3) that resets both mocks back to their real implementation before every test, using `vi.importActual` directly (independent of the `importOriginal` closure above, and unaffected by whatever the previous test queued):
+
+```ts
+beforeEach(async () => {
+  const actualVerifySetup = await vi.importActual<typeof import("@/lib/ledger/verifySetup")>("@/lib/ledger/verifySetup");
+  vi.mocked(verifySetupModule.verifySetup).mockReset();
+  vi.mocked(verifySetupModule.verifySetup).mockImplementation(actualVerifySetup.verifySetup);
+
+  const actualSetupAccount = await vi.importActual<typeof import("@/lib/ledger/setupAccount")>("@/lib/ledger/setupAccount");
+  vi.mocked(setupAccountModule.setupAccount).mockReset();
+  vi.mocked(setupAccountModule.setupAccount).mockImplementation(actualSetupAccount.setupAccount);
+});
 ```
 
 Add a new `describe` block:
 
 ```ts
 describe("setupAccountAction", () => {
+  beforeEach(async () => {
+    const actualVerifySetup = await vi.importActual<typeof import("@/lib/ledger/verifySetup")>("@/lib/ledger/verifySetup");
+    vi.mocked(verifySetupModule.verifySetup).mockReset();
+    vi.mocked(verifySetupModule.verifySetup).mockImplementation(actualVerifySetup.verifySetup);
+
+    const actualSetupAccount = await vi.importActual<typeof import("@/lib/ledger/setupAccount")>("@/lib/ledger/setupAccount");
+    vi.mocked(setupAccountModule.setupAccount).mockReset();
+    vi.mocked(setupAccountModule.setupAccount).mockImplementation(actualSetupAccount.setupAccount);
+  });
+
   it("rejects a future portfolio-as-of date without writing anything (status: save_failed)", async () => {
     const result = await setupAccountAction({
       name: "Future Date Test", custodian: "", portfolioAsOfDate: "2099-01-01",
@@ -2531,6 +2769,46 @@ describe("setupAccountAction", () => {
     const row = await pool.query(`SELECT id FROM accounts WHERE name = $1`, ["Verify Error Test"]);
     expect(row.rows).toHaveLength(1);
   });
+
+  it("normalizes a >10-decimal-place quantity to NUMERIC(28,10)'s own precision consistently, so read-back verification matches instead of reporting a false mismatch (round-trip)", async () => {
+    const asset = await resolveOrCreateAsset("PRECISE", "crypto", "Precise Coin");
+    const result = await setupAccountAction({
+      name: "Precision Round Trip Test", custodian: "", portfolioAsOfDate: "2026-01-01",
+      openingCashUsd: "0",
+      holdings: [{ assetId: asset.id, quantity: "1.123456789012345", avgCostUsd: "10" }], // 15 decimal places
+    });
+
+    expect(result.status).toBe("saved_verified");
+    if (result.status === "saved_verified") {
+      // The core fix: normalizing BEFORE both the write and the expected
+      // value means verifySetup never sees a divergence to report.
+      expect(result.verification.matches).toBe(true);
+      expect(result.roundedQuantityAssetIds).toContain(asset.id);
+    }
+
+    const pool = getPool();
+    const posRow = await pool.query<{ quantity: string }>(
+      `SELECT quantity FROM positions_current WHERE account_id = $1`,
+      [result.status === "saved_verified" ? result.accountId : -1]
+    );
+    expect(posRow.rows[0].quantity).toBe("1.1234567890"); // rounded to exactly 10dp
+  });
+
+  it("returns status: save_unknown — never save_failed — when setupAccount's commit outcome is genuinely ambiguous", async () => {
+    vi.mocked(setupAccountModule.setupAccount).mockRejectedValueOnce(
+      new setupAccountModule.SetupCommitUncertainError("simulated in-doubt commit", new Error("connection reset"))
+    );
+
+    const result = await setupAccountAction({
+      name: "Uncertain Commit Test", custodian: "", portfolioAsOfDate: "2026-01-01",
+      openingCashUsd: "100", holdings: [],
+    });
+
+    expect(result.status).toBe("save_unknown");
+    if (result.status === "save_unknown") {
+      expect(result.message).toMatch(/check the accounts page/i);
+    }
+  });
 });
 ```
 
@@ -2545,7 +2823,7 @@ Add these imports to the top of the file (alongside the existing ones):
 
 ```ts
 import { revalidatePath } from "next/cache";
-import { setupAccount, type SetupHoldingInput } from "@/lib/ledger/setupAccount";
+import { setupAccount, SetupCommitUncertainError, type SetupHoldingInput } from "@/lib/ledger/setupAccount";
 import { verifySetup, type VerifySetupResult } from "@/lib/ledger/verifySetup";
 import { isValidCalendarDate, isFutureDate } from "@/lib/dateValidation";
 ```
@@ -2569,7 +2847,8 @@ export interface SetupWizardInput {
 
 export type SetupWizardResult =
   | { status: "save_failed"; message: string }
-  | { status: "saved_verified"; accountId: number; verification: VerifySetupResult }
+  | { status: "save_unknown"; message: string }
+  | { status: "saved_verified"; accountId: number; verification: VerifySetupResult; roundedQuantityAssetIds: string[] }
   | { status: "saved_verification_error"; accountId: number; verificationError: string };
 
 // The Confirm & Save action (spec §4 Step 4): validates, atomically commits
@@ -2600,6 +2879,7 @@ export async function setupAccountAction(input: SetupWizardInput): Promise<Setup
 
   const custodian = input.custodian.trim() || null;
   const holdings: SetupHoldingInput[] = [];
+  const roundedQuantityAssetIds: string[] = [];
   for (const h of input.holdings) {
     let quantity: Decimal, avgCostUsd: Decimal;
     try {
@@ -2611,7 +2891,17 @@ export async function setupAccountAction(input: SetupWizardInput): Promise<Setup
     if (quantity.lte(0) || avgCostUsd.lte(0)) {
       return { status: "save_failed", message: "Quantity and average cost must be greater than zero." };
     }
-    holdings.push({ assetId: h.assetId, quantity, avgCostUsd });
+    // positions_current.quantity is NUMERIC(28,10) — applyTransaction's own
+    // INSERT already rounds to that via .toFixed(10). Rounding HERE too,
+    // before the same value is used for both the write (setupAccount) and
+    // the read-back comparison (verifySetup), keeps the two from silently
+    // diverging into a false verification mismatch over entered precision
+    // beyond what the column can hold.
+    const normalizedQuantity = quantity.toDecimalPlaces(10);
+    if (!normalizedQuantity.eq(quantity)) {
+      roundedQuantityAssetIds.push(h.assetId);
+    }
+    holdings.push({ assetId: h.assetId, quantity: normalizedQuantity, avgCostUsd });
   }
 
   let accountId: number;
@@ -2625,12 +2915,30 @@ export async function setupAccountAction(input: SetupWizardInput): Promise<Setup
     });
     accountId = result.accountId;
   } catch (err) {
+    if (err instanceof SetupCommitUncertainError) {
+      // The commit's own outcome is ambiguous — NOT the same as a definite
+      // "nothing was saved." Never inferred by checking whether an account
+      // of this name now exists (duplicate names are intentionally
+      // allowed, so a name match would prove nothing about whether THIS
+      // attempt is the one that succeeded).
+      return {
+        status: "save_unknown",
+        message:
+          "We couldn't confirm whether this setup was saved. Check the Accounts page before trying again — " +
+          "creating it a second time could result in a duplicate account if the first attempt actually succeeded.",
+      };
+    }
     // Nothing was saved — setupAccount rolled back the whole transaction.
     return { status: "save_failed", message: err instanceof Error ? err.message : "Setup failed — nothing was saved." };
   }
 
-  // From this point on, the account IS committed. Any failure below is a
-  // system-integrity issue distinct from a failed save.
+  // From this point on, the account IS committed. Revalidate the DB-backed
+  // pages BEFORE running verification, so a verification failure below can
+  // never skip cache invalidation for data that is genuinely saved.
+  revalidatePath("/");
+  revalidatePath("/accounts");
+  revalidatePath("/transactions");
+
   try {
     const verification = await verifySetup({
       accountId,
@@ -2640,9 +2948,7 @@ export async function setupAccountAction(input: SetupWizardInput): Promise<Setup
       expectedCashUsd: openingCashUsd,
       expectedHoldings: holdings,
     });
-    revalidatePath("/");
-    revalidatePath("/accounts");
-    return { status: "saved_verified", accountId, verification };
+    return { status: "saved_verified", accountId, verification, roundedQuantityAssetIds };
   } catch (err) {
     return {
       status: "saved_verification_error",
@@ -2656,7 +2962,7 @@ export async function setupAccountAction(input: SetupWizardInput): Promise<Setup
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run app/actions/setup.test.ts`
-Expected: PASS, 8 tests (4 from Task 9 + 4 new).
+Expected: PASS, 10 tests (4 from Task 9 + 6 new).
 
 Run: `npx tsc --noEmit 2>&1 | grep "app/actions/setup.ts"`
 Expected: no output.
@@ -2665,10 +2971,10 @@ Expected: no output.
 
 ```bash
 git add app/actions/setup.ts app/actions/setup.test.ts
-git commit -m "feat: setupAccountAction — validated, atomic, auto-verified account setup with a 3-way commit/verify outcome"
+git commit -m "feat: setupAccountAction — validated, atomic, auto-verified account setup with a 4-way commit/verify outcome, pre-verification revalidation, and quantity-precision normalization"
 ```
 
-**Functional acceptance check:** `npx vitest run app/actions/setup.test.ts` PASS, 8/8 — covers "Portfolio-as-of date validation" and "atomic rollback" at the action layer, and directly covers this session's "commit succeeds, verification then fails" requirement via the new `saved_verification_error` test.
+**Functional acceptance check:** `npx vitest run app/actions/setup.test.ts` PASS, 10/10 — covers "Portfolio-as-of date validation" and "atomic rollback" at the action layer, this session's "commit succeeds, verification then fails" requirement via `saved_verification_error`, and this session's final-review requirements for the `>10dp` quantity round-trip and the `save_unknown` uncertain-commit outcome.
 **UX acceptance check:** none yet — wired into the wizard's Step 4 in Task 15.
 
 ---
@@ -2735,7 +3041,10 @@ describe("SetupWizard — Step 4 (Review) and Confirm & Save", () => {
     fireEvent.click(confirmButton); // second click while pending — native disabled semantics must block this
     expect(setupAccountActionMock).toHaveBeenCalledTimes(1);
 
-    resolveSetupAccountAction({ status: "saved_verified", accountId: 1, verification: { matches: true, mismatches: [] } });
+    resolveSetupAccountAction({
+      status: "saved_verified", accountId: 1,
+      verification: { matches: true, mismatches: [] }, roundedQuantityAssetIds: [],
+    });
     await waitFor(() => expect(screen.getByText(/Setup complete/i)).toBeInTheDocument());
   });
 
@@ -2777,6 +3086,33 @@ describe("SetupWizard — Step 4 (Review) and Confirm & Save", () => {
     await waitFor(() => expect(screen.getByText(/Nothing was saved/i)).toBeInTheDocument());
     expect(screen.getByText(/already has a non-zero position/)).toBeInTheDocument();
     expect(screen.getByText("Review against your statement")).toBeInTheDocument();
+  });
+
+  it("shows an uncertain-outcome banner (never 'Nothing was saved') and re-enables Confirm & Save, when the Server Action call itself rejects", async () => {
+    goToReviewStep();
+    fireEvent.click(screen.getByLabelText(/checked these figures/i));
+    setupAccountActionMock.mockRejectedValueOnce(new Error("simulated network drop"));
+
+    fireEvent.click(screen.getByText("Confirm & Save"));
+
+    await waitFor(() => expect(screen.getByText(/couldn't reach the server/i)).toBeInTheDocument());
+    expect(screen.queryByText(/^Nothing was saved/i)).not.toBeInTheDocument();
+    // finally clears `saving` even on rejection — the user isn't stuck.
+    expect(screen.getByText("Confirm & Save")).toBeEnabled();
+  });
+
+  it("shows a distinct uncertain-outcome banner for status: save_unknown — never confused with a definite save_failed", async () => {
+    goToReviewStep();
+    fireEvent.click(screen.getByLabelText(/checked these figures/i));
+    fireEvent.click(screen.getByText("Confirm & Save"));
+
+    resolveSetupAccountAction({
+      status: "save_unknown",
+      message: "We couldn't confirm whether this setup was saved. Check the Accounts page before trying again.",
+    });
+
+    await waitFor(() => expect(screen.getByText(/couldn't confirm whether this was saved/i)).toBeInTheDocument());
+    expect(screen.queryByText(/^Nothing was saved/i)).not.toBeInTheDocument();
   });
 });
 
@@ -2854,13 +3190,27 @@ export function SetupWizard() {
   const [holdingResolution, setHoldingResolution] = useState<TickerResolutionResult | null>(null);
   const [resolving, setResolving] = useState(false);
   const [holdingError, setHoldingError] = useState<string | null>(null);
+  // The normalized ticker text that holdingDraft.assetId was actually
+  // resolved for (per this session's final-review correction). Ticker
+  // text and asset class can change after a resolution completes; without
+  // tracking this separately and re-checking it in addHolding(), an edit
+  // from a resolved "AAPL" to "MSFT" could submit MSFT's ticker text with
+  // AAPL's already-resolved assetId.
+  const [resolvedTicker, setResolvedTicker] = useState<string | null>(null);
 
   // Step 4 / save
   const [confirmChecked, setConfirmChecked] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null); // definite status: "save_failed"
+  // Per this session's final-review correction: a genuinely uncertain
+  // outcome — status: "save_unknown", OR the setupAccountAction call
+  // itself rejecting (a transport/network failure) — is tracked SEPARATELY
+  // from saveError, so the Review screen never reuses "Nothing was saved"
+  // copy (a definite claim) for an outcome that is actually unknown.
+  const [saveUncertain, setSaveUncertain] = useState<string | null>(null);
   const [mismatches, setMismatches] = useState<string[]>([]);
   const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [roundedQuantityAssetIds, setRoundedQuantityAssetIds] = useState<string[]>([]);
 
   const hasEnteredContent =
     name.trim() !== "" || custodian.trim() !== "" || openingCashUsd !== "0.00" || holdings.length > 0;
@@ -2869,8 +3219,8 @@ export function SetupWizard() {
     setStep(1);
     setName(""); setCustodian(""); setPortfolioAsOfDate(localTodayIso()); setNameWarning(null); setStep1Error(null);
     setOpeningCashUsd("0.00"); setStep2Error(null);
-    setCostBasisMode("average"); setHoldings([]); setHoldingDraft(emptyHolding()); setHoldingResolution(null); setHoldingError(null);
-    setConfirmChecked(false); setSaving(false); setSaveError(null); setMismatches([]); setVerificationError(null);
+    setCostBasisMode("average"); setHoldings([]); setHoldingDraft(emptyHolding()); setHoldingResolution(null); setHoldingError(null); setResolvedTicker(null);
+    setConfirmChecked(false); setSaving(false); setSaveError(null); setSaveUncertain(null); setMismatches([]); setVerificationError(null); setRoundedQuantityAssetIds([]);
   }
 
   function handleCancel() {
@@ -2930,11 +3280,13 @@ export function SetupWizard() {
   }
 
   async function handleHoldingTickerBlur() {
-    if (!holdingDraft.ticker.trim()) return;
+    const normalized = holdingDraft.ticker.trim().toUpperCase();
+    if (!normalized) return;
     setResolving(true);
     const result = await resolveTickerAction(holdingDraft.ticker, holdingDraft.assetClass);
     setResolving(false);
     setHoldingResolution(result);
+    setResolvedTicker(normalized);
     setHoldingDraft((d) => ({ ...d, assetId: result.assetId }));
   }
 
@@ -2946,7 +3298,16 @@ export function SetupWizard() {
     setHoldingError(null);
     const ticker = holdingDraft.ticker.trim().toUpperCase();
     if (!ticker) { setHoldingError("Enter a ticker symbol."); return; }
-    if (!holdingDraft.assetId) { setHoldingError("Resolve the ticker first (wait for the checking… state to finish)."); return; }
+    // Per this session's final-review correction: require the CURRENT
+    // normalized ticker to still match what holdingDraft.assetId was
+    // actually resolved for. onChange below already clears assetId the
+    // instant the ticker text or asset type changes, so this is a second,
+    // explicit guard against ever adding a holding whose visible ticker
+    // doesn't match its resolved identity.
+    if (!holdingDraft.assetId || resolvedTicker !== ticker) {
+      setHoldingError("Resolve the ticker first (wait for the checking… state to finish, or re-enter it if you changed it after resolving).");
+      return;
+    }
     if (isDuplicateTickerInDraft(holdings.map((h) => h.ticker), ticker)) {
       setHoldingError(`${ticker} is already in this account's list.`);
       return;
@@ -2966,6 +3327,7 @@ export function SetupWizard() {
     setHoldings((hs) => [...hs, { ...holdingDraft, ticker }]);
     setHoldingDraft(emptyHolding());
     setHoldingResolution(null);
+    setResolvedTicker(null);
   }
 
   function removeHolding(key: string) {
@@ -2976,6 +3338,12 @@ export function SetupWizard() {
     setHoldings((hs) => hs.filter((x) => x.key !== h.key));
     setHoldingDraft(h);
     setHoldingResolution(null);
+    // h.assetId is already resolved for h.ticker (it was only ever added
+    // via addHolding's own resolvedTicker check above) — carrying that
+    // forward means re-adding it unchanged doesn't spuriously demand a
+    // fresh resolution, while any edit to the ticker text still clears it
+    // via the input's onChange handler below.
+    setResolvedTicker(h.ticker);
   }
 
   const totalStartingValueUsd = holdings.reduce(
@@ -2986,41 +3354,69 @@ export function SetupWizard() {
   async function handleConfirmSave() {
     setSaving(true);
     setSaveError(null);
-    const result = await setupAccountAction({
-      name: name.trim(),
-      custodian: custodian.trim(),
-      portfolioAsOfDate,
-      openingCashUsd,
-      holdings: holdings.map((h) => ({
-        assetId: h.assetId!,
-        quantity: h.quantity,
-        avgCostUsd: avgCostFor(h).toFixed(10),
-      })),
-    });
-    setSaving(false);
-    if (result.status === "save_failed") {
-      setSaveError(result.message);
-      return;
-    }
-    if (result.status === "saved_verification_error") {
-      setVerificationError(result.verificationError);
-      setStep("unverified");
-      return;
-    }
-    // result.status === "saved_verified"
-    if (result.verification.matches) {
-      setStep("complete");
-    } else {
-      setMismatches(result.verification.mismatches);
-      setStep("mismatch");
+    setSaveUncertain(null);
+    try {
+      const result = await setupAccountAction({
+        name: name.trim(),
+        custodian: custodian.trim(),
+        portfolioAsOfDate,
+        openingCashUsd,
+        holdings: holdings.map((h) => ({
+          assetId: h.assetId!,
+          quantity: h.quantity,
+          avgCostUsd: avgCostFor(h).toFixed(10),
+        })),
+      });
+      if (result.status === "save_failed") {
+        setSaveError(result.message);
+        return;
+      }
+      if (result.status === "save_unknown") {
+        setSaveUncertain(result.message);
+        return;
+      }
+      if (result.status === "saved_verification_error") {
+        setVerificationError(result.verificationError);
+        setStep("unverified");
+        return;
+      }
+      // result.status === "saved_verified"
+      setRoundedQuantityAssetIds(result.roundedQuantityAssetIds);
+      if (result.verification.matches) {
+        setStep("complete");
+      } else {
+        setMismatches(result.verification.mismatches);
+        setStep("mismatch");
+      }
+    } catch {
+      // The setupAccountAction call itself rejected — a transport/network
+      // failure, not a returned outcome. We genuinely don't know whether
+      // the commit reached the server, so this must never be shown with
+      // "Nothing was saved" copy (a definite claim), and must never invite
+      // a blind retry.
+      setSaveUncertain(
+        "We couldn't reach the server to confirm whether this setup was saved. Check the Accounts page before " +
+          "trying again — submitting again could create a duplicate account if the first attempt actually succeeded."
+      );
+    } finally {
+      setSaving(false);
     }
   }
 
   if (step === "complete") {
+    const roundedTickers = holdings
+      .filter((h) => h.assetId && roundedQuantityAssetIds.includes(h.assetId))
+      .map((h) => h.ticker);
     return (
       <div>
         <h1>Setup complete for {name}</h1>
         <p>Cash: ${openingCashUsdSafe().toFixed(2)} &middot; Holdings: {holdings.length} position{holdings.length === 1 ? "" : "s"}</p>
+        {roundedTickers.length > 0 && (
+          <p style={{ color: "#666", fontSize: "0.9em" }}>
+            Note: the quantity entered for {roundedTickers.join(", ")} had more decimal places than Calboard
+            stores — it was rounded to 10 decimal places for storage.
+          </p>
+        )}
         <button onClick={resetAll}>+ Add another account</button>{" "}
         <button onClick={() => router.push("/")}>Go to dashboard →</button>
       </div>
@@ -3123,7 +3519,16 @@ export function SetupWizard() {
           <label>Ticker symbol<br />
             <input
               value={holdingDraft.ticker}
-              onChange={(e) => setHoldingDraft((d) => ({ ...d, ticker: e.target.value }))}
+              onChange={(e) => {
+                // Per this session's final-review correction: the instant
+                // the ticker text changes, any previous resolution is for a
+                // DIFFERENT symbol and must never be reused — clear it
+                // immediately rather than waiting for the next blur.
+                const value = e.target.value;
+                setHoldingDraft((d) => ({ ...d, ticker: value, assetId: null }));
+                setHoldingResolution(null);
+                setResolvedTicker(null);
+              }}
               onBlur={handleHoldingTickerBlur}
               placeholder="e.g. AAPL, VOO, BTC"
             />
@@ -3138,7 +3543,15 @@ export function SetupWizard() {
           <label>Asset type<br />
             <select
               value={holdingDraft.assetClass}
-              onChange={(e) => setHoldingDraft((d) => ({ ...d, assetClass: e.target.value as AssetClass }))}
+              onChange={(e) => {
+                // Asset class was part of what was resolved (resolveOrCreateAsset
+                // is class-specific) — changing it invalidates the resolution
+                // just like changing the ticker text does.
+                const value = e.target.value as AssetClass;
+                setHoldingDraft((d) => ({ ...d, assetClass: value, assetId: null }));
+                setHoldingResolution(null);
+                setResolvedTicker(null);
+              }}
             >
               <option value="equity">Equity</option>
               <option value="etf">ETF</option>
@@ -3233,6 +3646,11 @@ export function SetupWizard() {
           {saveError && (
             <p style={{ color: "#b00020" }}>Nothing was saved. Fix the issue below and try again.<br />{saveError}</p>
           )}
+          {saveUncertain && (
+            <p style={{ color: "#b00020" }}>
+              We couldn&apos;t confirm whether this was saved — do not assume nothing was saved.<br />{saveUncertain}
+            </p>
+          )}
 
           <button onClick={handleConfirmSave} disabled={!confirmChecked || saving}>
             {saving ? "Saving…" : "Confirm & Save"}
@@ -3248,7 +3666,7 @@ export function SetupWizard() {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run app/accounts/new/SetupWizard.test.tsx`
-Expected: PASS, 20 tests (14 from Tasks 10–13 + 6 new).
+Expected: PASS, 23 tests (15 from Tasks 10–13 + 8 new).
 
 - [ ] **Step 5: Manual verification — full wizard walkthrough**
 
@@ -3259,16 +3677,16 @@ With `npm run dev` running and the dev DB still empty of accounts (true at this 
 3. Tick the checkbox, click "Confirm & Save". Expected: brief "Saving…" (button disabled), then the Complete screen naming the account, its cash, and holding count.
 4. Click "Go to dashboard →". Expected: navigates to `/`.
 
-**UX acceptance check:** all of the above. The three failure/outcome paths (save failed, saved-but-mismatched, saved-but-unverified) are exercised precisely and deterministically by the automated tests above (Step 4) rather than manually — the "commit succeeds, verification then fails" scenario in particular isn't practically reproducible by hand (it requires a read-back that fails after a write that succeeded, which is what Task 14's mocked `verifySetup` test is for). As a lighter manual sanity check only, stopping Postgres mid-Confirm (`docker compose stop postgres`, click Confirm & Save, then `docker compose start postgres`) should still show the "Nothing was saved" banner with the Review draft intact, since that failure happens during the commit itself.
+**UX acceptance check:** all of the above. The five failure/outcome paths (save failed, saved-but-mismatched, saved-but-unverified, uncertain/save_unknown, transport rejection) are exercised precisely and deterministically by the automated tests above (Step 4) rather than manually — the "commit succeeds, verification then fails" scenario in particular isn't practically reproducible by hand (it requires a read-back that fails after a write that succeeded, which is what Task 14's mocked `verifySetup` test is for). As a lighter manual sanity check only, stopping Postgres mid-Confirm (`docker compose stop postgres`, click Confirm & Save, then `docker compose start postgres`) should show either the "Nothing was saved" banner (the connection drops before COMMIT is ever reached — the common case) or the distinct "couldn't confirm whether this was saved" banner (if the drop happens to land during the COMMIT round-trip itself) — never the reverse of what actually happened.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add app/accounts/new/SetupWizard.tsx app/accounts/new/SetupWizard.test.tsx
-git commit -m "feat: setup wizard Step 4 — review, atomic Confirm & Save, 3-way verification outcome, render-safe opening-cash display"
+git commit -m "feat: setup wizard Step 4 — review, atomic Confirm & Save, 4-way verification outcome (incl. uncertain-commit and transport-rejection handling), render-safe opening-cash display, rounded-quantity disclosure"
 ```
 
-**Functional acceptance check:** `npx vitest run app/accounts/new/SetupWizard.test.tsx` PASS, 20/20 — directly covers "double-submit prevention" and "opening cash validation / render safety" per this session's required test list, plus the now-3-way Complete/Mismatch/Unverified branching (the "commit succeeds, verification then fails" case is exercised precisely at Task 14's action layer; this level confirms the UI routes it to the distinct "unverified" screen and never shows "Nothing was saved").
+**Functional acceptance check:** `npx vitest run app/accounts/new/SetupWizard.test.tsx` PASS, 23/23 — directly covers "double-submit prevention" and "opening cash validation / render safety" per this session's required test list, plus the now-4-way Complete/Mismatch/Unverified/Uncertain branching (the "commit succeeds, verification then fails" case is exercised precisely at Task 14's action layer; this level confirms the UI routes it to the distinct "unverified" screen and never shows "Nothing was saved"), and this session's final-review requirements for a rejected Server Action call and a `save_unknown` result (both bannered distinctly from a definite save failure, and both leave Confirm & Save re-enabled via the `finally` block).
 **UX acceptance check:** see Step 5 above. The wizard is now fully functional end to end.
 
 ---
@@ -3280,6 +3698,7 @@ git commit -m "feat: setup wizard Step 4 — review, atomic Confirm & Save, 3-wa
 - Test: `lib/portfolio.test.ts` (append)
 
 **Interfaces:**
+- Consumes: `normalizePgDate` (Task 2).
 - Produces: `PriceStatus = "current" | "stale" | "unavailable"`, `PositionView` gains `priceStatus: PriceStatus` and `assetClass: AssetClass` (needed by Task 17's `PriceCell` retry affordance), `PortfolioView` gains `excludedFromTotalSymbols: string[]`. `assetId` on `PositionView` changes from `number` to `string` (BIGINT convention fix — see Global Constraints). `getPortfolioView` gains an optional `asOf: Date` param (defaults to `new Date()`).
 
 Now that Task 15 makes the wizard capable of creating a real account, this task's populated-state can finally be visually inspected against real data (Task 17 does the visual wiring).
@@ -3368,6 +3787,7 @@ Replace `lib/portfolio.ts` in full:
 import Decimal from "decimal.js";
 import { getPool } from "./db";
 import type { AssetClass } from "./assets";
+import { normalizePgDate } from "./dateValidation";
 
 export type PriceStatus = "current" | "stale" | "unavailable";
 
@@ -3447,17 +3867,15 @@ export async function getPortfolioView(asOf: Date = new Date()): Promise<Portfol
     const latestPriceUsd = row.latest_price ? new Decimal(row.latest_price) : null;
     const marketValueUsd = latestPriceUsd ? quantity.mul(latestPriceUsd) : null;
     const unrealisedPlUsd = marketValueUsd ? marketValueUsd.sub(costBasisUsd) : null;
-    // node-postgres parses `date` columns into JS Date objects (not strings) by
-    // default, but this view's contract is a plain ISO date string. pg constructs
-    // that Date from the date's own year/month/day as LOCAL time components
-    // (not UTC midnight), so we must read it back with the local getters —
-    // toISOString() converts to UTC first and would shift the date by one day
-    // on any machine whose local timezone is behind UTC.
-    const priceDate: string | null = row.price_date
-      ? row.price_date instanceof Date
-        ? `${row.price_date.getFullYear()}-${String(row.price_date.getMonth() + 1).padStart(2, "0")}-${String(row.price_date.getDate()).padStart(2, "0")}`
-        : String(row.price_date)
-      : null;
+    // Per this session's final-review correction: reuse the shared
+    // normalizePgDate helper (Task 2) for this DATE read instead of a
+    // duplicated inline conversion — normalizePgDate is the app's ONE
+    // definition of how a Postgres DATE becomes a plain "YYYY-MM-DD"
+    // string, handling both the raw string lib/db.ts's global type-parser
+    // override returns and a JS Date object defensively via LOCAL
+    // year/month/day components (never toISOString(), which converts
+    // through UTC and can shift the date by a day).
+    const priceDate: string | null = row.price_date ? normalizePgDate(row.price_date) : null;
 
     const priceStatus: PriceStatus =
       !latestPriceUsd || !priceDate
@@ -4407,6 +4825,21 @@ describe("submitTransactionAction", () => {
     });
     expect(second.ok).toBe(true);
   });
+
+  it("rejects a Buy priced at exactly zero — price must be greater than zero, not merely non-negative", async () => {
+    const account = await createAccount("Zero Price Test", null);
+    const asset = await resolveOrCreateAsset("ZEROP", "equity", "Zero Price Corp");
+    const result = await submitTransactionAction({
+      accountId: account.id, txnType: "BUY", tradeDate: "2026-01-01", amount: "",
+      assetId: asset.id, quantity: "5", priceUsd: "0", feesUsd: "0", note: "", confirmDuplicate: false,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok && "errors" in result) expect(result.errors.priceUsd).toMatch(/greater than zero/i);
+
+    const pool = getPool();
+    const row = await pool.query(`SELECT id FROM transactions WHERE account_id = $1`, [account.id]);
+    expect(row.rows).toHaveLength(0);
+  });
 });
 
 describe("getAccountHoldingsAction", () => {
@@ -4509,7 +4942,10 @@ export async function submitTransactionAction(input: TransactionFormInput): Prom
     const q = parsePositiveOrError(input.quantity, false);
     if (q.error) errors.quantity = q.error;
     else quantity = q.value;
-    const p = parsePositiveOrError(input.priceUsd, true);
+    // Per this session's final-review correction: price must be greater
+    // than zero, not merely non-negative — a $0 Buy/Sell price isn't a
+    // meaningful transaction (unlike fees, which genuinely can be zero).
+    const p = parsePositiveOrError(input.priceUsd, false);
     if (p.error) errors.priceUsd = p.error;
     else priceUsd = p.value;
     if (!input.assetId) {
@@ -4564,7 +5000,7 @@ export async function getAccountHoldingsAction(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run app/actions/transactions.test.ts`
-Expected: PASS, 5 tests.
+Expected: PASS, 6 tests.
 
 Run: `npx tsc --noEmit 2>&1 | grep "app/actions/transactions.ts"`
 Expected: no output.
@@ -4573,10 +5009,10 @@ Expected: no output.
 
 ```bash
 git add app/actions/transactions.ts app/actions/transactions.test.ts
-git commit -m "feat: transaction Server Action with structured field errors, duplicate check, sell-picker wiring"
+git commit -m "feat: transaction Server Action with structured field errors, duplicate check, sell-picker wiring, strictly-positive price validation"
 ```
 
-**Functional acceptance check:** `npx vitest run app/actions/transactions.test.ts` PASS, 5/5 — covers "transaction date validation" and "duplicate-transaction warning" end-to-end at the action layer (in addition to Task 21's query-level test).
+**Functional acceptance check:** `npx vitest run app/actions/transactions.test.ts` PASS, 6/6 — covers "transaction date validation" and "duplicate-transaction warning" end-to-end at the action layer (in addition to Task 21's query-level test), plus this session's final-review "price must be greater than zero" requirement.
 **UX acceptance check:** none yet — wired into the Transactions page in Task 25.
 
 ---
@@ -4592,6 +5028,12 @@ git commit -m "feat: transaction Server Action with structured field errors, dup
 - Consumes: `getAccountCashMap`/`getRecentTransactions` (Task 23), `submitTransactionAction`/`getAccountHoldingsAction` (Task 24), `resolveTickerAction` (Task 9), `computeCashPreview` (Task 22), `localTodayIso` (Task 2), `NavBar`/`buttonLinkStyle` (Task 3).
 
 Per this session's correction: `accounts` (and each account's `cashUsd`) is a prop, set once from the server component's initial render — without a fix, a second transaction entered right after a successful first one would preview against the now-stale original balance, not the balance the first transaction actually produced. This task adds a per-account local cash override, updated immediately from the just-computed preview on a successful submit (the preview *is* the new balance — no extra read needed), plus a `router.refresh()` so the next full page load also picks up the server-computed figure.
+
+Per this session's final-review correction, this task also fixes four issues:
+- **Resolved ticker/asset identity must never go stale (CRITICAL item 1).** The same bug as Task 13's holdings step exists here for Buy: editing the ticker text or asset type after a resolution completes must immediately clear the resolved `assetId`, and `submit()` must require the current normalized ticker still matches what was actually resolved before allowing an Add.
+- **The Server Action call itself can reject, not just resolve with an error (CRITICAL item 2).** `submit()` now wraps the `submitTransactionAction` call in `try/catch/finally` — `finally` always clears `submitting` (so the form never gets permanently stuck), and a rejection shows honest "couldn't reach the server, don't know whether it saved" copy rather than inviting a blind retry.
+- **`cashOverride` must only bridge latency, never permanently shadow fresher server data (item 6).** Without a fix, once set, the local override always wins over the `accounts` prop forever — even after `router.refresh()` (or a later full page load) delivers genuinely newer server-computed cash. It's now cleared whenever the `accounts` prop itself changes identity (i.e. a fresh server render actually landed), so the server value becomes authoritative again the moment it arrives.
+- **The Sell holdings fetch has no staleness guard (item 7).** Switching accounts quickly while Sell is selected fires overlapping `getAccountHoldingsAction` calls; without a guard, an older account's slower response can overwrite state after the user has already moved to a different account. A request-id guard fixes the race, and the same fetch now also re-runs after a successful Buy or Sell on the current account (previously it only ever ran on account/type change, so a just-changed position never refreshed the picker without switching away and back).
 
 - [ ] **Step 1: Write the failing component tests**
 
@@ -4614,14 +5056,19 @@ vi.mock("@/app/actions/transactions", () => ({
   submitTransactionAction: (...args: unknown[]) => submitTransactionActionMock(...args),
   getAccountHoldingsAction: (...args: unknown[]) => getAccountHoldingsActionMock(...args),
 }));
+
+const resolveTickerActionMock = vi.fn();
 vi.mock("@/app/actions/setup", () => ({
-  resolveTickerAction: vi.fn(),
+  resolveTickerAction: (...args: unknown[]) => resolveTickerActionMock(...args),
 }));
 
 const accounts = [{ id: 1, name: "Test Brokerage", custodian: null, cashUsd: "1000.00" }];
 
 beforeEach(() => {
   submitTransactionActionMock.mockClear();
+  getAccountHoldingsActionMock.mockClear();
+  getAccountHoldingsActionMock.mockResolvedValue([]);
+  resolveTickerActionMock.mockClear();
   refreshMock.mockClear();
 });
 
@@ -4678,6 +5125,112 @@ describe("TransactionForm — cash refresh after a successful transaction", () =
     // Also refreshes the server-rendered page so a later full reload reflects it too.
     expect(refreshMock).toHaveBeenCalled();
   });
+
+  it("does not permanently shadow a fresher accounts prop — once new server data arrives (e.g. via router.refresh()), it becomes authoritative again", async () => {
+    submitTransactionActionMock.mockResolvedValueOnce({ ok: true, transactionId: "1" });
+    const { rerender } = render(<TransactionForm accounts={accounts} />);
+
+    fireEvent.change(screen.getByLabelText(/amount \(usd\)/i), { target: { value: "200" } });
+    fireEvent.click(screen.getByText("Add transaction"));
+    await waitFor(() => expect(screen.getByText("Transaction added.")).toBeInTheDocument());
+    expect(screen.getByText(/\(currently \$1200\.00\)/)).toBeInTheDocument(); // the client-side override
+
+    // Simulate router.refresh() delivering a NEW accounts prop — e.g. a
+    // second transaction was also applied (another tab, or a wizard-created
+    // account), so the true server balance is 1500.00, not the client's
+    // own 1200.00 override.
+    const refreshedAccounts = [{ id: 1, name: "Test Brokerage", custodian: null, cashUsd: "1500.00" }];
+    rerender(<TransactionForm accounts={refreshedAccounts} />);
+
+    expect(screen.getByText(/\(currently \$1500\.00\)/)).toBeInTheDocument();
+  });
+});
+
+describe("TransactionForm — resolved-ticker staleness guard (Buy)", () => {
+  it("blocks submitting a Buy when the ticker was edited after resolution without re-resolving (resolved AAPL, edited to MSFT)", async () => {
+    resolveTickerActionMock.mockResolvedValue({
+      ok: true, assetId: "1", assetClass: "equity", priceUsd: "228.50", priceDate: "2026-08-25",
+    });
+    render(<TransactionForm accounts={accounts} />);
+
+    fireEvent.click(screen.getByLabelText("BUY"));
+    fireEvent.change(screen.getByLabelText(/ticker symbol/i), { target: { value: "AAPL" } });
+    fireEvent.blur(screen.getByLabelText(/ticker symbol/i));
+    await waitFor(() => expect(screen.getByText(/Resolved — last price \$228.50/)).toBeInTheDocument());
+
+    // Edit the ticker text WITHOUT triggering another blur/resolve.
+    fireEvent.change(screen.getByLabelText(/ticker symbol/i), { target: { value: "MSFT" } });
+    expect(screen.queryByText(/Resolved — last price \$228.50/)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^quantity$/i), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText(/price \(usd\)/i), { target: { value: "100" } });
+    fireEvent.click(screen.getByText("Add transaction"));
+
+    await waitFor(() => expect(screen.getByText(/resolve the ticker first/i)).toBeInTheDocument());
+    expect(submitTransactionActionMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("TransactionForm — Server Action rejection handling", () => {
+  it("shows an honest 'couldn't reach the server' message and re-enables the submit button when the Server Action call itself rejects", async () => {
+    submitTransactionActionMock.mockRejectedValueOnce(new Error("simulated network drop"));
+    render(<TransactionForm accounts={accounts} />);
+
+    fireEvent.change(screen.getByLabelText(/amount \(usd\)/i), { target: { value: "100" } });
+    fireEvent.click(screen.getByText("Add transaction"));
+
+    await waitFor(() => expect(screen.getByText(/couldn't reach the server/i)).toBeInTheDocument());
+    // finally clears `submitting` even on rejection.
+    expect(screen.getByText("Add transaction")).toBeEnabled();
+  });
+});
+
+describe("TransactionForm — Sell holdings freshness/race guard", () => {
+  it("does not let a slow response for a previous account overwrite the holdings picker after switching accounts", async () => {
+    const twoAccounts = [
+      { id: 1, name: "Account A", custodian: null, cashUsd: "1000.00" },
+      { id: 2, name: "Account B", custodian: null, cashUsd: "500.00" },
+    ];
+    let resolveAccountA: (value: unknown) => void;
+    getAccountHoldingsActionMock.mockImplementation((accountId: number) => {
+      if (accountId === 1) return new Promise((resolve) => { resolveAccountA = resolve; });
+      return Promise.resolve([{ assetId: "b1", symbol: "BBB", quantity: "3.0000" }]);
+    });
+
+    render(<TransactionForm accounts={twoAccounts} />);
+    fireEvent.click(screen.getByLabelText("SELL"));
+    // Account A's holdings request is now in flight (deliberately unresolved).
+
+    fireEvent.change(screen.getByLabelText(/^account$/i), { target: { value: "2" } });
+    await waitFor(() => expect(screen.getByText(/BBB — 3\.0000 held/)).toBeInTheDocument());
+
+    // NOW let Account A's stale, slower response resolve.
+    resolveAccountA!([{ assetId: "a1", symbol: "AAA", quantity: "9.0000" }]);
+
+    // It must NOT clobber the already-current Account B holdings.
+    expect(screen.getByText(/BBB — 3\.0000 held/)).toBeInTheDocument();
+    expect(screen.queryByText(/AAA — 9\.0000 held/)).not.toBeInTheDocument();
+  });
+
+  it("refetches holdings after a successful Sell on the current account, without requiring an account switch", async () => {
+    submitTransactionActionMock.mockResolvedValueOnce({ ok: true, transactionId: "1" });
+    getAccountHoldingsActionMock
+      .mockResolvedValueOnce([{ assetId: "a1", symbol: "AAA", quantity: "5.0000" }])
+      .mockResolvedValueOnce([{ assetId: "a1", symbol: "AAA", quantity: "3.0000" }]);
+
+    render(<TransactionForm accounts={accounts} />);
+    fireEvent.click(screen.getByLabelText("SELL"));
+    await waitFor(() => expect(screen.getByText(/AAA — 5\.0000 held/)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/^holding$/i), { target: { value: "a1" } });
+    fireEvent.change(screen.getByLabelText(/^quantity$/i), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText(/price \(usd\)/i), { target: { value: "10" } });
+    fireEvent.click(screen.getByText("Add transaction"));
+    await waitFor(() => expect(screen.getByText("Transaction added.")).toBeInTheDocument());
+
+    await waitFor(() => expect(screen.getByText(/AAA — 3\.0000 held/)).toBeInTheDocument());
+    expect(getAccountHoldingsActionMock).toHaveBeenCalledTimes(2);
+  });
 });
 ```
 
@@ -4691,7 +5244,7 @@ Expected: FAIL — `./TransactionForm` does not exist yet.
 ```tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Decimal from "decimal.js";
 import { resolveTickerAction, type TickerResolutionResult } from "@/app/actions/setup";
@@ -4721,6 +5274,13 @@ export function TransactionForm({ accounts }: { accounts: AccountOption[] }) {
   const [ticker, setTicker] = useState("");
   const [assetClass, setAssetClass] = useState<AssetClass>("equity");
   const [tickerResolution, setTickerResolution] = useState<TickerResolutionResult | null>(null);
+  // The normalized ticker text tickerResolution was actually resolved for
+  // (per this session's final-review correction — same fix as Task 13's
+  // wizard holdings step). Ticker text and asset class can change after a
+  // resolution completes; without tracking this and re-checking it in
+  // submit(), an edit from a resolved "AAPL" to "MSFT" could submit MSFT's
+  // ticker text with AAPL's already-resolved assetId.
+  const [resolvedTicker, setResolvedTicker] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
   const [holdings, setHoldings] = useState<{ assetId: string; symbol: string; quantity: string }[]>([]);
   const [selectedHoldingAssetId, setSelectedHoldingAssetId] = useState("");
@@ -4739,22 +5299,57 @@ export function TransactionForm({ accounts }: { accounts: AccountOption[] }) {
   // render) instead of the balance the first transaction actually produced.
   const [cashOverride, setCashOverride] = useState<Record<number, string>>({});
 
+  // Per this session's final-review correction: cashOverride must only
+  // bridge the latency until router.refresh() (called on every successful
+  // submit below) actually delivers a fresh `accounts` prop — it must
+  // never permanently shadow that fresher server data. Whenever the
+  // `accounts` prop's IDENTITY changes (a new server render actually
+  // landed, whether from THIS component's own refresh() or any other
+  // cause), the override is dropped so the incoming prop is authoritative
+  // again. A ref (not state) tracks the previous prop purely to detect
+  // that change — it never itself drives a render.
+  const previousAccountsRef = useRef(accounts);
+  useEffect(() => {
+    if (previousAccountsRef.current !== accounts) {
+      setCashOverride({});
+      previousAccountsRef.current = accounts;
+    }
+  }, [accounts]);
+
+  // Per this session's final-review correction: guards the Sell holdings
+  // fetch against two races — (a) switching accounts while a slower
+  // request for the PREVIOUS account is still in flight must not let that
+  // stale response overwrite the current account's holdings, and (b) a
+  // successful Buy/Sell changes the account's real positions, so the
+  // picker must refetch even though neither txnType nor accountId changed.
+  const holdingsRequestIdRef = useRef(0);
+  async function refreshHoldings(forAccountId: number) {
+    const requestId = ++holdingsRequestIdRef.current;
+    const result = await getAccountHoldingsAction(forAccountId);
+    if (requestId === holdingsRequestIdRef.current) {
+      setHoldings(result);
+    }
+  }
+
   useEffect(() => {
     if (txnType !== "SELL") return;
-    getAccountHoldingsAction(accountId).then(setHoldings);
+    refreshHoldings(accountId);
   }, [txnType, accountId]);
 
   useEffect(() => {
     setTickerResolution(null);
+    setResolvedTicker(null);
     setSelectedHoldingAssetId("");
   }, [txnType, accountId]);
 
   async function handleTickerBlur() {
-    if (!ticker.trim()) return;
+    const normalized = ticker.trim().toUpperCase();
+    if (!normalized) return;
     setResolving(true);
     const result = await resolveTickerAction(ticker, assetClass);
     setResolving(false);
     setTickerResolution(result);
+    setResolvedTicker(normalized);
   }
 
   const currentCashUsd = new Decimal(
@@ -4775,7 +5370,7 @@ export function TransactionForm({ accounts }: { accounts: AccountOption[] }) {
   }
 
   function resetEntryFields() {
-    setAmount(""); setTicker(""); setTickerResolution(null); setSelectedHoldingAssetId("");
+    setAmount(""); setTicker(""); setTickerResolution(null); setResolvedTicker(null); setSelectedHoldingAssetId("");
     setQuantity(""); setPriceUsd(""); setFeesUsd("0"); setNote("");
   }
 
@@ -4783,30 +5378,59 @@ export function TransactionForm({ accounts }: { accounts: AccountOption[] }) {
     setSubmitting(true);
     setErrors({});
     setDuplicateWarning(null);
+
+    if (txnType === "BUY") {
+      // Require the CURRENT normalized ticker to still match what
+      // tickerResolution.assetId was actually resolved for — the input's
+      // onChange below already clears both the instant the ticker text or
+      // asset type changes, so this is a second, explicit guard.
+      const normalizedTicker = ticker.trim().toUpperCase();
+      if (!tickerResolution?.assetId || resolvedTicker !== normalizedTicker) {
+        setSubmitting(false);
+        setErrors({ form: "Resolve the ticker first (wait for the checking… state to finish, or re-enter it if you changed it after resolving)." });
+        return;
+      }
+    }
+
     const assetId = txnType === "BUY" ? (tickerResolution?.assetId ?? "") : txnType === "SELL" ? selectedHoldingAssetId : "";
     const appliedPreview = preview; // capture before resetEntryFields() clears the inputs it was derived from
 
-    const result = await submitTransactionAction({
-      accountId, txnType, tradeDate, amount, assetId, quantity, priceUsd, feesUsd, note, confirmDuplicate,
-    });
-    setSubmitting(false);
+    try {
+      const result = await submitTransactionAction({
+        accountId, txnType, tradeDate, amount, assetId, quantity, priceUsd, feesUsd, note, confirmDuplicate,
+      });
 
-    if (result.ok === "duplicate") {
-      setDuplicateWarning(
-        `This looks similar to a transaction from ${result.duplicateTradeDate} (same account, ticker, type, quantity and price).`
-      );
-      return;
+      if (result.ok === "duplicate") {
+        setDuplicateWarning(
+          `This looks similar to a transaction from ${result.duplicateTradeDate} (same account, ticker, type, quantity and price).`
+        );
+        return;
+      }
+      if (!result.ok) {
+        setErrors(result.errors);
+        return;
+      }
+      setSuccessMessage("Transaction added.");
+      if (appliedPreview) {
+        setCashOverride((prev) => ({ ...prev, [accountId]: appliedPreview.toFixed(2) }));
+      }
+      if (txnType === "BUY" || txnType === "SELL") {
+        await refreshHoldings(accountId); // the just-applied Buy/Sell changed real positions
+      }
+      router.refresh(); // keeps the server-rendered accounts/recent-transactions in sync too
+      resetEntryFields();
+    } catch {
+      // The Server Action call itself rejected (network/transport
+      // failure), not a returned outcome. We genuinely don't know whether
+      // it committed, so this must never invite a blind retry.
+      setErrors({
+        form:
+          "We couldn't reach the server to confirm whether this transaction was saved. Check the recent-transactions " +
+          "list below before trying again — submitting again could create a duplicate if the first attempt actually succeeded.",
+      });
+    } finally {
+      setSubmitting(false);
     }
-    if (!result.ok) {
-      setErrors(result.errors);
-      return;
-    }
-    setSuccessMessage("Transaction added.");
-    if (appliedPreview) {
-      setCashOverride((prev) => ({ ...prev, [accountId]: appliedPreview.toFixed(2) }));
-    }
-    router.refresh(); // keeps the server-rendered accounts/recent-transactions in sync too
-    resetEntryFields();
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -4853,7 +5477,18 @@ export function TransactionForm({ accounts }: { accounts: AccountOption[] }) {
         {txnType === "BUY" && (
           <>
             <label>Ticker symbol<br />
-              <input value={ticker} onChange={(e) => setTicker(e.target.value)} onBlur={handleTickerBlur} />
+              <input
+                value={ticker}
+                onChange={(e) => {
+                  // Per this session's final-review correction: clear the
+                  // resolved identity the instant the ticker text changes
+                  // — a previous resolution is for a DIFFERENT symbol now.
+                  setTicker(e.target.value);
+                  setTickerResolution(null);
+                  setResolvedTicker(null);
+                }}
+                onBlur={handleTickerBlur}
+              />
             </label><br />
             {resolving && <p>checking…</p>}
             {tickerResolution && tickerResolution.ok && (
@@ -4861,7 +5496,16 @@ export function TransactionForm({ accounts }: { accounts: AccountOption[] }) {
             )}
             {tickerResolution && !tickerResolution.ok && <p>{tickerResolution.message}</p>}
             <label>Asset type<br />
-              <select value={assetClass} onChange={(e) => setAssetClass(e.target.value as AssetClass)}>
+              <select
+                value={assetClass}
+                onChange={(e) => {
+                  // Asset class was part of what was resolved — changing
+                  // it invalidates the resolution just like the ticker does.
+                  setAssetClass(e.target.value as AssetClass);
+                  setTickerResolution(null);
+                  setResolvedTicker(null);
+                }}
+              >
                 <option value="equity">Equity</option>
                 <option value="etf">ETF</option>
                 <option value="crypto">Crypto</option>
@@ -4950,6 +5594,13 @@ import { getAccountCashMap } from "@/lib/accountCash";
 import { getRecentTransactions } from "@/lib/transactionHistory";
 import { TransactionForm } from "./TransactionForm";
 
+// Always render dynamically — this page reads live DB state (accounts,
+// cash, recent transactions) on every request and must never be frozen as
+// a static build-time snapshot. This also ensures the revalidatePath("/transactions")
+// calls in app/actions/setup.ts (Task 14) and app/actions/transactions.ts
+// (Task 24) have a per-request render to invalidate.
+export const dynamic = "force-dynamic";
+
 export default async function TransactionsPage() {
   const accounts = await listAccounts();
 
@@ -5013,7 +5664,7 @@ export default async function TransactionsPage() {
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `npx vitest run app/transactions/TransactionForm.test.tsx`
-Expected: PASS, 3 tests.
+Expected: PASS, 8 tests.
 
 - [ ] **Step 6: Manual verification — full golden path**
 
@@ -5021,21 +5672,22 @@ With `npm run dev` running and the account from Task 15's walkthrough still pres
 
 1. Open `http://localhost:3000/transactions`. Add a **Deposit** of `500` — confirm the cash-preview line is correct before submit, and `/` reflects the new total after.
 2. Immediately add a **second Deposit** of `100` without reloading the page — confirm its "currently $..." figure already reflects the first deposit's result (not the page's original load-time balance).
-3. Add a **Buy** using a resolvable ticker — confirm ticker resolution works the same as the wizard's.
+3. Add a **Buy** using a resolvable ticker — confirm ticker resolution works the same as the wizard's. Then resolve a ticker, edit the text afterward WITHOUT tabbing out again, and click "Add transaction" — confirm it's blocked with "Resolve the ticker first..." rather than silently submitting under the previously-resolved symbol's identity.
 4. Immediately re-submit the **exact same Buy**. Confirm the duplicate warning appears with "Add anyway"/"Cancel", and "Add anyway" successfully submits.
-5. Add a **Sell**: confirm the "Holding" dropdown is populated from real current positions.
+5. Add a **Sell**: confirm the "Holding" dropdown is populated from real current positions, and that it reflects the reduced quantity immediately after the Sell completes (no account switch needed).
 6. Submit an invalid **Withdrawal** (e.g. `-5`). Confirm an inline field error appears beside Amount, the page doesn't blank/throw, and every other field retains what was entered.
+7. Submit a **Buy priced at `0`**. Confirm it's rejected with a "must be greater than zero" error beside Price, not silently accepted.
 
-**UX acceptance check:** all of the above.
+**UX acceptance check:** all of the above. The Server Action rejection and holdings-race scenarios (item 6 above's sibling checks) aren't practically reproducible by hand — they're covered deterministically by the automated tests in Step 5.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add app/transactions/page.tsx app/transactions/TransactionForm.tsx app/transactions/TransactionForm.test.tsx
-git commit -m "feat: Transactions page full form — ticker resolution, sell picker, duplicate warning, cash preview refreshed after each success"
+git commit -m "feat: Transactions page full form — ticker resolution (staleness-guarded), sell picker (race-guarded, refetched after Buy/Sell), duplicate warning, cash preview refreshed after each success without permanently shadowing fresh server data, Server Action rejection handling"
 ```
 
-**Functional acceptance check:** `npx vitest run app/transactions/TransactionForm.test.tsx` PASS, 3/3 — directly covers "inline validation with entered values preserved," "double-submit prevention," and this session's "cash refresh after successful transaction" requirement (two sequential transactions/previews) for the Transactions form.
+**Functional acceptance check:** `npx vitest run app/transactions/TransactionForm.test.tsx` PASS, 8/8 — directly covers "inline validation with entered values preserved," "double-submit prevention," and this session's "cash refresh after successful transaction" requirement (two sequential transactions/previews) for the Transactions form, plus this session's final-review requirements for resolved-ticker staleness (Buy), Server Action rejection handling, the cash-override-must-not-permanently-shadow-fresh-props fix, and the Sell holdings race/refetch guard.
 **UX acceptance check:** see Step 6 above.
 
 ---
@@ -5151,7 +5803,23 @@ git commit -m "chore: remove superseded app/actions.ts now that all pages use ap
 | 4. Commit vs. post-commit verification failure | `setupAccountAction` returns a 3-way `status`; commit and verification are separate `try/catch` blocks; `verifySetup` also checks the account row and opening date | 8, 14, 15 | `app/actions/setup.test.ts`'s `saved_verification_error` test (real commit, mocked verify failure), `verifySetup.test.ts`'s account-row/opening-date tests, `SetupWizard.test.tsx`'s "unverified" screen test |
 | 5. Transaction cash not refreshed after success | `TransactionForm` tracks a per-account cash override, updated from the applied preview on success, plus `router.refresh()` | 25 | `TransactionForm.test.tsx`'s two-sequential-transactions test |
 
-**Constraint check:** no task modifies `migrations/001_portfolio_core.sql`; no task changes `lib/ledger/cashEffect.ts` or `lib/ledger/positions.ts`'s accumulation logic; no task touches the append-only trigger; every task that reuses an existing function (`createAccount`, `applyTransaction`, `applyOpeningCashAdjustment`, `applyOpeningPositionAdjustment`, `upsertLatestPrice`, `resolveOrCreateAsset`) does so unmodified in behaviour when called without the new optional `client` param (Task 6's own regression tests confirm this explicitly); `recordAccountReconciliation` is untouched and not wired into any UI in this pass (Tasks 19–20 deferred); no M2/M3/M4 feature, reversal UI, full reconciliation workflow, or company-name lookup appears anywhere in this plan.
+**This session's final-review (independent Opus review) corrections, mapped:**
+
+| # | Issue | Fix | Task(s) | Test |
+|---|---|---|---|---|
+| 1 (CRITICAL) | Resolved ticker/asset identity could go stale (edit after resolve keeps the old assetId) | `resolvedTicker` tracked separately; ticker/asset-type `onChange` clears resolution immediately; the pre-submit gate requires the current normalized ticker to still equal `resolvedTicker` | 13, 15 (wizard), 25 (Buy) | `SetupWizard.test.tsx`'s and `TransactionForm.test.tsx`'s "resolve A → edit to B → submit blocked" tests |
+| 2 (CRITICAL) | A rejected Server Action call (transport failure) left `saving`/`submitting` stuck true and gave no feedback | `handleConfirmSave`/`submit` wrap the call in `try/catch/finally`; `finally` always clears the pending flag; the `catch` shows honest "couldn't reach the server, don't know if it saved" copy, never inviting a blind retry | 15 (wizard), 25 (transactions) | `SetupWizard.test.tsx`'s and `TransactionForm.test.tsx`'s Server-Action-rejection tests |
+| 3 | Quantity entered beyond `NUMERIC(28,10)`'s precision could diverge between the write and the read-back verification, looking like a system bug | `setupAccountAction` normalizes every holding's quantity to `.toDecimalPlaces(10)` once, before using the SAME value for both `setupAccount` and `verifySetup`'s `expectedHoldings`; rounded holdings are disclosed positively on the Complete screen | 14, 15 | `app/actions/setup.test.ts`'s `>10dp` round-trip test |
+| 4 | Cache revalidation ran after verification (could be skipped by a verification failure); DB-backed pages weren't explicitly dynamic | `revalidatePath` (now `/`, `/accounts`, `/transactions`) moved to immediately after the commit succeeds, before `verifySetup` runs; `export const dynamic = "force-dynamic"` added to all three DB-backed pages | 3, 4, 5, 14, 25 | Covered by existing `setupAccountAction` tests exercising the success path; dynamic-export presence is a manual/type-level check (no runtime test framework hook for Next's route config) |
+| 5 | A `ROLLBACK` failure could mask the original transaction error; an in-doubt `COMMIT` failure had no distinct outcome and risked being inferred from account-name existence (unsound — duplicate names are allowed) | `setupAccount` preserves the original error when `ROLLBACK` itself fails; a `COMMIT` failure throws the distinct `SetupCommitUncertainError` (no `ROLLBACK` attempted); `setupAccountAction` maps it to `status: "save_unknown"`, distinct from `save_failed` | 7, 14, 15 | `setupAccount.test.ts`'s rollback-masking and commit-uncertain tests; `app/actions/setup.test.ts`'s `save_unknown` test; `SetupWizard.test.tsx`'s uncertain-outcome banner test |
+| 6 | `cashOverride` could permanently shadow a fresher `accounts` prop | Cleared via a `useEffect` keyed on the `accounts` prop's own identity change, so newer server data supersedes it the moment it arrives | 25 | `TransactionForm.test.tsx`'s "does not permanently shadow a fresher accounts prop" test |
+| 7 | The Sell holdings fetch had no staleness guard and never refetched after a Buy/Sell without an account switch | `refreshHoldings` uses a request-id ref to discard an out-of-order response; called both by the mount/account-switch effect and explicitly after a successful Buy/Sell | 25 | `TransactionForm.test.tsx`'s race-guard and refetch-after-Sell tests |
+| 8 | A queued `.mockRejectedValueOnce()` on a partial mock could leak into a later, unrelated test | `beforeEach` inside `describe("setupAccountAction", ...)` resets both the `verifySetup` and `setupAccount` mocks to their real implementation via `vi.importActual`, every test | 14 | Structural (defensive) — no dedicated assertion; verified by the existing suite passing deterministically regardless of test order |
+| 9 | `resolveTickerAction` and `lib/portfolio.ts` each duplicated DATE-normalization logic instead of reusing `normalizePgDate` | Both now import and call the shared `normalizePgDate` (Task 2) | 9, 16 | Covered by each task's existing tests (no behavioural change, only de-duplication) |
+| 10 | Buy/Sell price allowed `0` (only non-negative was enforced) | `parsePositiveOrError(input.priceUsd, false)` — strictly greater than zero | 24 | `app/actions/transactions.test.ts`'s zero-price rejection test |
+| 11 | Dangerous-path test coverage checklist | Every item (stale-resolved-symbol, `>10dp` round-trip, Server Action rejection/uncertain outcome, new-account visible on Transactions, refreshed cash on a 2nd transaction, stale/racing Sell holdings) is covered by the tests listed against issues 1–7 above | 13, 14, 15, 25 | See rows above; "new account visible on Transactions" is covered by Task 26's full regression walkthrough (Step 3) rather than a unit test, since it's an end-to-end cross-page assertion |
+
+**Constraint check:** no task modifies `migrations/001_portfolio_core.sql`; no task changes `lib/ledger/cashEffect.ts` or `lib/ledger/positions.ts`'s accumulation logic; no task touches the append-only trigger; every task that reuses an existing function (`createAccount`, `applyTransaction`, `applyOpeningCashAdjustment`, `applyOpeningPositionAdjustment`, `upsertLatestPrice`, `resolveOrCreateAsset`) does so unmodified in behaviour when called without the new optional `client` param (Task 6's own regression tests confirm this explicitly); `recordAccountReconciliation` is untouched and not wired into any UI in this pass (Tasks 19–20 deferred); no M2/M3/M4 feature, reversal UI, full reconciliation workflow, or company-name lookup appears anywhere in this plan. This session's final-review pass adds no schema change either — `SetupCommitUncertainError` is a new *error class*, not new persisted state, and every fix above is confined to the `app/actions/*.ts` / `lib/ledger/setupAccount.ts` / component layers already touched by the original plan; no task count changed (still 26, with 19–20 still deferred as a numbered slot) and no new files were introduced by this pass.
 
 ---
 
