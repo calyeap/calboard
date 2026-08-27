@@ -4,6 +4,8 @@
 **Scope:** Product V1 — Portfolio + News Intelligence.
 **Conventions:** all money and quantity columns `NUMERIC(28,10)` — never floating point. All timestamps `TIMESTAMPTZ`, stored UTC. Milestone tags `[M1] [M2] [M3] [M4]`.
 
+> **Supersession note (2026-08-27) — snapshot/mirror UX.** The V1 user-facing flow is snapshot/mirror: users enter and update **current** holding quantities and average cost; they do **not** enter Buy/Sell/Deposit/Withdrawal transactions, and there is no cash, multi-account, or per-broker UX. The schema, ledger rules, and every primitive in this document are **unchanged** — `transactions`, `positions_current`, `account_cash`, `ADJUSTMENT`, `accounts`, `sources` etc. remain as designed and are used internally (a single hidden account; user edits are written as `ADJUSTMENT` rows). Transaction/ledger language here describes backend internals unless explicitly about user-entered data. Revision 3 of the Portfolio Setup UX design governs user-facing behaviour where older wording conflicts.
+
 ---
 
 ## 1. Schema map — and what is deliberately absent

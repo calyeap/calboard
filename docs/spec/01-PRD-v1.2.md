@@ -7,6 +7,8 @@
 
 Every requirement below is **V1** unless explicitly marked V2/V3/V4. There are no sub-tiers.
 
+> **Supersession note (2026-08-27) — snapshot/mirror UX.** V1's user-facing model is now snapshot/mirror: the user records the **current** quantity and average cost of each holding and updates those figures when their real holdings change. Users do **not** enter Buy / Sell / Deposit / Withdrawal transactions, and V1 has no brokerage-cash, multi-account, or per-broker UX. Any remaining transaction/ledger wording in this document refers to internal backend primitives (the append-only `transactions` table, `ADJUSTMENT` rows, derived positions) unless a requirement explicitly concerns user-entered transactions. Where older transaction-entry wording conflicts with user-facing behaviour, **Revision 3 of the Portfolio Setup UX design** (`docs/superpowers/specs/2026-08-26-portfolio-setup-ux-design.md`) governs. Accounting model, schema, and ledger rules are unchanged.
+
 ---
 
 ## 1. Product vision
