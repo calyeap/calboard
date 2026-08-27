@@ -191,6 +191,24 @@ describe("SetupWizard — Step 1 holdings list", () => {
     expect(screen.getByText(/add at least one holding/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /add your holdings/i })).toBeInTheDocument();
   });
+
+  it("clears the stale 'Add at least one holding.' error once a holding is successfully added", async () => {
+    resolveTickerActionMock.mockResolvedValue(okResolution({ priceUsd: "100.00" }));
+    render(<SetupWizard />);
+
+    // 1. Trigger the Step 1 "no holdings" error.
+    fireEvent.click(screen.getByRole("button", { name: /next: review/i }));
+    expect(screen.getByText(/add at least one holding/i)).toBeInTheDocument();
+
+    // 2. Successfully add a holding.
+    await addHolding("AAPL", "5", "100");
+
+    // 3. The holding row is visible.
+    await waitFor(() => expect(screen.getByRole("cell", { name: "AAPL" })).toBeInTheDocument());
+
+    // 4. The stale Step 1 error is gone.
+    expect(screen.queryByText(/add at least one holding/i)).toBeNull();
+  });
 });
 
 describe("SetupWizard — Step 2 Review & Save", () => {

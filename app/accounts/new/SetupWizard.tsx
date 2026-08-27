@@ -192,6 +192,9 @@ export function SetupWizard() {
     setQuantityInput("");
     setCostInput("");
     clearResolution();
+    // A prior "Add at least one holding." (or other Step 1) error is now
+    // stale — the list is no longer empty.
+    setStep1Error(null);
   }
 
   function removeHolding(index: number) {
