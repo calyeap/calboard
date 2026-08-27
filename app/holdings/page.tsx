@@ -33,10 +33,11 @@ export default async function HoldingsPage() {
   );
 }
 
-// Current holdings pre-fill, joined with per-row price / market value /
-// unrealized P&L. getPortfolioView's positions carry the average cost and
-// price health; every value crossing to the client component is serialized
-// to a plain string first.
+// Current holdings pre-fill with per-row price health. getPortfolioView's
+// positions carry the average cost, latest price, and price date; every
+// value crossing to the client component is serialized to a plain string
+// first. Market value and unrealised P&L are NOT passed — the editor
+// derives them live from each row's edited quantity / average cost.
 async function buildInitialRows(): Promise<EditorInitialRow[]> {
   const portfolio = await getPortfolioView();
   return portfolio.positions.map((p) => ({
@@ -47,7 +48,6 @@ async function buildInitialRows(): Promise<EditorInitialRow[]> {
     avgCostUsd: p.avgCostUsd ? p.avgCostUsd.toString() : "0",
     priceUsd: p.latestPriceUsd ? p.latestPriceUsd.toFixed(2) : null,
     priceStatus: p.priceStatus,
-    marketValueUsd: p.marketValueUsd ? p.marketValueUsd.toFixed(2) : null,
-    unrealisedPlUsd: p.unrealisedPlUsd ? p.unrealisedPlUsd.toFixed(2) : null,
+    priceDate: p.priceDate,
   }));
 }

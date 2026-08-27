@@ -209,6 +209,47 @@ describe("SetupWizard — Step 1 holdings list", () => {
     // 4. The stale Step 1 error is gone.
     expect(screen.queryByText(/add at least one holding/i)).toBeNull();
   });
+
+  it("re-resolves (does not dead-end Add) when the asset type changes with a populated ticker", async () => {
+    resolveTickerActionMock.mockResolvedValue(okResolution({ priceUsd: "50.00" }));
+    render(<SetupWizard />);
+
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "SOFI" } });
+    fireEvent.blur(ticker);
+    await waitFor(() => expect(resolveTickerActionMock).toHaveBeenCalledWith("SOFI", "equity"));
+
+    fireEvent.change(screen.getByLabelText("Asset type"), { target: { value: "etf" } });
+    await waitFor(() => expect(resolveTickerActionMock).toHaveBeenCalledWith("SOFI", "etf"));
+    await waitFor(() => expect(screen.getByText(/resolved/i)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Average cost per unit (USD)"), { target: { value: "40" } });
+    fireEvent.click(screen.getByRole("button", { name: /\+ add holding/i }));
+    await waitFor(() => expect(screen.getByRole("cell", { name: "SOFI" })).toBeInTheDocument());
+  });
+
+  it("ignores a late resolution from a superseded ticker/asset-type selection", async () => {
+    let resolveOld: (v: any) => void = () => {};
+    resolveTickerActionMock
+      .mockImplementationOnce(() => new Promise((res) => { resolveOld = res; }))
+      .mockImplementationOnce(async () => okResolution({ assetId: "NEW", priceUsd: "77.00" }));
+    render(<SetupWizard />);
+
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "AAA" } });
+    fireEvent.blur(ticker); // call 1 (equity) — pending
+
+    fireEvent.change(screen.getByLabelText("Asset type"), { target: { value: "etf" } }); // call 2 — resolves now
+    await waitFor(() => expect(screen.getByText(/\$77\.00/)).toBeInTheDocument());
+
+    resolveOld(okResolution({ assetId: "OLD", priceUsd: "11.00" }));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(screen.queryByText(/\$11\.00/)).toBeNull();
+    expect(screen.getByText(/\$77\.00/)).toBeInTheDocument();
+  });
 });
 
 describe("SetupWizard — Step 2 Review & Save", () => {

@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Decimal from "decimal.js";
 import { localTodayIso } from "@/lib/dateValidation";
 import type { AssetClass } from "@/lib/assets";
 import type { PriceStatus } from "@/lib/portfolio";
+import { PriceCell } from "@/app/components/PriceCell";
 import { resolveTickerAction, type TickerResolutionResult } from "@/app/actions/setup";
 import { updateHoldingsAction } from "@/app/actions/holdings";
 import { isDuplicateTickerInDraft } from "@/lib/wizard/draftHoldings";
@@ -17,8 +18,7 @@ export interface EditorInitialRow {
   avgCostUsd: string; // serialized Decimal
   priceUsd: string | null;
   priceStatus: PriceStatus;
-  marketValueUsd: string | null;
-  unrealisedPlUsd: string | null;
+  priceDate: string | null;
 }
 
 interface Row extends EditorInitialRow {
@@ -49,6 +49,24 @@ function tryDecimal(s: string): Decimal | null {
   }
 }
 
+function isZeroQty(s: string): boolean {
+  const d = tryDecimal(s);
+  return d !== null && d.isZero();
+}
+
+// Live derived figures — market value = quantity × latest price, unrealised
+// gain/loss = (price − avgCost) × quantity, the same formula lib/portfolio.ts
+// uses for the Dashboard row/aggregate. A price-unavailable holding shows
+// nothing (preserved from Task 16/17); a stale price still contributes.
+function derived(r: Row): { mv: string; pl: string } {
+  const price = r.priceStatus === "unavailable" ? null : tryDecimal(r.priceUsd ?? "");
+  const qty = tryDecimal(r.quantity);
+  const avg = tryDecimal(r.avgCostUsd);
+  if (!price || !qty) return { mv: "—", pl: "—" };
+  const pl = avg ? price.sub(avg).mul(qty) : null;
+  return { mv: qty.mul(price).toFixed(2), pl: pl ? pl.toFixed(2) : "—" };
+}
+
 type SaveState =
   | { kind: "idle" }
   | { kind: "saved" }
@@ -66,12 +84,53 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
   const [asOfDate, setAsOfDate] = useState(localTodayIso());
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
+  // `initial` is read once by the lazy initializer above, so a server
+  // re-render (e.g. PriceCell's Retry -> router.refresh) would otherwise be
+  // ignored by the mounted editor. Sync ONLY the refreshed price metadata
+  // (priceUsd / priceStatus / priceDate) into matching existing rows, keyed
+  // by assetId — never touching quantity, average cost, baselines, removed
+  // state, row order, or rows added in this session (absent from `initial`).
+  // Returns the current array unchanged when nothing moved, so this causes
+  // no re-render churn and never remounts the editor.
+  useEffect(() => {
+    const meta = new Map(
+      initial.map((r) => [
+        r.assetId,
+        { priceUsd: r.priceUsd, priceStatus: r.priceStatus, priceDate: r.priceDate },
+      ])
+    );
+    setRows((rs) => {
+      let changed = false;
+      const next = rs.map((r) => {
+        const m = meta.get(r.assetId);
+        if (
+          !m ||
+          (r.priceUsd === m.priceUsd &&
+            r.priceStatus === m.priceStatus &&
+            r.priceDate === m.priceDate)
+        ) {
+          return r;
+        }
+        changed = true;
+        return { ...r, priceUsd: m.priceUsd, priceStatus: m.priceStatus, priceDate: m.priceDate };
+      });
+      return changed ? next : rs;
+    });
+  }, [initial]);
+
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
 
+  // Any structural or field change makes a prior Save outcome obsolete —
+  // clear it so a stale success/failure message or an index-keyed field
+  // error can never drift onto a row it no longer describes.
+  function clearSaveState() {
+    setSave((s) => (s.kind === "idle" ? s : { kind: "idle" }));
+  }
+
   // Add-a-holding draft row — mirrors the wizard's Step 1 resolver + the
-  // resolved-ticker staleness guard.
+  // resolved-ticker staleness guard, plus a race-safe request counter.
   const [tickerInput, setTickerInput] = useState("");
   const [assetType, setAssetType] = useState<AssetClass>("equity");
   const [addQty, setAddQty] = useState("");
@@ -80,42 +139,54 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
   const [resolving, setResolving] = useState(false);
   const [resolution, setResolution] = useState<TickerResolutionResult | null>(null);
   const [resolvedTicker, setResolvedTicker] = useState<string | null>(null);
+  const [resolvedAssetClass, setResolvedAssetClass] = useState<AssetClass | null>(null);
   const [draftAssetId, setDraftAssetId] = useState<string | null>(null);
+  const resolveSeq = useRef(0);
 
   function clearResolution() {
     setResolution(null);
     setResolvedTicker(null);
+    setResolvedAssetClass(null);
     setDraftAssetId(null);
   }
 
-  async function handleTickerBlur() {
-    const normalized = tickerInput.trim().toUpperCase();
+  // Race-safe: every call takes the next sequence number; a response is
+  // applied only if it is still the latest. `forAssetClass` is passed
+  // explicitly so a select change re-resolves against the NEW class even
+  // though React state may not have updated within the same event tick.
+  async function resolveFor(rawTicker: string, forAssetClass: AssetClass) {
+    const normalized = rawTicker.trim().toUpperCase();
+    const seq = ++resolveSeq.current;
     if (!normalized) {
       clearResolution();
+      setResolving(false);
       return;
     }
+    clearResolution();
     setResolving(true);
-    setResolution(null);
     try {
-      const result = await resolveTickerAction(normalized, assetType);
+      const result = await resolveTickerAction(normalized, forAssetClass);
+      if (seq !== resolveSeq.current) return; // superseded by a newer request
       setResolution(result);
       setResolvedTicker(normalized);
+      setResolvedAssetClass(forAssetClass);
       setDraftAssetId(result.assetId);
     } finally {
-      setResolving(false);
+      if (seq === resolveSeq.current) setResolving(false);
     }
   }
 
   function addRow() {
     setAddError(null);
+    clearSaveState();
     const normalized = tickerInput.trim().toUpperCase();
     if (!normalized) {
       setAddError("Enter a ticker symbol.");
       return;
     }
     // Staleness guard: the current identity must have been resolved for
-    // exactly this normalized symbol.
-    if (!draftAssetId || resolvedTicker !== normalized) {
+    // exactly this normalized symbol AND the currently selected asset type.
+    if (!draftAssetId || resolvedTicker !== normalized || resolvedAssetClass !== assetType) {
       setAddError("Resolve the ticker first — enter it and tab out, or press Add anyway.");
       return;
     }
@@ -143,8 +214,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
         avgCostUsd: addCost,
         priceUsd: resolution && resolution.ok ? resolution.priceUsd : null,
         priceStatus: resolution && resolution.ok ? "current" : "unavailable",
-        marketValueUsd: null,
-        unrealisedPlUsd: null,
+        priceDate: resolution && resolution.ok ? resolution.priceDate : null,
         initialQuantity: "",
         initialAvgCostUsd: "",
         removed: false,
@@ -159,10 +229,12 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
   }
 
   function patchRow(i: number, patch: Partial<Row>) {
+    clearSaveState();
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   }
 
   function removeRow(i: number) {
+    clearSaveState();
     setRows((rs) => {
       const target = rs[i];
       if (target.isNew) return rs.filter((_, idx) => idx !== i);
@@ -171,6 +243,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
   }
 
   function undoRemove(i: number) {
+    clearSaveState();
     setRows((rs) =>
       rs.map((r, idx) => (idx === i ? { ...r, removed: false, quantity: r.initialQuantity } : r))
     );
@@ -209,18 +282,22 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
     setSaving(true);
     setSave({ kind: "idle" });
     try {
-      const holdings = rows.map((r) => ({
-        assetId: r.assetId,
-        quantity: r.removed ? "0" : r.quantity,
-        avgCostUsd: r.avgCostUsd,
-      }));
+      const holdings = rows.map((r) =>
+        r.removed
+          ? // A removed row is always an existing holding — submit its valid
+            // stored average cost, never whatever the (disabled) live field holds.
+            { assetId: r.assetId, quantity: "0", avgCostUsd: r.initialAvgCostUsd }
+          : { assetId: r.assetId, quantity: r.quantity, avgCostUsd: r.avgCostUsd }
+      );
       const result = await updateHoldingsAction({ asOfDate, holdings });
       if (result.ok === true) {
         // Rebase the baseline to the saved values so the avg-cost note
-        // clears and further edits diff correctly; drop removed rows.
+        // clears and further edits diff correctly. Drop every row whose
+        // saved target quantity is zero — whether it came from Remove or was
+        // typed manually — so it is not resubmitted on the next Save.
         setRows((rs) =>
           rs
-            .filter((r) => !r.removed)
+            .filter((r) => !r.removed && !isZeroQty(r.quantity))
             .map((r) => ({
               ...r,
               isNew: false,
@@ -271,11 +348,18 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
             aria-label="As-of date"
             value={asOfDate}
             max={localTodayIso()}
-            onChange={(e) => setAsOfDate(e.target.value)}
+            onChange={(e) => {
+              clearSaveState();
+              setAsOfDate(e.target.value);
+            }}
           />
         </p>
       )}
-      {errors.asOfDate && <p style={{ color: "#b00020" }}>{errors.asOfDate}</p>}
+      {errors.asOfDate && (
+        <p id="as-of-date-err" role="alert" style={{ color: "#b00020" }}>
+          {errors.asOfDate}
+        </p>
+      )}
 
       <table border={1} cellPadding={6} style={{ borderCollapse: "collapse", marginTop: "0.5rem" }}>
         <thead>
@@ -292,35 +376,70 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
         <tbody>
           {rows.map((r, i) => {
             const note = avgCostNote(r);
+            const d = r.removed ? { mv: "—", pl: "—" } : derived(r);
+            const qtyErr = errors[`holdings.${i}.quantity`];
+            const avgErr = errors[`holdings.${i}.avgCostUsd`];
+            const qtyErrId = `qty-${r.assetId}-err`;
+            const avgErrId = `avg-${r.assetId}-err`;
+            const noteId = `avg-${r.assetId}-note`;
+            const avgDescribedBy =
+              [avgErr ? avgErrId : null, note ? noteId : null].filter(Boolean).join(" ") || undefined;
             return (
               <tr key={r.assetId} style={r.removed ? { opacity: 0.5 } : undefined}>
                 <td>{r.symbol}</td>
                 <td>
                   <input
+                    id={`qty-${r.assetId}`}
                     aria-label={`Quantity for ${r.symbol}`}
+                    aria-invalid={qtyErr ? true : undefined}
+                    aria-describedby={qtyErr ? qtyErrId : undefined}
                     value={r.quantity}
                     disabled={r.removed}
                     onChange={(e) => patchRow(i, { quantity: e.target.value })}
                   />
-                  {errors[`holdings.${i}.quantity`] && (
-                    <div style={{ color: "#b00020" }}>{errors[`holdings.${i}.quantity`]}</div>
+                  {qtyErr && (
+                    <div id={qtyErrId} role="alert" style={{ color: "#b00020" }}>
+                      {qtyErr}
+                    </div>
                   )}
                 </td>
                 <td>
                   <input
+                    id={`avg-${r.assetId}`}
                     aria-label={`Average cost for ${r.symbol}`}
+                    aria-invalid={avgErr ? true : undefined}
+                    aria-describedby={avgDescribedBy}
                     value={r.avgCostUsd}
                     disabled={r.removed}
                     onChange={(e) => patchRow(i, { avgCostUsd: e.target.value })}
                   />
-                  {errors[`holdings.${i}.avgCostUsd`] && (
-                    <div style={{ color: "#b00020" }}>{errors[`holdings.${i}.avgCostUsd`]}</div>
+                  {avgErr && (
+                    <div id={avgErrId} role="alert" style={{ color: "#b00020" }}>
+                      {avgErr}
+                    </div>
                   )}
-                  {note && <div style={{ color: "#a15c00", fontSize: "0.85em" }}>{note}</div>}
+                  {note && (
+                    <div id={noteId} role="status" style={{ color: "#a15c00", fontSize: "0.85em" }}>
+                      {note}
+                    </div>
+                  )}
                 </td>
-                <td>{r.priceUsd ? `$${r.priceUsd}` : "—"}</td>
-                <td>{r.marketValueUsd ?? "—"}</td>
-                <td>{r.unrealisedPlUsd ?? "—"}</td>
+                <td>
+                  {r.removed ? (
+                    "—"
+                  ) : (
+                    <PriceCell
+                      assetId={r.assetId}
+                      symbol={r.symbol}
+                      assetClass={r.assetClass}
+                      priceStatus={r.priceStatus}
+                      priceUsd={r.priceUsd}
+                      priceDate={r.priceDate}
+                    />
+                  )}
+                </td>
+                <td>{d.mv}</td>
+                <td>{d.pl}</td>
                 <td>
                   {r.removed ? (
                     <button type="button" onClick={() => undoRemove(i)}>
@@ -349,9 +468,14 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
               value={tickerInput}
               onChange={(e) => {
                 setTickerInput(e.target.value);
+                setAddError(null);
+                clearSaveState();
+                // Invalidate any in-flight resolution for the old text; a
+                // blur re-resolves for the new one.
+                resolveSeq.current++;
                 clearResolution();
               }}
-              onBlur={handleTickerBlur}
+              onBlur={() => void resolveFor(tickerInput, assetType)}
             />
           </label>
           {resolving && <span>checking…</span>}
@@ -378,8 +502,18 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
               aria-label="Asset type"
               value={assetType}
               onChange={(e) => {
-                setAssetType(e.target.value as AssetClass);
-                clearResolution();
+                const next = e.target.value as AssetClass;
+                setAssetType(next);
+                setAddError(null);
+                clearSaveState();
+                if (tickerInput.trim()) {
+                  // Re-resolve against the NEW class rather than dead-ending
+                  // Add; pass it explicitly (state may be stale this tick).
+                  void resolveFor(tickerInput, next);
+                } else {
+                  resolveSeq.current++;
+                  clearResolution();
+                }
               }}
             >
               <option value="equity">Equity</option>

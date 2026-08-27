@@ -43,14 +43,18 @@ export function SetupWizard() {
   const [costInput, setCostInput] = useState("");
   const [holdingError, setHoldingError] = useState<string | null>(null);
 
-  // Resolution state. `resolvedTicker`/`draftAssetId` capture what the
-  // current identity was actually resolved for; editing the ticker text or
-  // the asset type clears them immediately so a stale identity can never be
-  // saved under a different symbol.
+  // Resolution state. `resolvedTicker`/`resolvedAssetClass`/`draftAssetId`
+  // capture what the current identity was actually resolved for; editing the
+  // ticker text clears them immediately, and changing the asset type
+  // re-resolves — so a stale identity can never be saved under a different
+  // symbol or class. `resolveSeq` makes a late response from a superseded
+  // request unable to overwrite the latest selection.
   const [resolving, setResolving] = useState(false);
   const [resolution, setResolution] = useState<TickerResolutionResult | null>(null);
   const [resolvedTicker, setResolvedTicker] = useState<string | null>(null);
+  const [resolvedAssetClass, setResolvedAssetClass] = useState<AssetClass | null>(null);
   const [draftAssetId, setDraftAssetId] = useState<string | null>(null);
+  const resolveSeq = useRef(0);
 
   // Step 2 — plain Review & Save. No sign-off checkbox, no statement-match
   // framing, no post-save verification screen (spec revision 3 §3.3).
@@ -118,24 +122,33 @@ export function SetupWizard() {
   function clearResolution() {
     setResolution(null);
     setResolvedTicker(null);
+    setResolvedAssetClass(null);
     setDraftAssetId(null);
   }
 
-  async function handleTickerBlur() {
-    const normalized = tickerInput.trim().toUpperCase();
+  // Race-safe: every call takes the next sequence number and its response is
+  // applied only if it is still the latest. `forAssetClass` is passed
+  // explicitly so a select change re-resolves against the NEW class even
+  // though React state may not have updated within the same event tick.
+  async function resolveFor(rawTicker: string, forAssetClass: AssetClass) {
+    const normalized = rawTicker.trim().toUpperCase();
+    const seq = ++resolveSeq.current;
     if (!normalized) {
       clearResolution();
+      setResolving(false);
       return;
     }
+    clearResolution();
     setResolving(true);
-    setResolution(null);
     try {
-      const result = await resolveTickerAction(normalized, assetType);
+      const result = await resolveTickerAction(normalized, forAssetClass);
+      if (seq !== resolveSeq.current) return; // superseded by a newer request
       setResolution(result);
       setResolvedTicker(normalized);
+      setResolvedAssetClass(forAssetClass);
       setDraftAssetId(result.assetId);
     } finally {
-      setResolving(false);
+      if (seq === resolveSeq.current) setResolving(false);
     }
   }
 
@@ -146,7 +159,7 @@ export function SetupWizard() {
       setHoldingError("Enter a ticker symbol.");
       return;
     }
-    if (!draftAssetId || resolvedTicker !== normalized) {
+    if (!draftAssetId || resolvedTicker !== normalized || resolvedAssetClass !== assetType) {
       setHoldingError("Resolve the ticker first — enter it and tab out, or press Add anyway.");
       return;
     }
@@ -212,10 +225,13 @@ export function SetupWizard() {
     setCostInput(
       costBasisMode === "average" ? h.avgCostUsd.toString() : h.avgCostUsd.mul(h.quantity).toString()
     );
-    // Its identity was already resolved for this ticker — carry it so an
-    // unchanged re-add needs no fresh resolution.
+    // Its identity was already resolved for this ticker and type — carry
+    // both so an unchanged re-add needs no fresh resolution, and bump the
+    // resolve sequence so any in-flight request can't clobber it.
+    resolveSeq.current++;
     setDraftAssetId(h.assetId);
     setResolvedTicker(h.ticker);
+    setResolvedAssetClass(h.assetType);
     setResolution(null);
     setHoldingError(null);
   }
@@ -315,9 +331,12 @@ export function SetupWizard() {
                 value={tickerInput}
                 onChange={(e) => {
                   setTickerInput(e.target.value);
+                  // Invalidate any in-flight resolution for the old text; a
+                  // blur re-resolves for the new one.
+                  resolveSeq.current++;
                   clearResolution();
                 }}
-                onBlur={handleTickerBlur}
+                onBlur={() => void resolveFor(tickerInput, assetType)}
               />
             </label>
             {resolving && <span>checking…</span>}
@@ -344,8 +363,17 @@ export function SetupWizard() {
                 aria-label="Asset type"
                 value={assetType}
                 onChange={(e) => {
-                  setAssetType(e.target.value as AssetClass);
-                  clearResolution();
+                  const next = e.target.value as AssetClass;
+                  setAssetType(next);
+                  if (tickerInput.trim()) {
+                    // Re-resolve against the NEW class rather than
+                    // dead-ending Add; pass it explicitly (state may be
+                    // stale this tick).
+                    void resolveFor(tickerInput, next);
+                  } else {
+                    resolveSeq.current++;
+                    clearResolution();
+                  }
                 }}
               >
                 <option value="equity">Equity</option>
