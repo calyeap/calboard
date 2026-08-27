@@ -144,6 +144,15 @@ h6 {
 .status-neutral {
   color: var(--color-text-muted);
 }
+/* A pathological long unbroken token (e.g. a pasted ticker echoed back in a
+   not-found resolution message) must wrap rather than force its container
+   wider — these colour-only utilities otherwise have no wrapping behaviour. */
+.status-danger,
+.status-warning,
+.status-success,
+.status-neutral {
+  overflow-wrap: anywhere;
+}
 
 /* Block banner treatment for standalone messages — save outcomes, the
    row-error summary, step errors, the excluded-holdings disclosure. Field
@@ -173,6 +182,9 @@ h6 {
   .editor-table td {
     display: block;
     width: 100%;
+    /* the <table border={1}> HTML hint still paints once display:block wins —
+       drop it so only the per-row card borders show */
+    border: 0;
   }
   .editor-table thead {
     /* the per-cell data-label carries the column meaning at this width */
@@ -203,5 +215,12 @@ h6 {
   .editor-table input {
     width: 100%;
     max-width: 20rem;
+  }
+  /* A <fieldset>'s UA min-inline-size is min-content, and the add-holding
+     fieldset has no overflow containment — a long unbroken token in its
+     resolution message would otherwise set a min-content floor wider than a
+     ~375px viewport and pan the page sideways. */
+  .page-shell fieldset {
+    min-inline-size: 0;
   }
 }
