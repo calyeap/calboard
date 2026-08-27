@@ -28,9 +28,9 @@ const C = SIZE / 2;
 export function AllocationDonut({ allocation }: { allocation: AllocationResult }) {
   if (!allocation.hasAllocation) {
     return (
-      <section>
+      <section className="dashboard-section allocation">
         <h2>Allocation</h2>
-        <p style={{ color: "#666" }}>
+        <p className="dashboard-note">
           Allocation isn&apos;t available yet — no holding has a usable market price.
         </p>
       </section>
@@ -47,9 +47,9 @@ export function AllocationDonut({ allocation }: { allocation: AllocationResult }
   let offset = 0;
 
   return (
-    <section>
+    <section className="dashboard-section allocation">
       <h2>Allocation</h2>
-      <div style={{ display: "flex", gap: "1.5rem", alignItems: "center", flexWrap: "wrap" }}>
+      <div className="allocation-layout">
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden="true">
           <circle cx={C} cy={C} r={R} fill="none" stroke="#eee" strokeWidth={STROKE} />
           {entries.map((e, i) => {

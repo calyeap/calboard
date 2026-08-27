@@ -208,3 +208,92 @@ describe("Dashboard — Allocation section", () => {
     expect(table.textContent).toContain("100.00%");
   });
 });
+
+// --- Task 31: hierarchy & responsive Dashboard ---
+describe("Dashboard — Task 31: hierarchy & responsive Dashboard", () => {
+  const twoPriced = () =>
+    portfolio([
+      position({ symbol: "AAPL", quantity: new Decimal("10"), latestPriceUsd: new Decimal("300"), marketValueUsd: new Decimal("3000") }),
+      position({ symbol: "MSFT", quantity: new Decimal("10"), latestPriceUsd: new Decimal("100"), marketValueUsd: new Decimal("1000") }),
+    ]);
+
+  function holdingsTableOf(): HTMLTableElement {
+    // The Holdings detail table is the one inside the "Holdings" section;
+    // the AllocationDonut legend lives in the "Allocation" section and has
+    // an accessible name (<caption>Allocation by holding</caption>).
+    return within(
+      screen.getByRole("heading", { name: /^holdings$/i }).closest("section")!
+    ).getByRole("table") as HTMLTableElement;
+  }
+
+  it("T31-1 (pass-at-baseline regression guard): section reading order is Portfolio Value -> Allocation -> Holdings", async () => {
+    getPortfolioViewMock.mockResolvedValue(twoPriced());
+    render(await DashboardPage());
+
+    const pv = screen.getByRole("heading", { name: "Portfolio Value" });
+    const alloc = screen.getByRole("heading", { name: /^allocation$/i });
+    const holdings = screen.getByRole("heading", { name: /^holdings$/i });
+    const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
+
+    expect(pv.compareDocumentPosition(alloc) & FOLLOWING).toBeTruthy();
+    expect(alloc.compareDocumentPosition(holdings) & FOLLOWING).toBeTruthy();
+  });
+
+  it("T31-2: the Dashboard holdings table is wrapped in the .editor-table responsive container", async () => {
+    getPortfolioViewMock.mockResolvedValue(twoPriced());
+    render(await DashboardPage());
+
+    const holdingsTable = holdingsTableOf();
+    expect(holdingsTable).not.toHaveAccessibleName();
+    expect(holdingsTable.parentElement).toHaveClass("editor-table");
+  });
+
+  it("T31-3: each Dashboard holdings row carries real-text .cell-label field labels in column order", async () => {
+    getPortfolioViewMock.mockResolvedValue(twoPriced());
+    render(await DashboardPage());
+
+    const firstRow = holdingsTableOf().querySelector("tbody tr")!;
+    const labels = Array.from(firstRow.querySelectorAll("td")).map(
+      (td) => td.querySelector(".cell-label")?.textContent ?? null
+    );
+    expect(labels).toEqual([
+      "Symbol",
+      "Qty",
+      "Avg cost",
+      "Price",
+      "Market value",
+      "Unrealised P&L",
+    ]);
+  });
+
+  it("T31-4 (pass-at-baseline regression guard): no duplicated holdings markup — one tbody, one row per position, one retry control per unpriced position", async () => {
+    getPortfolioViewMock.mockResolvedValue(
+      portfolio([
+        position({ symbol: "AAPL", priceStatus: "current", latestPriceUsd: new Decimal("300"), marketValueUsd: new Decimal("3000") }),
+        position({ symbol: "STL", priceStatus: "stale", priceDate: "2026-06-01", latestPriceUsd: new Decimal("50"), marketValueUsd: new Decimal("500") }),
+        position({ symbol: "NOPX", priceStatus: "unavailable", latestPriceUsd: null, marketValueUsd: null, unrealisedPlUsd: null }),
+      ])
+    );
+    render(await DashboardPage());
+
+    const holdingsTable = holdingsTableOf();
+    expect(holdingsTable.querySelectorAll("tbody").length).toBe(1);
+    expect(holdingsTable.querySelectorAll("tbody tr").length).toBe(3);
+    // Retry appears for the stale and the unavailable holding only (2), not
+    // for the current one.
+    expect(screen.getAllByRole("button", { name: /retry/i }).length).toBe(2);
+  });
+
+  it("T31-5: Portfolio Value uses the .pv-amount hook and the freshness line uses .dashboard-note", async () => {
+    getPortfolioViewMock.mockResolvedValue(twoPriced());
+    render(await DashboardPage());
+
+    const pvSection = screen.getByRole("heading", { name: "Portfolio Value" }).closest("section")!;
+    const pvAmount = pvSection.querySelector(".pv-amount");
+    expect(pvAmount).not.toBeNull();
+    expect(pvAmount!.textContent).toContain("US$4000.00");
+
+    const freshness = screen.getByText(/holdings last updated:/i);
+    expect(freshness).toHaveClass("dashboard-note");
+  });
+});

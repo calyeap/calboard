@@ -1789,3 +1789,67 @@ Once reviewed, the two standard execution paths are:
 
 1. **Subagent-Driven (recommended)** — REQUIRED SUB-SKILL: `superpowers:subagent-driven-development`. A fresh subagent per task, with review between tasks.
 2. **Inline Execution** — REQUIRED SUB-SKILL: `superpowers:executing-plans`. Batch execution in this session with checkpoints.
+
+---
+
+## UI-pass extension — Task 31 (Command Center authorized)
+
+*Tasks 27–30 (allocation chart, shared visual foundation, status feedback & accessibility,
+responsive Holdings editor) were authorized via Command Center after this plan's original Task 1–26
+scope and are recorded in git history (`6b88da3`, `cabef2f`, `cd3062c`, `e23ef93`, `6fbe6ff`,
+`5584997`). Task 31 is likewise Command-Center authorized; its contract is recorded here so the
+repository carries it. No Task 32 content is defined.*
+
+### Task 31 — Dashboard hierarchy and allocation layout
+
+**Goal:** make the existing Dashboard (`/`, `app/page.tsx`) easier to scan and responsive at
+desktop and narrow widths **without adding new information or functionality**. Presentation-layer
+only.
+
+**Desktop reading order (≥ 641px):** (1) Portfolio summary + health/freshness, (2) Allocation,
+(3) Holdings detail. Portfolio Value remains the strongest visual element; price health and
+holdings freshness stay visible but visually secondary. The Holdings detail remains a native
+desktop `<table>` with its `<thead>`.
+
+**Narrow reading order (≤ 640px):** (1) Portfolio summary, (2) health / freshness, (3) Allocation
+and legend, (4) responsive Holdings presentation. Same information, same components/markup — no
+separate mobile Dashboard, no duplicated data markup, no different mobile information architecture.
+
+**Holdings table responsiveness:** above 640px the Dashboard Holdings detail stays a native
+`<table>`. At ≤ 640px each holding restacks into a readable block using the **existing Task 30
+single-DOM mechanism** — wrap the table in `.editor-table` and give each `<td>` a real-text
+`<span class="cell-label">` field label. This resolves the previously-known Dashboard page-level
+horizontal overflow at narrow mobile widths (explicitly in scope for Task 31). It must not be
+solved by whole-page horizontal scroll, a second mobile Dashboard, a duplicate table, or by hiding
+any financial value.
+
+**Allocation section:** the existing priced donut + legend remain; layout/hierarchy only. Donut and
+legend form one coherent, visually balanced section. Allocation percentage and USD market value
+stay visible; the text legend stays sufficient to understand allocation without colour; the
+excluded-unpriced-holdings disclosure and the allocation-unavailable state stay clear. No
+allocation calculation change, no new allocation dimension, no sector/historical allocation, no
+interactions/filters/drill-downs.
+
+**Accessibility:** native desktop table headers + semantics preserved; real-text (not CSS
+`::before`) field context for responsive holdings values, reusing the Task 30 `.cell-label`
+pattern; logical DOM + keyboard order; visible keyboard focus; state (current/stale/unavailable/
+error) and allocation comprehension never depend on colour alone; chart values available through
+the text legend. No redundant ARIA where native/real-text semantics already provide context.
+
+**Preserved unchanged:** every calculation; every displayed value and rounding rule; current /
+stale / unavailable price presentation; `PriceCell` Retry behaviour, its disabled/loading state,
+its error handling, and its Task 29 `role="alert"` retry-error semantics; the
+excluded-unpriced-holdings disclosure; all Task 30 Holdings-editor behaviour and tests.
+
+**Out of scope:** new widgets / whitespace-filling content / performance or historical charts /
+daily-change calculations / sector allocation / filters / new interactions / new metrics /
+calculation, persistence, database or price-fetch-architecture changes / automatic price refreshing
+/ watchlists / news / AI / setup-wizard changes / Task 32 / unjustified dependencies / push /
+merge / deploy. Do not add information merely because visual space is available. Do not refactor
+Task 30's Holdings editor to share code — reuse the CSS mechanism as-is.
+
+**Breakpoint:** the project's existing `@media (max-width: 640px)` (Task 28). No new breakpoint.
+
+**Browser acceptance widths:** 1280px, 640px, 375px. At 375px
+`document.documentElement.scrollWidth <= document.documentElement.clientWidth` must hold (no
+page-level horizontal overflow), including with long ticker / long value content.

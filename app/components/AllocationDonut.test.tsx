@@ -78,6 +78,44 @@ describe("AllocationDonut", () => {
     expect(screen.getByText(/allocation isn't available yet/i)).toBeInTheDocument();
   });
 
+  it("T31-6: the section carries the dashboard-section + allocation hooks, the donut/legend share an .allocation-layout wrapper, and the not-available branch keeps the heading + .dashboard-note", () => {
+    const allocation = computeAllocation(
+      [
+        { symbol: "AAPL", marketValueUsd: new Decimal("3000.00") },
+        { symbol: "MSFT", marketValueUsd: new Decimal("1000.00") },
+      ],
+      new Decimal("4000.00")
+    );
+    const { container, unmount } = render(<AllocationDonut allocation={allocation} />);
+
+    const section = container.querySelector("section")!;
+    expect(section).toHaveClass("dashboard-section");
+    expect(section).toHaveClass("allocation");
+
+    const layout = container.querySelector(".allocation-layout")!;
+    expect(layout).not.toBeNull();
+    expect(layout.querySelector("svg")).not.toBeNull();
+    expect(within(layout as HTMLElement).getByRole("table")).toBeInTheDocument();
+
+    unmount();
+
+    // not-available branch
+    const empty = computeAllocation(
+      [
+        { symbol: "AAA", marketValueUsd: null },
+        { symbol: "BBB", marketValueUsd: null },
+      ],
+      new Decimal("0")
+    );
+    const { container: emptyContainer } = render(<AllocationDonut allocation={empty} />);
+    const emptySection = emptyContainer.querySelector("section")!;
+    expect(emptySection).toHaveClass("dashboard-section");
+    expect(emptySection).toHaveClass("allocation");
+    expect(screen.getByRole("heading", { name: /allocation/i })).toBeInTheDocument();
+    const note = screen.getByText(/allocation isn't available yet/i);
+    expect(note).toHaveClass("dashboard-note");
+  });
+
   it("does not communicate allocation through colour alone: the SVG is hidden from assistive tech and colour swatches are decorative", () => {
     const allocation = computeAllocation(
       [

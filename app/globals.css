@@ -165,7 +165,7 @@ h6 {
   overflow-wrap: break-word;
 }
 
-/* --- Holdings editor: responsive table (Task 30) ---------------------------
+/* --- Responsive restacking table (Task 30 Holdings editor + Task 31 Dashboard) ---
    Desktop keeps the plain multi-column table. At the project's 640px
    breakpoint each row restacks into a labelled block, so a narrow screen
    never has to pan a seven-column editor and the page itself never scrolls
@@ -225,5 +225,43 @@ h6 {
      ~375px viewport and pan the page sideways. */
   .page-shell fieldset {
     min-inline-size: 0;
+  }
+}
+
+/* --- Dashboard hierarchy & allocation layout (Task 31) --------------------
+   Presentation only: Portfolio Value stays the strongest element, health /
+   freshness read as secondary, and the sections get consistent vertical
+   rhythm. No new information, no new components. */
+.dashboard-section + .dashboard-section {
+  margin-top: var(--space-lg);
+}
+.pv-amount {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0.25rem 0;
+}
+.dashboard-note {
+  color: var(--color-text-muted);
+  font-size: 0.9em;
+  margin: 0.25rem 0;
+}
+.allocation-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-lg);
+}
+.allocation-layout > svg {
+  flex: 0 0 auto;
+}
+.allocation-layout > table {
+  flex: 1 1 16rem;
+}
+.allocation-layout td {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .allocation-layout {
+    gap: var(--space-md);
   }
 }

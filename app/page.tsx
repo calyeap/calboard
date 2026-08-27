@@ -57,9 +57,9 @@ export default async function DashboardPage() {
           </section>
         ) : (
           <>
-            <section>
+            <section className="dashboard-section">
               <h2>Portfolio Value</h2>
-              <p style={{ fontSize: "1.5rem" }}>US${portfolio.totalMarketValueUsd.toFixed(2)}</p>
+              <p className="pv-amount">US${portfolio.totalMarketValueUsd.toFixed(2)}</p>
               <p>
                 Unrealised gain/loss vs cost basis: US${portfolio.totalUnrealisedPlUsd.toFixed(2)}
                 {portfolio.totalUnrealisedPlPct !== null && (
@@ -67,14 +67,14 @@ export default async function DashboardPage() {
                 )}
               </p>
               {lastConfirmation ? (
-                <p style={{ color: "#666" }}>
+                <p className="dashboard-note">
                   Holdings last updated: {formatConfirmedAt(lastConfirmation.confirmedAt)}
                   {lastConfirmation.asOfDate && (
                     <span style={{ fontSize: "0.85em" }}> (snapshot as of {lastConfirmation.asOfDate})</span>
                   )}
                 </p>
               ) : (
-                <p style={{ color: "#666" }}>Holdings last updated: —</p>
+                <p className="dashboard-note">Holdings last updated: —</p>
               )}
               {portfolio.excludedFromTotalSymbols.length > 0 && (
                 <p className="status-msg status-warning">
@@ -87,7 +87,7 @@ export default async function DashboardPage() {
 
             {allocation && <AllocationDonut allocation={allocation} />}
 
-            <section>
+            <section className="dashboard-section">
               <h2>Holdings</h2>
               {/*
                 No day-price-movement column in V1: the market-data provider
@@ -95,6 +95,7 @@ export default async function DashboardPage() {
                 latest close, never a prior close, so per the Task 17 contract's
                 "omit the cell otherwise" fallback there is nothing to render.
               */}
+              <div className="editor-table">
               <table border={1} cellPadding={6}>
                 <thead>
                   <tr>
@@ -115,10 +116,11 @@ export default async function DashboardPage() {
                       plUsd && basis && !basis.isZero() ? plUsd.div(basis).mul(100) : null;
                     return (
                       <tr key={`${p.accountId}-${p.assetId}`}>
-                        <td>{p.symbol}</td>
-                        <td>{p.quantity.toFixed(4)}</td>
-                        <td>{p.avgCostUsd ? p.avgCostUsd.toFixed(2) : "—"}</td>
+                        <td><span className="cell-label">Symbol</span>{p.symbol}</td>
+                        <td><span className="cell-label">Qty</span>{p.quantity.toFixed(4)}</td>
+                        <td><span className="cell-label">Avg cost</span>{p.avgCostUsd ? p.avgCostUsd.toFixed(2) : "—"}</td>
                         <td>
+                          <span className="cell-label">Price</span>
                           <PriceCell
                             assetId={p.assetId}
                             symbol={p.symbol}
@@ -128,8 +130,9 @@ export default async function DashboardPage() {
                             priceDate={p.priceDate}
                           />
                         </td>
-                        <td>{p.marketValueUsd ? p.marketValueUsd.toFixed(2) : "—"}</td>
+                        <td><span className="cell-label">Market value</span>{p.marketValueUsd ? p.marketValueUsd.toFixed(2) : "—"}</td>
                         <td>
+                          <span className="cell-label">Unrealised P&amp;L</span>
                           {plUsd ? (
                             <>
                               {plUsd.toFixed(2)}
@@ -144,6 +147,7 @@ export default async function DashboardPage() {
                   })}
                 </tbody>
               </table>
+              </div>
             </section>
           </>
         )}
