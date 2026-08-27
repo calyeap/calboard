@@ -289,6 +289,34 @@ describe("SetupWizard — Step 2 Review & Save", () => {
     expect(screen.getByRole("button", { name: /^save$/i })).not.toBeDisabled();
   });
 
+  it("clears a stale save_failed banner when returning to Review without re-submitting", async () => {
+    setupAccountActionMock.mockResolvedValue({
+      status: "save_failed",
+      message: "That date is in the future — enter the holdings you have now.",
+    });
+
+    await reachReview();
+
+    // 1. save_failed → red banner on Review.
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(screen.getByText(/nothing was saved/i)).toBeInTheDocument());
+
+    // 2. Back to Step 1.
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: /add your holdings/i })).toBeInTheDocument()
+    );
+
+    // 3. Re-enter Step 2 without submitting again.
+    fireEvent.click(screen.getByRole("button", { name: /next: review/i }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: /^review$/i })).toBeInTheDocument());
+
+    // 4. The stale banner is gone; Save is ready for a fresh attempt.
+    expect(screen.queryByText(/nothing was saved/i)).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("button", { name: /^save$/i })).not.toBeDisabled();
+  });
+
   it("typing an intermediate invalid character on a draft field does not throw", async () => {
     await reachReview();
     fireEvent.click(screen.getByRole("button", { name: /edit/i })); // back to Step 1

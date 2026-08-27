@@ -231,6 +231,9 @@ export function SetupWizard() {
       return;
     }
     setStep1Error(null);
+    // A prior save_failed banner must not survive a trip back to Step 1 and
+    // reappear on Review before the user has actually re-submitted.
+    setSaveError(null);
     setStep(2);
   }
 
