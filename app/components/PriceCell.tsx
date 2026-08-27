@@ -43,12 +43,18 @@ export function PriceCell({
 
   if (priceStatus === "stale") {
     return (
-      <span style={{ color: "#888" }}>
+      // Muted, not near-invisible: the Task 28 muted-text token instead of the
+      // old #888, which the plan flagged as too weak.
+      <span style={{ color: "var(--color-text-muted)" }}>
         ${priceUsd} <span style={{ fontSize: "0.85em" }}>(as of {priceDate})</span>{" "}
         <button type="button" onClick={handleRetry} disabled={retrying}>
           {retrying ? "Retrying…" : "Retry"}
         </button>
-        {retryError && <div style={{ color: "#b00020" }}>{retryError}</div>}
+        {retryError && (
+          <div className="status-danger" role="alert">
+            {retryError}
+          </div>
+        )}
       </span>
     );
   }
@@ -59,7 +65,11 @@ export function PriceCell({
       <button type="button" onClick={handleRetry} disabled={retrying}>
         {retrying ? "Retrying…" : "Retry"}
       </button>
-      {retryError && <div style={{ color: "#b00020" }}>{retryError}</div>}
+      {retryError && (
+        <div className="status-danger" role="alert">
+          {retryError}
+        </div>
+      )}
     </span>
   );
 }

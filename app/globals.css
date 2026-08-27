@@ -125,3 +125,33 @@ h6 {
   text-decoration: none;
   border-radius: var(--radius);
 }
+
+/* --- Status & feedback messages (Task 29) ------------------------------------
+   One restrained treatment shared by the Dashboard disclosure, the Holdings
+   editor and the setup wizard. Status is never carried by colour alone: every
+   message keeps its wording and signs, and `.status-msg` adds a
+   colour-independent left border so a feedback line never reads as ordinary
+   body text. No cards, shadows, toasts or motion. */
+.status-danger {
+  color: var(--color-danger);
+}
+.status-warning {
+  color: var(--color-warning);
+}
+.status-success {
+  color: var(--color-success);
+}
+.status-neutral {
+  color: var(--color-text-muted);
+}
+
+/* Block banner treatment for standalone messages — save outcomes, the
+   row-error summary, step errors, the excluded-holdings disclosure. Field
+   messages that sit inside a table cell take only the colour class above, so
+   the Holdings table's width is left untouched (its overflow is Task 30). */
+.status-msg {
+  display: block;
+  padding: var(--space-sm) var(--space-md);
+  border-inline-start: 3px solid currentColor;
+  overflow-wrap: break-word;
+}

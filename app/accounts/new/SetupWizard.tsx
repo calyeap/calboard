@@ -346,21 +346,25 @@ export function SetupWizard() {
                 onBlur={() => void resolveFor(tickerInput, assetType)}
               />
             </label>
-            {resolving && <span>checking…</span>}
-            {resolution?.ok && (
-              <span>
-                ✓ Resolved — last price ${resolution.priceUsd} ({resolution.priceDate})
-              </span>
-            )}
-            {resolution && !resolution.ok && (
-              <span>
-                {resolution.message}{" "}
-                {draftAssetId && (
-                  <button type="button" onClick={addHolding}>
-                    Add anyway
-                  </button>
-                )}
-              </span>
+            {/* One polite live region for every ticker-resolution state, so a
+                screen reader hears the meaningful result without an assertive
+                interruption and without a second region repeating it. The
+                "Add anyway" affordance sits outside it. */}
+            <div aria-live="polite" aria-atomic="true">
+              {resolving && <span className="status-neutral">checking…</span>}
+              {resolution?.ok && (
+                <span className="status-success">
+                  ✓ Resolved — last price ${resolution.priceUsd} ({resolution.priceDate})
+                </span>
+              )}
+              {resolution && !resolution.ok && (
+                <span className="status-warning">{resolution.message}</span>
+              )}
+            </div>
+            {resolution && !resolution.ok && draftAssetId && (
+              <button type="button" onClick={addHolding}>
+                Add anyway
+              </button>
             )}
 
             <label>
@@ -404,7 +408,7 @@ export function SetupWizard() {
             <button type="button" onClick={addHolding}>
               + Add holding
             </button>
-            {holdingError && <span style={{ color: "#b00020" }}>{holdingError}</span>}
+            {holdingError && <span className="status-msg status-danger">{holdingError}</span>}
           </div>
 
           {holdings.length > 0 && (
@@ -441,7 +445,7 @@ export function SetupWizard() {
             </table>
           )}
 
-          {step1Error && <p style={{ color: "#b00020" }}>{step1Error}</p>}
+          {step1Error && <p className="status-msg status-danger">{step1Error}</p>}
 
           <div style={{ marginTop: "1.5rem" }}>
             <button type="button" onClick={handleCancel}>
@@ -495,7 +499,7 @@ export function SetupWizard() {
           </p>
 
           {saveError?.kind === "failed" && (
-            <p style={{ color: "#b00020" }} role="alert">
+            <p className="status-msg status-danger" role="alert">
               Nothing was saved. {saveError.message} Fix the issue and try again.{" "}
               <button type="button" onClick={() => setStep(1)}>
                 Take me to the problem
@@ -503,7 +507,7 @@ export function SetupWizard() {
             </p>
           )}
           {saveError?.kind === "unknown" && (
-            <p style={{ color: "#a15c00" }} role="alert">
+            <p className="status-msg status-warning" role="alert">
               {saveError.message}
             </p>
           )}

@@ -331,6 +331,11 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
   }
 
   const errors = save.kind === "failed" ? save.errors : {};
+  // A rejection can carry only field-level keys (an as-of-date error, or
+  // holdings.<i>.<field> row errors) with no form-level message — without this
+  // summary the Save button would then have no feedback beside it, only the
+  // inline errors far up the editor.
+  const hasFieldErrors = Object.keys(errors).length > 0;
 
   return (
     <div style={{ fontFamily: "system-ui" }}>
@@ -365,7 +370,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
         </p>
       )}
       {errors.asOfDate && (
-        <p id="as-of-date-err" role="alert" style={{ color: "#b00020" }}>
+        <p id="as-of-date-err" role="alert" className="status-msg status-danger">
           {errors.asOfDate}
         </p>
       )}
@@ -407,7 +412,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                     onChange={(e) => patchRow(i, { quantity: e.target.value })}
                   />
                   {qtyErr && (
-                    <div id={qtyErrId} role="alert" style={{ color: "#b00020" }}>
+                    <div id={qtyErrId} role="alert" className="status-danger">
                       {qtyErr}
                     </div>
                   )}
@@ -423,12 +428,12 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                     onChange={(e) => patchRow(i, { avgCostUsd: e.target.value })}
                   />
                   {avgErr && (
-                    <div id={avgErrId} role="alert" style={{ color: "#b00020" }}>
+                    <div id={avgErrId} role="alert" className="status-danger">
                       {avgErr}
                     </div>
                   )}
                   {note && (
-                    <div id={noteId} role="status" style={{ color: "#a15c00", fontSize: "0.85em" }}>
+                    <div id={noteId} role="status" className="status-warning" style={{ fontSize: "0.85em" }}>
                       {note}
                     </div>
                   )}
@@ -487,21 +492,25 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
               onBlur={() => void resolveFor(tickerInput, assetType)}
             />
           </label>
-          {resolving && <span>checking…</span>}
-          {resolution && resolution.ok && (
-            <span>
-              ✓ Resolved — last price ${resolution.priceUsd} ({resolution.priceDate})
-            </span>
-          )}
-          {resolution && !resolution.ok && (
-            <span>
-              {resolution.message}{" "}
-              {draftAssetId && (
-                <button type="button" onClick={addRow}>
-                  Add anyway
-                </button>
-              )}
-            </span>
+          {/* One polite live region for every ticker-resolution state, so a
+              screen reader hears the meaningful result without it being an
+              assertive interruption and without a second region announcing
+              the same thing. The "Add anyway" affordance sits outside it. */}
+          <div aria-live="polite" aria-atomic="true">
+            {resolving && <span className="status-neutral">checking…</span>}
+            {resolution && resolution.ok && (
+              <span className="status-success">
+                ✓ Resolved — last price ${resolution.priceUsd} ({resolution.priceDate})
+              </span>
+            )}
+            {resolution && !resolution.ok && (
+              <span className="status-warning">{resolution.message}</span>
+            )}
+          </div>
+          {resolution && !resolution.ok && draftAssetId && (
+            <button type="button" onClick={addRow}>
+              Add anyway
+            </button>
           )}
 
           <label>
@@ -554,23 +563,32 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
           <button type="button" onClick={addRow}>
             + Add holding
           </button>
-          {addError && <span style={{ color: "#b00020" }}>{addError}</span>}
+          {addError && <span className="status-msg status-danger">{addError}</span>}
         </div>
       </fieldset>
 
-      {save.kind === "saved" && <p style={{ color: "#0a7a0a" }}>Holdings updated.</p>}
+      {save.kind === "saved" && (
+        <p className="status-msg status-success" role="status">
+          Holdings updated.
+        </p>
+      )}
       {save.kind === "failed" && errors.form && (
-        <p style={{ color: "#b00020" }} role="alert">
+        <p className="status-msg status-danger" role="alert">
           {errors.form}
         </p>
       )}
+      {save.kind === "failed" && !errors.form && hasFieldErrors && (
+        <p className="status-msg status-danger" role="alert">
+          Fix the highlighted errors before saving.
+        </p>
+      )}
       {save.kind === "unknown" && (
-        <p style={{ color: "#a15c00" }} role="alert">
+        <p className="status-msg status-warning" role="alert">
           {save.message}
         </p>
       )}
       {save.kind === "unreachable" && (
-        <p style={{ color: "#a15c00" }} role="alert">
+        <p className="status-msg status-warning" role="alert">
           We couldn&apos;t reach the server, so we don&apos;t know whether your changes saved. Check the
           Dashboard before trying again.
         </p>

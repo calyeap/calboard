@@ -77,7 +77,7 @@ export default async function DashboardPage() {
                 <p style={{ color: "#666" }}>Holdings last updated: —</p>
               )}
               {portfolio.excludedFromTotalSymbols.length > 0 && (
-                <p style={{ color: "#a15c00" }}>
+                <p className="status-msg status-warning">
                   Portfolio total excludes {portfolio.excludedFromTotalSymbols.length} holding
                   {portfolio.excludedFromTotalSymbols.length === 1 ? "" : "s"} with no price yet (
                   {portfolio.excludedFromTotalSymbols.join(", ")}) — true value is higher.

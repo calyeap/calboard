@@ -400,3 +400,44 @@ describe("SetupWizard — Step 2 Review & Save", () => {
     expect(screen.queryByText(/checking/i)).toBeNull();
   });
 });
+
+describe("SetupWizard — Task 29 status & accessibility", () => {
+  it("announces a resolved ticker result in a polite live region", async () => {
+    resolveTickerActionMock.mockResolvedValue({
+      ok: true,
+      assetId: "1",
+      assetClass: "equity",
+      priceUsd: "228.50",
+      priceDate: "2026-08-25",
+    });
+    render(<SetupWizard />);
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "AAPL" } });
+    fireEvent.blur(ticker);
+
+    const msg = await screen.findByText(/resolved — last price \$228\.50/i);
+    const live = msg.closest("[aria-live]");
+    expect(live).not.toBeNull();
+    expect(live).toHaveAttribute("aria-live", "polite");
+    expect(msg.closest('[role="alert"]')).toBeNull();
+  });
+
+  it("announces a not-found ticker result politely, without an assertive alert on Step 1", async () => {
+    resolveTickerActionMock.mockResolvedValue({
+      ok: false,
+      assetId: "1",
+      message:
+        'Couldn\'t find a price for "ZZZZ". Check the symbol, or add it anyway if you\'re sure it\'s correct.',
+    });
+    render(<SetupWizard />);
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "ZZZZ" } });
+    fireEvent.blur(ticker);
+
+    const msg = await screen.findByText(/couldn't find a price for "ZZZZ"/i);
+    expect(msg.closest("[aria-live]")).toHaveAttribute("aria-live", "polite");
+    expect(msg.closest('[role="alert"]')).toBeNull();
+    // Step 1 keeps no assertive alert — the resolution result is polite only.
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});

@@ -474,4 +474,104 @@ describe("HoldingsEditor", () => {
     fireEvent.change(screen.getByLabelText("Quantity for AAPL"), { target: { value: "11" } });
     expect(screen.queryByText(/holdings updated/i)).toBeNull();
   });
+
+  // --- Task 29: status, feedback & accessibility ---
+
+  it("T29-1: a row-only save rejection shows a fix-the-errors summary near Save (assertive), field errors still attached", async () => {
+    updateHoldingsActionMock.mockResolvedValue({
+      ok: false,
+      errors: { "holdings.0.quantity": "Quantity must be zero or greater." },
+    });
+    render(<HoldingsEditor initial={baseInitial()} />);
+
+    fireEvent.change(screen.getByLabelText("Quantity for AAPL"), { target: { value: "-5" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    const summary = await screen.findByText(/fix the highlighted errors before saving/i);
+    expect(summary).toHaveAttribute("role", "alert");
+    // near the Save control, not buried inside the table, and above the button
+    expect(summary.closest("table")).toBeNull();
+    const saveBtn = screen.getByRole("button", { name: /^save$/i });
+    expect(summary.compareDocumentPosition(saveBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // the row-level message stays attached to its field
+    const qty = screen.getByLabelText("Quantity for AAPL");
+    expect(qty).toHaveAttribute("aria-invalid", "true");
+    const ids = (qty.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+    expect(ids.map((x) => document.getElementById(x)?.textContent).join(" ")).toMatch(
+      /quantity must be zero or greater/i
+    );
+  });
+
+  it("T29-2: no fix-the-errors summary when the rejection carries a form-level message instead", async () => {
+    updateHoldingsActionMock.mockResolvedValue({
+      ok: false,
+      errors: { form: "We couldn't find your portfolio to update." },
+    });
+    render(<HoldingsEditor initial={baseInitial()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/couldn't find your portfolio/i)).toBeInTheDocument()
+    );
+    expect(screen.queryByText(/fix the highlighted errors before saving/i)).toBeNull();
+  });
+
+  it("T29-3: a resolved ticker result is announced in a polite live region", async () => {
+    resolveTickerActionMock.mockResolvedValue({
+      ok: true,
+      assetId: "9",
+      assetClass: "equity",
+      priceUsd: "12.00",
+      priceDate: "2026-08-25",
+    });
+    render(<HoldingsEditor initial={baseInitial()} />);
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "TSLA" } });
+    fireEvent.blur(ticker);
+
+    const msg = await screen.findByText(/resolved — last price \$12\.00/i);
+    const live = msg.closest("[aria-live]");
+    expect(live).not.toBeNull();
+    expect(live).toHaveAttribute("aria-live", "polite");
+    expect(msg.closest('[role="alert"]')).toBeNull();
+  });
+
+  it("T29-4: a not-found ticker result is announced in the same polite live region", async () => {
+    resolveTickerActionMock.mockResolvedValue({
+      ok: false,
+      assetId: "9",
+      message:
+        'Couldn\'t find a price for "TSLA". Check the symbol, or add it anyway if you\'re sure it\'s correct.',
+    });
+    render(<HoldingsEditor initial={baseInitial()} />);
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "TSLA" } });
+    fireEvent.blur(ticker);
+
+    const msg = await screen.findByText(/couldn't find a price for "TSLA"/i);
+    const live = msg.closest("[aria-live]");
+    expect(live).not.toBeNull();
+    expect(live).toHaveAttribute("aria-live", "polite");
+    expect(msg.closest('[role="alert"]')).toBeNull();
+  });
+
+  it("T29-5: an as-of-date-only rejection (no row error, no form error) still shows the summary near Save", () => {
+    render(<HoldingsEditor initial={baseInitial()} />);
+    fireEvent.click(screen.getByRole("button", { name: /change date/i }));
+    fireEvent.change(screen.getByLabelText("As-of date"), { target: { value: "2099-01-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    const summary = screen.getByText(/fix the highlighted errors before saving/i);
+    expect(summary).toHaveAttribute("role", "alert");
+    expect(summary.closest("table")).toBeNull();
+    const saveBtn = screen.getByRole("button", { name: /^save$/i });
+    expect(summary.compareDocumentPosition(saveBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // the date error itself is unchanged — still associated with the input
+    const input = screen.getByLabelText("As-of date");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const id = input.getAttribute("aria-describedby");
+    expect(document.getElementById(id!)?.textContent).toMatch(/future/i);
+  });
 });
