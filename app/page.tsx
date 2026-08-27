@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { NavBar, buttonLinkStyle } from "./components/NavBar";
 import { PriceCell } from "./components/PriceCell";
+import { AllocationDonut } from "./components/AllocationDonut";
 import { listAccounts } from "@/lib/accounts";
 import { getPortfolioView } from "@/lib/portfolio";
 import { getLastSnapshotConfirmation } from "@/lib/holdings";
+import { computeAllocation } from "@/lib/allocation";
 
 // Always render dynamically — this page reads live DB state (accounts,
 // portfolio positions) on every request and must never be frozen as a
@@ -30,6 +32,17 @@ export default async function DashboardPage() {
   // the wrong timestamp. (Duplicate-account setup is out of scope here.)
   const lastConfirmation =
     accounts.length === 1 ? await getLastSnapshotConfirmation(accounts[0].id) : null;
+
+  // Allocation by holding — priced market value only, using the exact
+  // per-position marketValueUsd getPortfolioView already computed and the
+  // exact totalMarketValueUsd shown above as "Portfolio Value" (no second
+  // total). computeAllocation itself excludes unpriced holdings.
+  const allocation = portfolio
+    ? computeAllocation(
+        portfolio.positions.map((p) => ({ symbol: p.symbol, marketValueUsd: p.marketValueUsd })),
+        portfolio.totalMarketValueUsd
+      )
+    : null;
 
   return (
     <>
@@ -71,6 +84,8 @@ export default async function DashboardPage() {
                 </p>
               )}
             </section>
+
+            {allocation && <AllocationDonut allocation={allocation} />}
 
             <section>
               <h2>Holdings</h2>
