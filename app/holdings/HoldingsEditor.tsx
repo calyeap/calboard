@@ -401,8 +401,12 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
               [avgErr ? avgErrId : null, note ? noteId : null].filter(Boolean).join(" ") || undefined;
             return (
               <tr key={r.assetId} style={r.removed ? { opacity: 0.5 } : undefined}>
-                <td data-label="Symbol">{r.symbol}</td>
-                <td data-label="Quantity">
+                <td>
+                  <span className="cell-label">Symbol</span>
+                  {r.symbol}
+                </td>
+                <td>
+                  <span className="cell-label">Quantity</span>
                   <input
                     id={`qty-${r.assetId}`}
                     aria-label={`Quantity for ${r.symbol}`}
@@ -418,7 +422,8 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                     </div>
                   )}
                 </td>
-                <td data-label="Average cost">
+                <td>
+                  <span className="cell-label">Average cost</span>
                   <input
                     id={`avg-${r.assetId}`}
                     aria-label={`Average cost for ${r.symbol}`}
@@ -439,7 +444,8 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                     </div>
                   )}
                 </td>
-                <td data-label="Price">
+                <td>
+                  <span className="cell-label">Price</span>
                   {r.removed ? (
                     "—"
                   ) : (
@@ -453,8 +459,14 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                     />
                   )}
                 </td>
-                <td data-label="Market value">{d.mv}</td>
-                <td data-label="Unrealised P&L">{d.pl}</td>
+                <td>
+                  <span className="cell-label">Market value</span>
+                  {d.mv}
+                </td>
+                <td>
+                  <span className="cell-label">Unrealised P&amp;L</span>
+                  {d.pl}
+                </td>
                 <td>
                   {r.removed ? (
                     <button type="button" onClick={() => undoRemove(i)}>

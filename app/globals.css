@@ -174,6 +174,13 @@ h6 {
   overflow-x: auto;
 }
 
+/* Narrow-width per-cell field labels for the restacked editor. Real DOM text
+   (not ::before) so assistive tech gets the field name independent of CSS
+   generated content; hidden on desktop where the <thead> carries it. */
+.editor-table .cell-label {
+  display: none;
+}
+
 @media (max-width: 640px) {
   .editor-table > table,
   .editor-table thead,
@@ -187,7 +194,7 @@ h6 {
     border: 0;
   }
   .editor-table thead {
-    /* the per-cell data-label carries the column meaning at this width */
+    /* the per-cell .cell-label carries the column meaning at this width */
     display: none;
   }
   .editor-table tr {
@@ -201,16 +208,12 @@ h6 {
     padding: 0.35rem 0;
     overflow-wrap: anywhere;
   }
-  .editor-table td::before {
-    content: attr(data-label);
+  .editor-table .cell-label {
     display: block;
     font-size: 0.85em;
     font-weight: 600;
     color: var(--color-text-muted);
     margin-bottom: 0.15rem;
-  }
-  .editor-table td:not([data-label])::before {
-    content: none;
   }
   .editor-table input {
     width: 100%;

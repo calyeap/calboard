@@ -401,8 +401,11 @@ describe("HoldingsEditor", () => {
     expect(screen.getByLabelText("Quantity for NEW")).toBeInTheDocument(); // new row untouched
 
     // row order preserved: AAPL, MSFT, NEW
+    // (the Symbol cell now leads with a <span class="cell-label">Symbol</span>
+    // narrow-width label — Task 30 fix round 2 — so read the trailing symbol
+    // text node, not the whole cell's textContent)
     const symbolCells = Array.from(document.querySelectorAll("tbody tr td:first-child")).map(
-      (c) => c.textContent
+      (c) => c.lastChild?.textContent
     );
     expect(symbolCells).toEqual(["AAPL", "MSFT", "NEW"]);
   });
@@ -577,11 +580,11 @@ describe("HoldingsEditor", () => {
 
   // --- Task 30: responsive presentation ---
 
-  it("T30-1: each holding row's value cells carry a narrow-width column label", () => {
+  it("T30-1: each holding row's value cells carry a narrow-width field label as real DOM text", () => {
     render(<HoldingsEditor initial={baseInitial()} />);
     const tr = screen.getByLabelText("Quantity for AAPL").closest("tr")!;
-    const labels = Array.from(tr.querySelectorAll("td")).map((td) =>
-      td.getAttribute("data-label")
+    const labels = Array.from(tr.querySelectorAll("td")).map(
+      (td) => td.querySelector(".cell-label")?.textContent ?? null
     );
     expect(labels).toEqual([
       "Symbol",
@@ -605,5 +608,27 @@ describe("HoldingsEditor", () => {
     expect(screen.getAllByLabelText("Quantity for AAPL")).toHaveLength(1);
     expect(screen.getAllByLabelText("Average cost for AAPL")).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: /remove aapl/i })).toHaveLength(1);
+  });
+
+  it("T30-4: the read-only Price / Market value / Unrealised P&L cells label their value with real DOM text (not only CSS ::before)", () => {
+    render(<HoldingsEditor initial={baseInitial()} />);
+    const tds = Array.from(
+      screen.getByLabelText("Quantity for AAPL").closest("tr")!.querySelectorAll("td")
+    );
+    const [priceTd, mvTd, plTd] = [tds[3], tds[4], tds[5]];
+    expect(priceTd.querySelector(".cell-label")?.textContent).toBe("Price");
+    expect(mvTd.querySelector(".cell-label")?.textContent).toBe("Market value");
+    expect(plTd.querySelector(".cell-label")?.textContent).toBe("Unrealised P&L");
+    expect(priceTd.querySelector(".cell-label")?.tagName).toBe("SPAN");
+    // label precedes the value in DOM/reading order
+    expect(mvTd.firstElementChild?.classList.contains("cell-label")).toBe(true);
+  });
+
+  it("T30-5: existing accessible input/button names are unchanged by the responsive field labels", () => {
+    render(<HoldingsEditor initial={baseInitial()} />);
+    expect(screen.getByLabelText("Quantity for AAPL")).toBeInTheDocument();
+    expect(screen.getByLabelText("Average cost for AAPL")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove AAPL" })).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Quantity for AAPL")).toHaveLength(1);
   });
 });
