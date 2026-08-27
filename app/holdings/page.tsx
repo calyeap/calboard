@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { NavBar, buttonLinkStyle } from "../components/NavBar";
+import { NavBar } from "../components/NavBar";
 import { getAllHoldings } from "@/lib/holdings";
 import { getPortfolioView } from "@/lib/portfolio";
 import { HoldingsEditor, type EditorInitialRow } from "./HoldingsEditor";
@@ -15,13 +15,13 @@ export default async function HoldingsPage() {
   return (
     <>
       <NavBar />
-      <main style={{ fontFamily: "system-ui", padding: "0 2rem 2rem", maxWidth: 900, margin: "0 auto" }}>
+      <main className="page-shell">
         <h1>Holdings</h1>
 
         {holdings.length === 0 ? (
           <>
             <p>No holdings yet.</p>
-            <Link href="/accounts/new" style={buttonLinkStyle}>
+            <Link href="/accounts/new" className="button-link">
               Add your holdings
             </Link>
           </>

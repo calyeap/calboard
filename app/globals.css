@@ -1,0 +1,127 @@
+/* Calboard CSS foundation (Task 28).
+   Small and restrained: a shared page shell, system typography, a handful
+   of tokens, and visible keyboard focus. This is a foundation, not a design
+   system, and it deliberately does not restyle individual screens. */
+
+:root {
+  --color-text: #1a1a1a;
+  --color-text-muted: #666666;
+  --color-border: #dcdcdc;
+  --color-page-bg: #ffffff;
+  --color-danger: #b00020;
+  --color-warning: #a15c00;
+  --color-success: #0a7a0a;
+
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 2rem;
+
+  --radius: 4px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-page-bg);
+  color: var(--color-text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+}
+
+/* Form controls inherit the page font instead of the browser default. */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* Basic heading / paragraph rhythm. The first-child reset keeps the top of
+   each screen from shifting. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  line-height: 1.25;
+  margin-block: 1.5em 0.5em;
+}
+
+:is(main, section, article) > :first-child {
+  margin-block-start: 0;
+}
+
+/* Visible keyboard focus everywhere. */
+:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
+/* Shared page shell — replaces the duplicated inline <main> styling on the
+   Dashboard, Holdings, and setup-wizard routes. */
+.page-shell {
+  max-width: 900px;
+  margin-inline: auto;
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+.page-shell--narrow {
+  max-width: 640px;
+}
+
+/* Shared navigation shell (NavBar). */
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Narrow-width padding. Declared after both .page-shell and .site-nav so it
+   wins on source order — .site-nav's `padding` shorthand has the same
+   specificity and would otherwise reset the inline padding back to --space-lg,
+   leaving the nav misaligned with the page content it sits above. */
+@media (max-width: 640px) {
+  .page-shell,
+  .site-nav {
+    padding-inline: var(--space-md);
+  }
+}
+
+.site-nav__brand {
+  font-size: 1.1rem;
+}
+
+/* The underline is the at-rest affordance: without it these links are the
+   same dark text as everything else, and a hover-only underline is no
+   affordance at all on a touch device. */
+.site-nav a {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.site-nav a:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* CTA link presented as a button — the CSS replacement for the old exported
+   buttonLinkStyle object. */
+.button-link {
+  display: inline-block;
+  padding: var(--space-sm) var(--space-md);
+  background: #111111;
+  color: #ffffff;
+  text-decoration: none;
+  border-radius: var(--radius);
+}

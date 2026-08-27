@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { NavBar, buttonLinkStyle } from "./components/NavBar";
+import { NavBar } from "./components/NavBar";
 import { PriceCell } from "./components/PriceCell";
 import { AllocationDonut } from "./components/AllocationDonut";
 import { listAccounts } from "@/lib/accounts";
@@ -47,13 +47,13 @@ export default async function DashboardPage() {
   return (
     <>
       <NavBar />
-      <main style={{ fontFamily: "system-ui", padding: "0 2rem 2rem", maxWidth: 900, margin: "0 auto" }}>
+      <main className="page-shell">
         <h1>Dashboard</h1>
 
         {!portfolio ? (
           <section>
             <p>No holdings yet.</p>
-            <Link href="/accounts/new" style={buttonLinkStyle}>Add your holdings</Link>
+            <Link href="/accounts/new" className="button-link">Add your holdings</Link>
           </section>
         ) : (
           <>
