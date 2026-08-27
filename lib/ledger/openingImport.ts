@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import type { PoolClient } from "pg";
 import { getPool } from "../db";
 import { isValidCalendarDate } from "../dateValidation";
 import { applyTransaction } from "./applyTransaction";
@@ -33,22 +34,26 @@ export interface OpeningCashAdjustmentInput {
 // effect is applied directly to derived account cash. See TDD's ADJUSTMENT
 // txn_type and this session's approved spot-only cutover workflow.
 export async function applyOpeningCashAdjustment(
-  input: OpeningCashAdjustmentInput
+  input: OpeningCashAdjustmentInput,
+  client?: PoolClient
 ): Promise<{ transactionId: string }> {
   const note = requireOpeningImportNote(input.note);
   requireValidTradeDate(input.tradeDate);
 
-  return applyTransaction({
-    accountId: input.accountId,
-    assetId: null,
-    txnType: "ADJUSTMENT",
-    tradeDate: input.tradeDate,
-    quantity: null,
-    priceUsd: null,
-    feesUsd: new Decimal(0),
-    grossAmountUsd: input.cashEffectUsd,
-    note,
-  });
+  return applyTransaction(
+    {
+      accountId: input.accountId,
+      assetId: null,
+      txnType: "ADJUSTMENT",
+      tradeDate: input.tradeDate,
+      quantity: null,
+      priceUsd: null,
+      feesUsd: new Decimal(0),
+      grossAmountUsd: input.cashEffectUsd,
+      note,
+    },
+    client
+  );
 }
 
 export interface OpeningPositionAdjustmentInput {
@@ -67,7 +72,8 @@ export interface OpeningPositionAdjustmentInput {
 // only, not correcting an existing one, so guessing at that behavior here
 // would be out of scope.
 export async function applyOpeningPositionAdjustment(
-  input: OpeningPositionAdjustmentInput
+  input: OpeningPositionAdjustmentInput,
+  client?: PoolClient
 ): Promise<{ transactionId: string }> {
   const note = requireOpeningImportNote(input.note);
   requireValidTradeDate(input.tradeDate);
@@ -81,9 +87,10 @@ export async function applyOpeningPositionAdjustment(
   // Not transactionally atomic with the insert below (a plain SELECT, not
   // SELECT ... FOR UPDATE inside the same transaction as applyTransaction's
   // write) — acceptable for a single-operator one-time cutover import, not
-  // for concurrent use.
-  const pool = getPool();
-  const existing = await pool.query<{ quantity: string }>(
+  // for concurrent use. When a caller injects its own client, this SELECT
+  // runs on that client (so it sees the caller's in-flight transaction).
+  const db = client ?? getPool();
+  const existing = await db.query<{ quantity: string }>(
     `SELECT quantity FROM positions_current WHERE account_id = $1 AND asset_id = $2`,
     [input.accountId, input.assetId]
   );
@@ -95,15 +102,18 @@ export async function applyOpeningPositionAdjustment(
     );
   }
 
-  return applyTransaction({
-    accountId: input.accountId,
-    assetId: input.assetId,
-    txnType: "ADJUSTMENT",
-    tradeDate: input.tradeDate,
-    quantity: input.quantity,
-    priceUsd: input.avgCostUsd,
-    feesUsd: new Decimal(0),
-    grossAmountUsd: new Decimal(0),
-    note,
-  });
+  return applyTransaction(
+    {
+      accountId: input.accountId,
+      assetId: input.assetId,
+      txnType: "ADJUSTMENT",
+      tradeDate: input.tradeDate,
+      quantity: input.quantity,
+      priceUsd: input.avgCostUsd,
+      feesUsd: new Decimal(0),
+      grossAmountUsd: new Decimal(0),
+      note,
+    },
+    client
+  );
 }
