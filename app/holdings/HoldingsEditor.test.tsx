@@ -419,4 +419,59 @@ describe("HoldingsEditor", () => {
     await waitFor(() => expect(retryPriceFetchActionMock).toHaveBeenCalledTimes(1));
     expect(retryPriceFetchActionMock).toHaveBeenCalledWith("42", "TSLA", "equity");
   });
+
+  it("N2: the 'checking…' status clears when a pending resolution is invalidated by editing the ticker", async () => {
+    resolveTickerActionMock.mockImplementation(() => new Promise(() => {})); // never resolves
+    render(<HoldingsEditor initial={baseInitial()} />);
+
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "AAA" } });
+    fireEvent.blur(ticker);
+    await waitFor(() => expect(screen.getByText(/checking/i)).toBeInTheDocument());
+
+    // Editing the ticker invalidates the in-flight request without starting
+    // a new one — the status must not stay stuck.
+    fireEvent.change(ticker, { target: { value: "AAB" } });
+    expect(screen.queryByText(/checking/i)).toBeNull();
+  });
+
+  it("N4: the as-of-date error is programmatically associated with the date input", () => {
+    render(<HoldingsEditor initial={baseInitial()} />);
+    fireEvent.click(screen.getByRole("button", { name: /change date/i }));
+    fireEvent.change(screen.getByLabelText("As-of date"), { target: { value: "2099-01-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    const input = screen.getByLabelText("As-of date");
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    const id = input.getAttribute("aria-describedby");
+    expect(id).toBeTruthy();
+    expect(document.getElementById(id!)?.textContent).toMatch(/future/i);
+  });
+
+  it("N5: an uncertain-commit warning persists across an unrelated field edit", async () => {
+    updateHoldingsActionMock.mockResolvedValue({
+      ok: "unknown",
+      message: "We couldn't confirm whether this saved — check the Dashboard before trying again.",
+    });
+    render(<HoldingsEditor initial={baseInitial()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/couldn't confirm whether this saved/i)).toBeInTheDocument()
+    );
+
+    fireEvent.change(screen.getByLabelText("Quantity for AAPL"), { target: { value: "11" } });
+    expect(screen.getByText(/couldn't confirm whether this saved/i)).toBeInTheDocument();
+  });
+
+  it("N5b: a 'Holdings updated' confirmation still clears once the user edits again", async () => {
+    updateHoldingsActionMock.mockResolvedValue({ ok: true });
+    render(<HoldingsEditor initial={baseInitial()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(screen.getByText(/holdings updated/i)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Quantity for AAPL"), { target: { value: "11" } });
+    expect(screen.queryByText(/holdings updated/i)).toBeNull();
+  });
 });

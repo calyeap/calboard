@@ -124,6 +124,11 @@ export function SetupWizard() {
     setResolvedTicker(null);
     setResolvedAssetClass(null);
     setDraftAssetId(null);
+    // Invalidating a resolution also ends the "checking…" state; a request
+    // superseded without starting another would otherwise leave the spinner
+    // stuck (its own finally bails out on the sequence mismatch). resolveFor
+    // re-sets this to true immediately after calling clearResolution().
+    setResolving(false);
   }
 
   // Race-safe: every call takes the next sequence number and its response is
@@ -227,8 +232,10 @@ export function SetupWizard() {
     );
     // Its identity was already resolved for this ticker and type — carry
     // both so an unchanged re-add needs no fresh resolution, and bump the
-    // resolve sequence so any in-flight request can't clobber it.
+    // resolve sequence so any in-flight request can't clobber it (and can't
+    // leave the "checking…" spinner stuck).
     resolveSeq.current++;
+    setResolving(false);
     setDraftAssetId(h.assetId);
     setResolvedTicker(h.ticker);
     setResolvedAssetClass(h.assetType);

@@ -14,7 +14,9 @@ export async function retryPriceFetchAction(
 ): Promise<{ ok: boolean; message?: string }> {
   try {
     await upsertLatestPrice(assetId, symbol, assetClass);
+    // Both surfaces render prices now — the Dashboard and the /holdings editor.
     revalidatePath("/");
+    revalidatePath("/holdings");
     return { ok: true };
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : "Price fetch failed." };

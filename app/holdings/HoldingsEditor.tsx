@@ -122,11 +122,13 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
   const savingRef = useRef(false);
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
 
-  // Any structural or field change makes a prior Save outcome obsolete —
-  // clear it so a stale success/failure message or an index-keyed field
-  // error can never drift onto a row it no longer describes.
+  // Any structural or field change makes a prior *definitive* Save outcome
+  // obsolete — clear a stale "Holdings updated." or an index-keyed field
+  // error so it can't drift onto a row it no longer describes. An
+  // indeterminate outcome ("couldn't confirm" / "couldn't reach the server")
+  // is NOT resolved by editing — keep it visible until the next real Save.
   function clearSaveState() {
-    setSave((s) => (s.kind === "idle" ? s : { kind: "idle" }));
+    setSave((s) => (s.kind === "failed" || s.kind === "saved" ? { kind: "idle" } : s));
   }
 
   // Add-a-holding draft row — mirrors the wizard's Step 1 resolver + the
@@ -148,6 +150,11 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
     setResolvedTicker(null);
     setResolvedAssetClass(null);
     setDraftAssetId(null);
+    // Invalidating a resolution also ends the "checking…" state — otherwise
+    // a request superseded without starting another leaves the spinner stuck
+    // (its own finally bails out on the sequence mismatch). resolveFor
+    // re-sets this to true immediately after calling clearResolution().
+    setResolving(false);
   }
 
   // Race-safe: every call takes the next sequence number; a response is
@@ -346,6 +353,8 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
             id="holdings-as-of-date"
             type="date"
             aria-label="As-of date"
+            aria-invalid={errors.asOfDate ? true : undefined}
+            aria-describedby={errors.asOfDate ? "as-of-date-err" : undefined}
             value={asOfDate}
             max={localTodayIso()}
             onChange={(e) => {

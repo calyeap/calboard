@@ -386,4 +386,17 @@ describe("SetupWizard — Step 2 Review & Save", () => {
       fireEvent.change(qty, { target: { value: "-" } });
     }).not.toThrow();
   });
+
+  it("clears the 'checking…' status when a pending resolution is invalidated by editing the ticker", async () => {
+    resolveTickerActionMock.mockImplementation(() => new Promise(() => {})); // never resolves
+    render(<SetupWizard />);
+
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "AAA" } });
+    fireEvent.blur(ticker);
+    await waitFor(() => expect(screen.getByText(/checking/i)).toBeInTheDocument());
+
+    fireEvent.change(ticker, { target: { value: "AAB" } });
+    expect(screen.queryByText(/checking/i)).toBeNull();
+  });
 });
