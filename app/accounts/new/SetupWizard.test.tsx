@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { localTodayIso } from "@/lib/dateValidation";
-import { resolveTickerAction } from "@/app/actions/setup";
+import { resolveTickerAction, setupAccountAction } from "@/app/actions/setup";
 import { SetupWizard } from "./SetupWizard";
 
 const pushMock = vi.fn();
@@ -10,16 +10,19 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
 }));
 
-// The Server Action is exercised through the component; its own DB-backed
-// behaviour is covered in app/actions/setup.test.ts.
+// The Server Actions are exercised through the component; their own
+// DB-backed behaviour is covered in app/actions/setup.test.ts.
 vi.mock("@/app/actions/setup", () => ({
   resolveTickerAction: vi.fn(),
+  setupAccountAction: vi.fn(),
 }));
 const resolveTickerActionMock = vi.mocked(resolveTickerAction);
+const setupAccountActionMock = vi.mocked(setupAccountAction);
 
 beforeEach(() => {
   pushMock.mockClear();
   resolveTickerActionMock.mockReset();
+  setupAccountActionMock.mockReset();
 });
 
 // Vitest isn't run with globals:true, so @testing-library/react's automatic
@@ -187,5 +190,113 @@ describe("SetupWizard — Step 1 holdings list", () => {
     fireEvent.click(screen.getByRole("button", { name: /next: review/i }));
     expect(screen.getByText(/add at least one holding/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /add your holdings/i })).toBeInTheDocument();
+  });
+});
+
+describe("SetupWizard — Step 2 Review & Save", () => {
+  const okResolution = () => ({
+    ok: true as const,
+    assetId: "1",
+    assetClass: "equity" as const,
+    priceUsd: "100.00",
+    priceDate: "2026-08-25",
+  });
+
+  async function reachReview() {
+    render(<SetupWizard />);
+    fireEvent.change(screen.getByLabelText("Ticker symbol"), { target: { value: "AAPL" } });
+    fireEvent.blur(screen.getByLabelText("Ticker symbol"));
+    await waitFor(() => expect(screen.getByText(/resolved/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText("Average cost per unit (USD)"), { target: { value: "150" } });
+    fireEvent.click(screen.getByRole("button", { name: /\+ add holding/i }));
+    await waitFor(() => expect(screen.getByRole("cell", { name: "AAPL" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /next: review/i }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: /^review$/i })).toBeInTheDocument());
+  }
+
+  beforeEach(() => {
+    resolveTickerActionMock.mockResolvedValue(okResolution());
+  });
+
+  it("Save is disabled while the request is in flight, fires once, then advances to Complete on 'saved'", async () => {
+    let resolveSave: (v: { status: "saved"; accountId: number }) => void = () => {};
+    setupAccountActionMock.mockImplementation(
+      () => new Promise((res) => { resolveSave = res; })
+    );
+
+    await reachReview();
+    const saveButton = screen.getByRole("button", { name: /^save$/i });
+    fireEvent.click(saveButton);
+    fireEvent.click(saveButton); // second click must be ignored
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /saving/i })).toBeDisabled());
+
+    resolveSave({ status: "saved", accountId: 1 });
+
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: /portfolio saved/i })).toBeInTheDocument()
+    );
+    expect(setupAccountActionMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /go to dashboard/i }));
+    expect(pushMock).toHaveBeenCalledWith("/");
+  });
+
+  it("'save_failed' keeps the draft on Review and shows a red 'Nothing was saved' banner", async () => {
+    setupAccountActionMock.mockResolvedValue({
+      status: "save_failed",
+      message: "That date is in the future — enter the holdings you have now.",
+    });
+
+    await reachReview();
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.getByText(/nothing was saved/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^review$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /portfolio saved/i })).toBeNull();
+    // Draft intact — the holding row is still there.
+    expect(screen.getByRole("cell", { name: "AAPL" })).toBeInTheDocument();
+  });
+
+  it("'save_unknown' shows an amber 'couldn't confirm' banner, never the 'Nothing was saved' copy", async () => {
+    setupAccountActionMock.mockResolvedValue({
+      status: "save_unknown",
+      message: "We couldn't confirm whether this saved — check the Dashboard before trying again.",
+    });
+
+    await reachReview();
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/couldn't confirm whether this saved/i)).toBeInTheDocument()
+    );
+    expect(screen.queryByText(/nothing was saved/i)).toBeNull();
+    expect(screen.queryByRole("heading", { name: /portfolio saved/i })).toBeNull();
+  });
+
+  it("a rejected setupAccountAction call shows the same amber copy and re-enables Save", async () => {
+    setupAccountActionMock.mockRejectedValue(new Error("network down"));
+
+    await reachReview();
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/couldn't confirm whether this saved/i)).toBeInTheDocument()
+    );
+    expect(screen.queryByText(/nothing was saved/i)).toBeNull();
+    expect(screen.getByRole("button", { name: /^save$/i })).not.toBeDisabled();
+  });
+
+  it("typing an intermediate invalid character on a draft field does not throw", async () => {
+    await reachReview();
+    fireEvent.click(screen.getByRole("button", { name: /edit/i })); // back to Step 1
+    const qty = screen.getByLabelText("Quantity");
+    expect(() => {
+      fireEvent.change(qty, { target: { value: "1." } });
+      fireEvent.change(qty, { target: { value: "1.e" } });
+      fireEvent.change(qty, { target: { value: "-" } });
+    }).not.toThrow();
   });
 });

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Decimal from "decimal.js";
 import { localTodayIso } from "@/lib/dateValidation";
 import type { AssetClass } from "@/lib/assets";
-import { resolveTickerAction, type TickerResolutionResult } from "@/app/actions/setup";
+import { resolveTickerAction, setupAccountAction, type TickerResolutionResult } from "@/app/actions/setup";
 import { computeAvgCostUsd, isDuplicateTickerInDraft, type CostBasisMode } from "@/lib/wizard/draftHoldings";
 
 type Step = 1 | 2 | "complete";
@@ -52,8 +52,59 @@ export function SetupWizard() {
   const [resolvedTicker, setResolvedTicker] = useState<string | null>(null);
   const [draftAssetId, setDraftAssetId] = useState<string | null>(null);
 
+  // Step 2 — plain Review & Save. No sign-off checkbox, no statement-match
+  // framing, no post-save verification screen (spec revision 3 §3.3).
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<{ kind: "failed" | "unknown"; message: string } | null>(null);
+  // A synchronous guard: two clicks dispatched before React re-renders the
+  // disabled button would both pass a state-based check (stale closure), so
+  // the in-flight flag that actually blocks the second call is a ref.
+  const savingRef = useRef(false);
+
   const modeLocked = holdings.length > 0;
   const costLabel = costBasisMode === "average" ? "Average cost per unit (USD)" : "Total cost basis (USD)";
+
+  const totalCostBasisEntered = holdings.reduce(
+    (sum, h) => sum.add(h.quantity.mul(h.avgCostUsd)),
+    new Decimal(0)
+  );
+
+  async function handleSave() {
+    if (savingRef.current) return; // no double-submit
+    savingRef.current = true;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const result = await setupAccountAction({
+        asOfDate,
+        holdings: holdings.map((h) => ({
+          assetId: h.assetId,
+          quantity: h.quantity.toString(),
+          avgCostUsd: h.avgCostUsd.toString(),
+        })),
+      });
+      if (result.status === "saved") {
+        setStep("complete");
+        return;
+      }
+      if (result.status === "save_failed") {
+        setSaveError({ kind: "failed", message: result.message });
+        return;
+      }
+      // save_unknown — the COMMIT was genuinely ambiguous.
+      setSaveError({ kind: "unknown", message: result.message });
+    } catch {
+      // The action call itself rejected (transport failure) — same honest
+      // "we don't know" copy as save_unknown, never "nothing was saved".
+      setSaveError({
+        kind: "unknown",
+        message: "We couldn't confirm whether this saved — check the Dashboard before trying again.",
+      });
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }
 
   const hasEnteredContent = asOfDate !== localTodayIso() || holdings.length > 0;
 
@@ -359,6 +410,80 @@ export function SetupWizard() {
               Next: Review →
             </button>
           </div>
+        </section>
+      )}
+
+      {step === 2 && (
+        <section>
+          <h1>Review</h1>
+          <p style={{ color: "#555" }}>Nothing has been saved yet.</p>
+
+          <p>
+            These figures are current as of {asOfDate}.{" "}
+            <button type="button" onClick={() => setStep(1)}>
+              Edit
+            </button>
+          </p>
+
+          <table border={1} cellPadding={6} style={{ borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th>Type</th>
+                <th>Qty</th>
+                <th>Avg cost</th>
+                <th>Cost basis</th>
+              </tr>
+            </thead>
+            <tbody>
+              {holdings.map((h) => (
+                <tr key={h.ticker}>
+                  <td>{h.ticker}</td>
+                  <td>{h.assetType}</td>
+                  <td>{h.quantity.toString()}</td>
+                  <td>${h.avgCostUsd.toFixed(2)}</td>
+                  <td>${h.quantity.mul(h.avgCostUsd).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <p>
+            Total cost basis entered: ${totalCostBasisEntered.toFixed(2)} — what you paid, not today&apos;s
+            market value.
+          </p>
+
+          {saveError?.kind === "failed" && (
+            <p style={{ color: "#b00020" }} role="alert">
+              Nothing was saved. {saveError.message} Fix the issue and try again.{" "}
+              <button type="button" onClick={() => setStep(1)}>
+                Take me to the problem
+              </button>
+            </p>
+          )}
+          {saveError?.kind === "unknown" && (
+            <p style={{ color: "#a15c00" }} role="alert">
+              {saveError.message}
+            </p>
+          )}
+
+          <div style={{ marginTop: "1.5rem" }}>
+            <button type="button" onClick={() => setStep(1)}>
+              ← Back
+            </button>{" "}
+            <button type="button" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {step === "complete" && (
+        <section>
+          <h1>Portfolio saved</h1>
+          <button type="button" onClick={() => router.push("/")}>
+            Go to dashboard →
+          </button>
         </section>
       )}
     </div>
