@@ -375,6 +375,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
         </p>
       )}
 
+      <div className="editor-table">
       <table border={1} cellPadding={6} style={{ borderCollapse: "collapse", marginTop: "0.5rem" }}>
         <thead>
           <tr>
@@ -400,8 +401,8 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
               [avgErr ? avgErrId : null, note ? noteId : null].filter(Boolean).join(" ") || undefined;
             return (
               <tr key={r.assetId} style={r.removed ? { opacity: 0.5 } : undefined}>
-                <td>{r.symbol}</td>
-                <td>
+                <td data-label="Symbol">{r.symbol}</td>
+                <td data-label="Quantity">
                   <input
                     id={`qty-${r.assetId}`}
                     aria-label={`Quantity for ${r.symbol}`}
@@ -417,7 +418,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                     </div>
                   )}
                 </td>
-                <td>
+                <td data-label="Average cost">
                   <input
                     id={`avg-${r.assetId}`}
                     aria-label={`Average cost for ${r.symbol}`}
@@ -438,7 +439,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                     </div>
                   )}
                 </td>
-                <td>
+                <td data-label="Price">
                   {r.removed ? (
                     "—"
                   ) : (
@@ -452,8 +453,8 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                     />
                   )}
                 </td>
-                <td>{d.mv}</td>
-                <td>{d.pl}</td>
+                <td data-label="Market value">{d.mv}</td>
+                <td data-label="Unrealised P&L">{d.pl}</td>
                 <td>
                   {r.removed ? (
                     <button type="button" onClick={() => undoRemove(i)}>
@@ -470,6 +471,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
           })}
         </tbody>
       </table>
+      </div>
 
       <fieldset style={{ marginTop: "1rem", maxWidth: 380 }}>
         <legend>Add a holding</legend>

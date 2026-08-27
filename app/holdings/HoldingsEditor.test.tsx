@@ -574,4 +574,36 @@ describe("HoldingsEditor", () => {
     const id = input.getAttribute("aria-describedby");
     expect(document.getElementById(id!)?.textContent).toMatch(/future/i);
   });
+
+  // --- Task 30: responsive presentation ---
+
+  it("T30-1: each holding row's value cells carry a narrow-width column label", () => {
+    render(<HoldingsEditor initial={baseInitial()} />);
+    const tr = screen.getByLabelText("Quantity for AAPL").closest("tr")!;
+    const labels = Array.from(tr.querySelectorAll("td")).map((td) =>
+      td.getAttribute("data-label")
+    );
+    expect(labels).toEqual([
+      "Symbol",
+      "Quantity",
+      "Average cost",
+      "Price",
+      "Market value",
+      "Unrealised P&L",
+      null,
+    ]);
+  });
+
+  it("T30-2: the editor table is wrapped in the responsive container", () => {
+    render(<HoldingsEditor initial={baseInitial()} />);
+    const table = screen.getByRole("table");
+    expect(table.parentElement).toHaveClass("editor-table");
+  });
+
+  it("T30-3: each editable control and row action is rendered exactly once (no duplicated narrow-width variant)", () => {
+    render(<HoldingsEditor initial={baseInitial()} />);
+    expect(screen.getAllByLabelText("Quantity for AAPL")).toHaveLength(1);
+    expect(screen.getAllByLabelText("Average cost for AAPL")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /remove aapl/i })).toHaveLength(1);
+  });
 });

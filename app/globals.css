@@ -155,3 +155,53 @@ h6 {
   border-inline-start: 3px solid currentColor;
   overflow-wrap: break-word;
 }
+
+/* --- Holdings editor: responsive table (Task 30) ---------------------------
+   Desktop keeps the plain multi-column table. At the project's 640px
+   breakpoint each row restacks into a labelled block, so a narrow screen
+   never has to pan a seven-column editor and the page itself never scrolls
+   sideways. One markup, one set of controls — presentational only. */
+.editor-table {
+  overflow-x: auto;
+}
+
+@media (max-width: 640px) {
+  .editor-table > table,
+  .editor-table thead,
+  .editor-table tbody,
+  .editor-table tr,
+  .editor-table td {
+    display: block;
+    width: 100%;
+  }
+  .editor-table thead {
+    /* the per-cell data-label carries the column meaning at this width */
+    display: none;
+  }
+  .editor-table tr {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    margin-block: var(--space-sm);
+    padding: var(--space-sm);
+  }
+  .editor-table td {
+    border: 0;
+    padding: 0.35rem 0;
+    overflow-wrap: anywhere;
+  }
+  .editor-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    margin-bottom: 0.15rem;
+  }
+  .editor-table td:not([data-label])::before {
+    content: none;
+  }
+  .editor-table input {
+    width: 100%;
+    max-width: 20rem;
+  }
+}
