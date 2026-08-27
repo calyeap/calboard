@@ -1,20 +1,35 @@
 import Link from "next/link";
 import { NavBar, buttonLinkStyle } from "./components/NavBar";
+import { PriceCell } from "./components/PriceCell";
 import { listAccounts } from "@/lib/accounts";
 import { getPortfolioView } from "@/lib/portfolio";
+import { getLastSnapshotConfirmation } from "@/lib/holdings";
 
 // Always render dynamically — this page reads live DB state (accounts,
 // portfolio positions) on every request and must never be frozen as a
-// static build-time snapshot. Per this session's final-review correction,
-// this is stated explicitly rather than relied on implicitly, so the
-// revalidatePath("/") calls in app/actions/setup.ts (Task 14) and
-// app/actions/prices.ts (Task 17) always have a per-request render to
-// invalidate.
+// static build-time snapshot, so the revalidatePath("/") calls in
+// app/actions/setup.ts and app/actions/prices.ts always have a per-request
+// render to invalidate.
 export const dynamic = "force-dynamic";
+
+// "Holdings last updated" is a confirmation timestamp (model rule 10): the
+// moment the user pressed Save, shown as local "YYYY-MM-DD HH:MM". It is NOT
+// the as-of date the entered figures represent.
+function formatConfirmedAt(at: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${at.getFullYear()}-${p(at.getMonth() + 1)}-${p(at.getDate())} ${p(at.getHours())}:${p(at.getMinutes())}`;
+}
 
 export default async function DashboardPage() {
   const accounts = await listAccounts();
   const portfolio = accounts.length > 0 ? await getPortfolioView() : null;
+
+  // V1 keeps exactly one hidden portfolio account. Only read freshness when
+  // that invariant holds; if more than one account somehow exists, don't
+  // guess which is "the" portfolio — omit the line rather than risk showing
+  // the wrong timestamp. (Duplicate-account setup is out of scope here.)
+  const lastConfirmation =
+    accounts.length === 1 ? await getLastSnapshotConfirmation(accounts[0].id) : null;
 
   return (
     <>
@@ -32,31 +47,86 @@ export default async function DashboardPage() {
             <section>
               <h2>Portfolio Value</h2>
               <p style={{ fontSize: "1.5rem" }}>US${portfolio.totalMarketValueUsd.toFixed(2)}</p>
-              {/* Task 17 replaces the placeholder with the real most-recent as-of date. */}
-              <p style={{ color: "#666" }}>Holdings last updated: —</p>
+              <p>
+                Unrealised gain/loss vs cost basis: US${portfolio.totalUnrealisedPlUsd.toFixed(2)}
+                {portfolio.totalUnrealisedPlPct !== null && (
+                  <> ({portfolio.totalUnrealisedPlPct.toFixed(2)}%)</>
+                )}
+              </p>
+              {lastConfirmation ? (
+                <p style={{ color: "#666" }}>
+                  Holdings last updated: {formatConfirmedAt(lastConfirmation.confirmedAt)}
+                  {lastConfirmation.asOfDate && (
+                    <span style={{ fontSize: "0.85em" }}> (snapshot as of {lastConfirmation.asOfDate})</span>
+                  )}
+                </p>
+              ) : (
+                <p style={{ color: "#666" }}>Holdings last updated: —</p>
+              )}
+              {portfolio.excludedFromTotalSymbols.length > 0 && (
+                <p style={{ color: "#a15c00" }}>
+                  Portfolio total excludes {portfolio.excludedFromTotalSymbols.length} holding
+                  {portfolio.excludedFromTotalSymbols.length === 1 ? "" : "s"} with no price yet (
+                  {portfolio.excludedFromTotalSymbols.join(", ")}) — true value is higher.
+                </p>
+              )}
             </section>
 
             <section>
               <h2>Holdings</h2>
+              {/*
+                No day-price-movement column in V1: the market-data provider
+                interface (EodPricePoint) and getPortfolioView expose only the
+                latest close, never a prior close, so per the Task 17 contract's
+                "omit the cell otherwise" fallback there is nothing to render.
+              */}
               <table border={1} cellPadding={6}>
                 <thead>
                   <tr>
                     <th>Symbol</th><th>Qty</th><th>Avg cost</th>
-                    <th>Price</th><th>Price date</th><th>Market value</th><th>Unrealised P&amp;L</th>
+                    <th>Price</th><th>Market value</th><th>Unrealised P&amp;L</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {portfolio.positions.map((p) => (
-                    <tr key={`${p.accountId}-${p.assetId}`}>
-                      <td>{p.symbol}</td>
-                      <td>{p.quantity.toFixed(4)}</td>
-                      <td>{p.avgCostUsd ? p.avgCostUsd.toFixed(2) : "—"}</td>
-                      <td>{p.latestPriceUsd ? p.latestPriceUsd.toFixed(2) : "no price yet"}</td>
-                      <td>{p.priceDate ?? "—"}</td>
-                      <td>{p.marketValueUsd ? p.marketValueUsd.toFixed(2) : "—"}</td>
-                      <td>{p.unrealisedPlUsd ? p.unrealisedPlUsd.toFixed(2) : "—"}</td>
-                    </tr>
-                  ))}
+                  {portfolio.positions.map((p) => {
+                    // Same formula as the aggregate in lib/portfolio.ts:
+                    // (price − avgCost) × qty, and % over (avgCost × qty).
+                    const plUsd =
+                      p.latestPriceUsd && p.avgCostUsd
+                        ? p.latestPriceUsd.sub(p.avgCostUsd).mul(p.quantity)
+                        : null;
+                    const basis = p.avgCostUsd ? p.avgCostUsd.mul(p.quantity) : null;
+                    const plPct =
+                      plUsd && basis && !basis.isZero() ? plUsd.div(basis).mul(100) : null;
+                    return (
+                      <tr key={`${p.accountId}-${p.assetId}`}>
+                        <td>{p.symbol}</td>
+                        <td>{p.quantity.toFixed(4)}</td>
+                        <td>{p.avgCostUsd ? p.avgCostUsd.toFixed(2) : "—"}</td>
+                        <td>
+                          <PriceCell
+                            assetId={p.assetId}
+                            symbol={p.symbol}
+                            assetClass={p.assetClass}
+                            priceStatus={p.priceStatus}
+                            priceUsd={p.latestPriceUsd ? p.latestPriceUsd.toFixed(2) : null}
+                            priceDate={p.priceDate}
+                          />
+                        </td>
+                        <td>{p.marketValueUsd ? p.marketValueUsd.toFixed(2) : "—"}</td>
+                        <td>
+                          {plUsd ? (
+                            <>
+                              {plUsd.toFixed(2)}
+                              {plPct !== null && <> ({plPct.toFixed(2)}%)</>}
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </section>

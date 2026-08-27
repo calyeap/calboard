@@ -46,6 +46,15 @@ export interface PortfolioView {
   // (spec §8). Stale-but-present prices still contribute their last-known
   // market value and are NOT in this list.
   excludedFromTotalSymbols: string[];
+  // Aggregate current unrealized gain/loss vs cost basis — V1's entire
+  // "performance" surface (spec §9.1); no MWR/TWR/IRR, no return series.
+  // Sum of (latestPrice − avgCost) × quantity over every position that has
+  // BOTH a usable latest price and an avg cost (stale prices still count;
+  // only price-unavailable positions are left out). The percentage is that
+  // sum over the summed avg-cost basis (avgCost × quantity) for the same
+  // positions, or null when nothing qualifies (zero denominator).
+  totalUnrealisedPlUsd: Decimal;
+  totalUnrealisedPlPct: Decimal | null;
 }
 
 export async function getPortfolioView(asOf: Date = new Date()): Promise<PortfolioView> {
@@ -127,11 +136,33 @@ export async function getPortfolioView(asOf: Date = new Date()): Promise<Portfol
     .filter((p) => p.priceStatus === "unavailable")
     .map((p) => p.symbol);
 
+  // Aggregate unrealized gain/loss vs cost basis (spec §9.1). One formula,
+  // (latestPrice − avgCost) × quantity, used here and per-row on the
+  // Dashboard. Only positions with both a usable price and an avg cost
+  // contribute — a price-unavailable position is left out of numerator and
+  // denominator alike, so the percentage is not diluted by holdings we
+  // can't value yet.
+  let totalUnrealisedPlUsd = new Decimal(0);
+  let aggregateCostBasisUsd = new Decimal(0);
+  for (const p of positions) {
+    if (p.latestPriceUsd && p.avgCostUsd) {
+      totalUnrealisedPlUsd = totalUnrealisedPlUsd.add(
+        p.latestPriceUsd.sub(p.avgCostUsd).mul(p.quantity)
+      );
+      aggregateCostBasisUsd = aggregateCostBasisUsd.add(p.avgCostUsd.mul(p.quantity));
+    }
+  }
+  const totalUnrealisedPlPct = aggregateCostBasisUsd.isZero()
+    ? null
+    : totalUnrealisedPlUsd.div(aggregateCostBasisUsd).mul(100);
+
   return {
     positions,
     totalCashUsd,
     totalMarketValueUsd,
     totalPortfolioValueUsd: totalCashUsd.add(totalMarketValueUsd),
     excludedFromTotalSymbols,
+    totalUnrealisedPlUsd,
+    totalUnrealisedPlPct,
   };
 }
