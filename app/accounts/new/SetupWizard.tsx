@@ -2,9 +2,21 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Decimal from "decimal.js";
 import { localTodayIso } from "@/lib/dateValidation";
+import type { AssetClass } from "@/lib/assets";
+import { resolveTickerAction, type TickerResolutionResult } from "@/app/actions/setup";
+import { computeAvgCostUsd, isDuplicateTickerInDraft, type CostBasisMode } from "@/lib/wizard/draftHoldings";
 
 type Step = 1 | 2 | "complete";
+
+interface DraftHolding {
+  ticker: string; // normalized (uppercase)
+  assetId: string;
+  assetType: AssetClass;
+  quantity: Decimal;
+  avgCostUsd: Decimal; // derived once, at entry — frozen thereafter
+}
 
 export function SetupWizard() {
   const router = useRouter();
@@ -18,15 +30,140 @@ export function SetupWizard() {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [step1Error, setStep1Error] = useState<string | null>(null);
 
-  // Disposable draft: nothing is persisted before Save. The only content a
-  // user can have entered in this slice is a changed as-of date.
-  const hasEnteredContent = asOfDate !== localTodayIso();
+  // Cost-basis mode is chosen once for the whole snapshot, then locked as
+  // soon as the first holding is added (spec §4). "total" is divided by
+  // quantity to the average cost that storage actually keeps.
+  const [costBasisMode, setCostBasisMode] = useState<CostBasisMode>("average");
+  const [holdings, setHoldings] = useState<DraftHolding[]>([]);
+
+  // Add-a-holding draft row.
+  const [tickerInput, setTickerInput] = useState("");
+  const [assetType, setAssetType] = useState<AssetClass>("equity");
+  const [quantityInput, setQuantityInput] = useState("");
+  const [costInput, setCostInput] = useState("");
+  const [holdingError, setHoldingError] = useState<string | null>(null);
+
+  // Resolution state. `resolvedTicker`/`draftAssetId` capture what the
+  // current identity was actually resolved for; editing the ticker text or
+  // the asset type clears them immediately so a stale identity can never be
+  // saved under a different symbol.
+  const [resolving, setResolving] = useState(false);
+  const [resolution, setResolution] = useState<TickerResolutionResult | null>(null);
+  const [resolvedTicker, setResolvedTicker] = useState<string | null>(null);
+  const [draftAssetId, setDraftAssetId] = useState<string | null>(null);
+
+  const modeLocked = holdings.length > 0;
+  const costLabel = costBasisMode === "average" ? "Average cost per unit (USD)" : "Total cost basis (USD)";
+
+  const hasEnteredContent = asOfDate !== localTodayIso() || holdings.length > 0;
 
   function handleCancel() {
     if (hasEnteredContent && !window.confirm("Discard this setup? Nothing has been saved yet.")) {
       return;
     }
     router.push("/holdings");
+  }
+
+  function clearResolution() {
+    setResolution(null);
+    setResolvedTicker(null);
+    setDraftAssetId(null);
+  }
+
+  async function handleTickerBlur() {
+    const normalized = tickerInput.trim().toUpperCase();
+    if (!normalized) {
+      clearResolution();
+      return;
+    }
+    setResolving(true);
+    setResolution(null);
+    try {
+      const result = await resolveTickerAction(normalized, assetType);
+      setResolution(result);
+      setResolvedTicker(normalized);
+      setDraftAssetId(result.assetId);
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  function addHolding() {
+    setHoldingError(null);
+    const normalized = tickerInput.trim().toUpperCase();
+    if (!normalized) {
+      setHoldingError("Enter a ticker symbol.");
+      return;
+    }
+    if (!draftAssetId || resolvedTicker !== normalized) {
+      setHoldingError("Resolve the ticker first — enter it and tab out, or press Add anyway.");
+      return;
+    }
+    if (isDuplicateTickerInDraft(holdings.map((h) => h.ticker), normalized)) {
+      setHoldingError(`${normalized} is already in your holdings — enter one combined row per asset.`);
+      return;
+    }
+
+    let quantity: Decimal;
+    let costRaw: Decimal;
+    try {
+      quantity = new Decimal(quantityInput);
+    } catch {
+      setHoldingError("Quantity must be a number.");
+      return;
+    }
+    try {
+      costRaw = new Decimal(costInput);
+    } catch {
+      setHoldingError("Cost must be a number.");
+      return;
+    }
+    if (!quantity.isFinite() || quantity.lte(0)) {
+      setHoldingError("Quantity must be greater than zero.");
+      return;
+    }
+    if (!costRaw.isFinite() || costRaw.lte(0)) {
+      setHoldingError("Cost must be greater than zero.");
+      return;
+    }
+
+    let avgCostUsd: Decimal;
+    try {
+      avgCostUsd = computeAvgCostUsd(quantity, costRaw, costBasisMode);
+    } catch (err) {
+      setHoldingError(err instanceof Error ? err.message : "Could not compute the average cost.");
+      return;
+    }
+
+    setHoldings((hs) => [...hs, { ticker: normalized, assetId: draftAssetId, assetType, quantity, avgCostUsd }]);
+    setTickerInput("");
+    setAssetType("equity");
+    setQuantityInput("");
+    setCostInput("");
+    clearResolution();
+  }
+
+  function removeHolding(index: number) {
+    setHoldings((hs) => hs.filter((_, i) => i !== index));
+  }
+
+  function editHolding(index: number) {
+    const h = holdings[index];
+    setHoldings((hs) => hs.filter((_, i) => i !== index));
+    setTickerInput(h.ticker);
+    setAssetType(h.assetType);
+    setQuantityInput(h.quantity.toString());
+    // Seed the cost field so re-adding under the CURRENT mode reproduces the
+    // same average cost, whichever mode is active now.
+    setCostInput(
+      costBasisMode === "average" ? h.avgCostUsd.toString() : h.avgCostUsd.mul(h.quantity).toString()
+    );
+    // Its identity was already resolved for this ticker — carry it so an
+    // unchanged re-add needs no fresh resolution.
+    setDraftAssetId(h.assetId);
+    setResolvedTicker(h.ticker);
+    setResolution(null);
+    setHoldingError(null);
   }
 
   function goToStep2() {
@@ -36,6 +173,10 @@ export function SetupWizard() {
     }
     if (asOfDate > localTodayIso()) {
       setStep1Error("That date is in the future — enter the holdings you have now.");
+      return;
+    }
+    if (holdings.length === 0) {
+      setStep1Error("Add at least one holding.");
       return;
     }
     setStep1Error(null);
@@ -73,6 +214,139 @@ export function SetupWizard() {
                 onChange={(e) => setAsOfDate(e.target.value)}
               />
             </p>
+          )}
+
+          <fieldset disabled={modeLocked} style={{ marginTop: "1rem" }}>
+            <legend>How are you entering cost?</legend>
+            <label>
+              <input
+                type="radio"
+                name="cost-basis-mode"
+                disabled={modeLocked}
+                checked={costBasisMode === "average"}
+                onChange={() => {
+                  if (!modeLocked) setCostBasisMode("average");
+                }}
+              />{" "}
+              Average cost per unit
+            </label>{" "}
+            <label>
+              <input
+                type="radio"
+                name="cost-basis-mode"
+                disabled={modeLocked}
+                checked={costBasisMode === "total"}
+                onChange={() => {
+                  if (!modeLocked) setCostBasisMode("total");
+                }}
+              />{" "}
+              Total cost basis
+            </label>
+          </fieldset>
+          {modeLocked && (
+            <p style={{ color: "#666", fontSize: "0.9rem" }}>
+              Cost-entry method is locked once a holding is added — remove all holdings to change it.
+            </p>
+          )}
+
+          <div style={{ marginTop: "1rem", display: "grid", gap: "0.5rem", maxWidth: 360 }}>
+            <label>
+              Ticker symbol
+              <br />
+              <input
+                aria-label="Ticker symbol"
+                value={tickerInput}
+                onChange={(e) => {
+                  setTickerInput(e.target.value);
+                  clearResolution();
+                }}
+                onBlur={handleTickerBlur}
+              />
+            </label>
+            {resolving && <span>checking…</span>}
+            {resolution?.ok && (
+              <span>
+                ✓ Resolved — last price ${resolution.priceUsd} ({resolution.priceDate})
+              </span>
+            )}
+            {resolution && !resolution.ok && (
+              <span>
+                {resolution.message}{" "}
+                {draftAssetId && (
+                  <button type="button" onClick={addHolding}>
+                    Add anyway
+                  </button>
+                )}
+              </span>
+            )}
+
+            <label>
+              Asset type
+              <br />
+              <select
+                aria-label="Asset type"
+                value={assetType}
+                onChange={(e) => {
+                  setAssetType(e.target.value as AssetClass);
+                  clearResolution();
+                }}
+              >
+                <option value="equity">Equity</option>
+                <option value="etf">ETF</option>
+                <option value="crypto">Crypto</option>
+              </select>
+            </label>
+
+            <label>
+              Quantity
+              <br />
+              <input aria-label="Quantity" value={quantityInput} onChange={(e) => setQuantityInput(e.target.value)} />
+            </label>
+
+            <label>
+              {costLabel}
+              <br />
+              <input aria-label={costLabel} value={costInput} onChange={(e) => setCostInput(e.target.value)} />
+            </label>
+
+            <button type="button" onClick={addHolding}>
+              + Add holding
+            </button>
+            {holdingError && <span style={{ color: "#b00020" }}>{holdingError}</span>}
+          </div>
+
+          {holdings.length > 0 && (
+            <table border={1} cellPadding={6} style={{ marginTop: "1rem", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th>Ticker</th>
+                  <th>Type</th>
+                  <th>Qty</th>
+                  <th>Avg cost</th>
+                  <th>Cost basis</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {holdings.map((h, i) => (
+                  <tr key={h.ticker}>
+                    <td>{h.ticker}</td>
+                    <td>{h.assetType}</td>
+                    <td>{h.quantity.toString()}</td>
+                    <td>${h.avgCostUsd.toFixed(2)}</td>
+                    <td>${h.quantity.mul(h.avgCostUsd).toFixed(2)}</td>
+                    <td>
+                      <button type="button" onClick={() => editHolding(i)}>
+                        Edit
+                      </button>{" "}
+                      <button type="button" onClick={() => removeHolding(i)}>
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
 
           {step1Error && <p style={{ color: "#b00020" }}>{step1Error}</p>}
