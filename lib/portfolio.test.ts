@@ -47,4 +47,69 @@ describe("getPortfolioView", () => {
     expect(view.totalMarketValueUsd.toFixed(2)).toBe("1200.00");
     expect(view.totalPortfolioValueUsd.toFixed(2)).toBe("10200.00");
   });
+
+  it("classifies a position with no price row as unavailable and excludes it from the total, with disclosure", async () => {
+    const account = await createAccount("No Price Brokerage", null);
+    const asset = await resolveOrCreateAsset("NOPRICE", "equity", "No Price Corp");
+    await applyTransaction({
+      accountId: account.id, assetId: asset.id, txnType: "BUY",
+      tradeDate: "2026-01-02", quantity: new Decimal(5), priceUsd: new Decimal(50),
+      feesUsd: new Decimal(0), grossAmountUsd: null, note: null,
+    });
+
+    const view = await getPortfolioView();
+    const position = view.positions.find((p) => p.symbol === "NOPRICE")!;
+    expect(position.priceStatus).toBe("unavailable");
+    expect(position.marketValueUsd).toBeNull();
+    expect(view.excludedFromTotalSymbols).toContain("NOPRICE");
+  });
+
+  it("classifies a price older than the freshness threshold as stale, but still includes it in the total", async () => {
+    const account = await createAccount("Stale Price Brokerage", null);
+    const asset = await resolveOrCreateAsset("STALE", "equity", "Stale Corp");
+    await applyTransaction({
+      accountId: account.id, assetId: asset.id, txnType: "BUY",
+      tradeDate: "2026-01-02", quantity: new Decimal(5), priceUsd: new Decimal(50),
+      feesUsd: new Decimal(0), grossAmountUsd: null, note: null,
+    });
+    const pool = getPool();
+    const sourceRow = await pool.query<{ id: number }>(`SELECT id FROM sources WHERE name = 'EODHD'`);
+    const tenDaysAgo = new Date();
+    tenDaysAgo.setUTCDate(tenDaysAgo.getUTCDate() - 10);
+    const staleDate = tenDaysAgo.toISOString().slice(0, 10);
+    await pool.query(
+      `INSERT INTO prices_daily (asset_id, price_date, close, adj_close, source_id, retrieved_at)
+       VALUES ($1, $2, 60.00, 60.00, $3, now())`,
+      [asset.id, staleDate, sourceRow.rows[0].id]
+    );
+
+    const view = await getPortfolioView();
+    const position = view.positions.find((p) => p.symbol === "STALE")!;
+    expect(position.priceStatus).toBe("stale");
+    expect(position.marketValueUsd!.toFixed(2)).toBe("300.00");
+    expect(view.excludedFromTotalSymbols).not.toContain("STALE");
+  });
+
+  it("classifies a fresh price (within the threshold) as current", async () => {
+    const account = await createAccount("Current Price Brokerage", null);
+    const asset = await resolveOrCreateAsset("CURR", "equity", "Current Corp");
+    await applyTransaction({
+      accountId: account.id, assetId: asset.id, txnType: "BUY",
+      tradeDate: "2026-01-02", quantity: new Decimal(2), priceUsd: new Decimal(10),
+      feesUsd: new Decimal(0), grossAmountUsd: null, note: null,
+    });
+    const pool = getPool();
+    const sourceRow = await pool.query<{ id: number }>(`SELECT id FROM sources WHERE name = 'EODHD'`);
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    await pool.query(
+      `INSERT INTO prices_daily (asset_id, price_date, close, adj_close, source_id, retrieved_at)
+       VALUES ($1, $2, 15.00, 15.00, $3, now())`,
+      [asset.id, yesterday.toISOString().slice(0, 10), sourceRow.rows[0].id]
+    );
+
+    const view = await getPortfolioView();
+    const position = view.positions.find((p) => p.symbol === "CURR")!;
+    expect(position.priceStatus).toBe("current");
+  });
 });
