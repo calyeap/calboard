@@ -264,72 +264,77 @@ export function SetupWizard() {
   }
 
   return (
-    <div style={{ fontFamily: "system-ui" }}>
+    <div className="wizard">
       {step === 1 && (
         <section>
           <h1>Add your holdings</h1>
+          <p className="wizard-step">Step 1 of 2</p>
           <p>
             Calboard mirrors the equities and crypto you already hold elsewhere, as one combined
             portfolio. Enter what you hold now; update it here whenever your real holdings change.
             Calboard never places trades — you keep doing that in your own trading app.
           </p>
 
-          <p style={{ color: "#555" }}>
-            These figures are current as of {asOfDate}.{" "}
-            {!datePickerOpen && (
-              <button type="button" onClick={() => setDatePickerOpen(true)}>
-                Change date
-              </button>
+          <div className="wizard-section">
+            <p className="wizard-note">
+              These figures are current as of {asOfDate}.{" "}
+              {!datePickerOpen && (
+                <button type="button" onClick={() => setDatePickerOpen(true)}>
+                  Change date
+                </button>
+              )}
+            </p>
+            {datePickerOpen && (
+              <p>
+                <label htmlFor="as-of-date">As of </label>
+                <input
+                  id="as-of-date"
+                  type="date"
+                  aria-label="As-of date"
+                  value={asOfDate}
+                  max={localTodayIso()}
+                  onChange={(e) => setAsOfDate(e.target.value)}
+                />
+              </p>
             )}
-          </p>
-          {datePickerOpen && (
-            <p>
-              <label htmlFor="as-of-date">As of </label>
-              <input
-                id="as-of-date"
-                type="date"
-                aria-label="As-of date"
-                value={asOfDate}
-                max={localTodayIso()}
-                onChange={(e) => setAsOfDate(e.target.value)}
-              />
-            </p>
-          )}
+          </div>
 
-          <fieldset disabled={modeLocked} style={{ marginTop: "1rem" }}>
-            <legend>How are you entering cost?</legend>
-            <label>
-              <input
-                type="radio"
-                name="cost-basis-mode"
-                disabled={modeLocked}
-                checked={costBasisMode === "average"}
-                onChange={() => {
-                  if (!modeLocked) setCostBasisMode("average");
-                }}
-              />{" "}
-              Average cost per unit
-            </label>{" "}
-            <label>
-              <input
-                type="radio"
-                name="cost-basis-mode"
-                disabled={modeLocked}
-                checked={costBasisMode === "total"}
-                onChange={() => {
-                  if (!modeLocked) setCostBasisMode("total");
-                }}
-              />{" "}
-              Total cost basis
-            </label>
-          </fieldset>
-          {modeLocked && (
-            <p style={{ color: "#666", fontSize: "0.9rem" }}>
-              Cost-entry method is locked once a holding is added — remove all holdings to change it.
-            </p>
-          )}
+          <div className="wizard-section">
+            <fieldset disabled={modeLocked}>
+              <legend>How are you entering cost?</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="cost-basis-mode"
+                  disabled={modeLocked}
+                  checked={costBasisMode === "average"}
+                  onChange={() => {
+                    if (!modeLocked) setCostBasisMode("average");
+                  }}
+                />{" "}
+                Average cost per unit
+              </label>{" "}
+              <label>
+                <input
+                  type="radio"
+                  name="cost-basis-mode"
+                  disabled={modeLocked}
+                  checked={costBasisMode === "total"}
+                  onChange={() => {
+                    if (!modeLocked) setCostBasisMode("total");
+                  }}
+                />{" "}
+                Total cost basis
+              </label>
+            </fieldset>
+            {modeLocked && (
+              <p className="wizard-note">
+                Cost-entry method is locked once a holding is added — remove all holdings to change it.
+              </p>
+            )}
+          </div>
 
-          <div style={{ marginTop: "1rem", display: "grid", gap: "0.5rem", maxWidth: 360 }}>
+          <div className="wizard-section wizard-add">
             <label>
               Ticker symbol
               <br />
@@ -412,7 +417,8 @@ export function SetupWizard() {
           </div>
 
           {holdings.length > 0 && (
-            <table border={1} cellPadding={6} style={{ marginTop: "1rem", borderCollapse: "collapse" }}>
+            <div className="editor-table">
+            <table border={1} cellPadding={6} style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr>
                   <th>Ticker</th>
@@ -426,16 +432,31 @@ export function SetupWizard() {
               <tbody>
                 {holdings.map((h, i) => (
                   <tr key={h.ticker}>
-                    <td>{h.ticker}</td>
-                    <td>{h.assetType}</td>
-                    <td>{h.quantity.toString()}</td>
-                    <td>${h.avgCostUsd.toFixed(2)}</td>
-                    <td>${h.quantity.mul(h.avgCostUsd).toFixed(2)}</td>
                     <td>
-                      <button type="button" onClick={() => editHolding(i)}>
+                      <span className="cell-label">Ticker</span>
+                      {h.ticker}
+                    </td>
+                    <td>
+                      <span className="cell-label">Type</span>
+                      {h.assetType}
+                    </td>
+                    <td>
+                      <span className="cell-label">Qty</span>
+                      {h.quantity.toString()}
+                    </td>
+                    <td>
+                      <span className="cell-label">Avg cost</span>
+                      ${h.avgCostUsd.toFixed(2)}
+                    </td>
+                    <td>
+                      <span className="cell-label">Cost basis</span>
+                      ${h.quantity.mul(h.avgCostUsd).toFixed(2)}
+                    </td>
+                    <td>
+                      <button type="button" aria-label={`Edit ${h.ticker}`} onClick={() => editHolding(i)}>
                         Edit
                       </button>{" "}
-                      <button type="button" onClick={() => removeHolding(i)}>
+                      <button type="button" aria-label={`Remove ${h.ticker}`} onClick={() => removeHolding(i)}>
                         Remove
                       </button>
                     </td>
@@ -443,15 +464,16 @@ export function SetupWizard() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
 
           {step1Error && <p className="status-msg status-danger">{step1Error}</p>}
 
-          <div style={{ marginTop: "1.5rem" }}>
+          <div className="wizard-actions">
             <button type="button" onClick={handleCancel}>
               Cancel setup
             </button>{" "}
-            <button type="button" onClick={goToStep2}>
+            <button type="button" className="primary" onClick={goToStep2}>
               Next: Review →
             </button>
           </div>
@@ -461,15 +483,19 @@ export function SetupWizard() {
       {step === 2 && (
         <section>
           <h1>Review</h1>
-          <p style={{ color: "#555" }}>Nothing has been saved yet.</p>
+          <p className="wizard-step">Step 2 of 2</p>
 
-          <p>
-            These figures are current as of {asOfDate}.{" "}
-            <button type="button" onClick={() => setStep(1)}>
-              Edit
-            </button>
-          </p>
+          <div className="wizard-section">
+            <p className="wizard-note">Nothing has been saved yet.</p>
+            <p>
+              These figures are current as of {asOfDate}.{" "}
+              <button type="button" onClick={() => setStep(1)}>
+                Edit
+              </button>
+            </p>
+          </div>
 
+          <div className="editor-table">
           <table border={1} cellPadding={6} style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr>
@@ -483,15 +509,31 @@ export function SetupWizard() {
             <tbody>
               {holdings.map((h) => (
                 <tr key={h.ticker}>
-                  <td>{h.ticker}</td>
-                  <td>{h.assetType}</td>
-                  <td>{h.quantity.toString()}</td>
-                  <td>${h.avgCostUsd.toFixed(2)}</td>
-                  <td>${h.quantity.mul(h.avgCostUsd).toFixed(2)}</td>
+                  <td>
+                    <span className="cell-label">Ticker</span>
+                    {h.ticker}
+                  </td>
+                  <td>
+                    <span className="cell-label">Type</span>
+                    {h.assetType}
+                  </td>
+                  <td>
+                    <span className="cell-label">Qty</span>
+                    {h.quantity.toString()}
+                  </td>
+                  <td>
+                    <span className="cell-label">Avg cost</span>
+                    ${h.avgCostUsd.toFixed(2)}
+                  </td>
+                  <td>
+                    <span className="cell-label">Cost basis</span>
+                    ${h.quantity.mul(h.avgCostUsd).toFixed(2)}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
 
           <p>
             Total cost basis entered: ${totalCostBasisEntered.toFixed(2)} — what you paid, not today&apos;s
@@ -512,11 +554,11 @@ export function SetupWizard() {
             </p>
           )}
 
-          <div style={{ marginTop: "1.5rem" }}>
+          <div className="wizard-actions">
             <button type="button" onClick={() => setStep(1)}>
               ← Back
             </button>{" "}
-            <button type="button" onClick={handleSave} disabled={saving}>
+            <button type="button" className="primary" onClick={handleSave} disabled={saving}>
               {saving ? "Saving…" : "Save"}
             </button>
           </div>

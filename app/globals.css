@@ -265,3 +265,50 @@ h6 {
     gap: var(--space-md);
   }
 }
+
+/* --- Setup-wizard polish (Task 32) --------------------------------------
+   Presentation only: a plain "Step N of 2" indicator, consistent vertical
+   rhythm between the wizard's control groups, a width-contained add-holding
+   column, and a clear primary/secondary split on each step's actions. Both
+   wizard tables reuse the Task 30/31 `.editor-table` / `.cell-label`
+   restacking mechanism unchanged. No new breakpoint; status is never carried
+   by colour alone. */
+.wizard-step {
+  margin: 0.25rem 0 var(--space-md);
+  color: var(--color-text-muted);
+  font-size: 0.9em;
+}
+.wizard-note {
+  color: var(--color-text-muted);
+  font-size: 0.9em;
+}
+.wizard-section + .wizard-section {
+  margin-top: var(--space-lg);
+}
+.wizard .editor-table {
+  margin-top: var(--space-lg);
+}
+.wizard-add {
+  display: grid;
+  gap: var(--space-sm);
+  max-width: 24rem;
+}
+.wizard-add input,
+.wizard-add select {
+  max-width: 100%;
+}
+.wizard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+.wizard-actions .primary {
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .wizard-add {
+    max-width: 100%;
+  }
+}

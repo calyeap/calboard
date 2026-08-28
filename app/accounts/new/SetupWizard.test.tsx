@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, cleanup, within } from "@testing-library/react";
 import { localTodayIso } from "@/lib/dateValidation";
 import { resolveTickerAction, setupAccountAction } from "@/app/actions/setup";
 import { SetupWizard } from "./SetupWizard";
@@ -113,14 +113,14 @@ describe("SetupWizard — Step 1 holdings list", () => {
     // Not resolved yet → Add is refused.
     fireEvent.click(screen.getByRole("button", { name: /\+ add holding/i }));
     expect(screen.getByText(/resolve the ticker first/i)).toBeInTheDocument();
-    expect(screen.queryByRole("cell", { name: "AAPL" })).toBeNull();
+    expect(screen.queryByText("AAPL")).toBeNull();
 
     fireEvent.blur(ticker);
     await waitFor(() => expect(screen.getByText(/\$228\.50/)).toBeInTheDocument());
     expect(screen.getByText(/resolved/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /\+ add holding/i }));
-    await waitFor(() => expect(screen.getByRole("cell", { name: "AAPL" })).toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByRole("table")).getByText("AAPL")).toBeInTheDocument());
   });
 
   it("blocks a duplicate ticker case-insensitively — one combined row per asset", async () => {
@@ -128,11 +128,11 @@ describe("SetupWizard — Step 1 holdings list", () => {
     render(<SetupWizard />);
 
     await addHolding("AAPL", "5", "100");
-    await waitFor(() => expect(screen.getByRole("cell", { name: "AAPL" })).toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByRole("table")).getByText("AAPL")).toBeInTheDocument());
 
     await addHolding("aapl", "3", "110");
     expect(screen.getByText(/already in your holdings/i)).toBeInTheDocument();
-    expect(screen.getAllByRole("cell", { name: "AAPL" })).toHaveLength(1);
+    expect(within(screen.getByRole("table")).getAllByText("AAPL")).toHaveLength(1);
   });
 
   it("switches the cost field label when 'Total cost basis' mode is chosen", () => {
@@ -148,7 +148,7 @@ describe("SetupWizard — Step 1 holdings list", () => {
     render(<SetupWizard />);
 
     await addHolding("AAPL", "10", "180");
-    await waitFor(() => expect(screen.getByRole("cell", { name: "$180.00" })).toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByRole("table")).getByText("$180.00")).toBeInTheDocument());
 
     const averageRadio = screen.getByRole("radio", { name: /average cost per unit/i });
     const totalRadio = screen.getByRole("radio", { name: /total cost basis/i });
@@ -161,7 +161,7 @@ describe("SetupWizard — Step 1 holdings list", () => {
     // and the existing row's frozen avg cost is untouched.
     expect(screen.getByLabelText("Average cost per unit (USD)")).toBeInTheDocument();
     expect(screen.queryByLabelText("Total cost basis (USD)")).toBeNull();
-    expect(screen.getByRole("cell", { name: "$180.00" })).toBeInTheDocument();
+    expect(within(screen.getByRole("table")).getByText("$180.00")).toBeInTheDocument();
   });
 
   it("blocks Add when the ticker was edited after resolution without re-resolving; nothing is saved under the stale id", async () => {
@@ -181,8 +181,8 @@ describe("SetupWizard — Step 1 holdings list", () => {
     fireEvent.click(screen.getByRole("button", { name: /\+ add holding/i }));
 
     expect(screen.getByText(/resolve the ticker first/i)).toBeInTheDocument();
-    expect(screen.queryByRole("cell", { name: "MSFT" })).toBeNull();
-    expect(screen.queryByRole("cell", { name: "AAPL" })).toBeNull();
+    expect(screen.queryByText("MSFT")).toBeNull();
+    expect(screen.queryByText("AAPL")).toBeNull();
   });
 
   it("requires at least one holding before 'Next: Review →' proceeds", () => {
@@ -204,7 +204,7 @@ describe("SetupWizard — Step 1 holdings list", () => {
     await addHolding("AAPL", "5", "100");
 
     // 3. The holding row is visible.
-    await waitFor(() => expect(screen.getByRole("cell", { name: "AAPL" })).toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByRole("table")).getByText("AAPL")).toBeInTheDocument());
 
     // 4. The stale Step 1 error is gone.
     expect(screen.queryByText(/add at least one holding/i)).toBeNull();
@@ -226,7 +226,7 @@ describe("SetupWizard — Step 1 holdings list", () => {
     fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: "3" } });
     fireEvent.change(screen.getByLabelText("Average cost per unit (USD)"), { target: { value: "40" } });
     fireEvent.click(screen.getByRole("button", { name: /\+ add holding/i }));
-    await waitFor(() => expect(screen.getByRole("cell", { name: "SOFI" })).toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByRole("table")).getByText("SOFI")).toBeInTheDocument());
   });
 
   it("ignores a late resolution from a superseded ticker/asset-type selection", async () => {
@@ -269,7 +269,7 @@ describe("SetupWizard — Step 2 Review & Save", () => {
     fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: "10" } });
     fireEvent.change(screen.getByLabelText("Average cost per unit (USD)"), { target: { value: "150" } });
     fireEvent.click(screen.getByRole("button", { name: /\+ add holding/i }));
-    await waitFor(() => expect(screen.getByRole("cell", { name: "AAPL" })).toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByRole("table")).getByText("AAPL")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /next: review/i }));
     await waitFor(() => expect(screen.getByRole("heading", { name: /^review$/i })).toBeInTheDocument());
   }
@@ -316,7 +316,7 @@ describe("SetupWizard — Step 2 Review & Save", () => {
     expect(screen.getByRole("heading", { name: /^review$/i })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /portfolio saved/i })).toBeNull();
     // Draft intact — the holding row is still there.
-    expect(screen.getByRole("cell", { name: "AAPL" })).toBeInTheDocument();
+    expect(within(screen.getByRole("table")).getByText("AAPL")).toBeInTheDocument();
   });
 
   it("'save_unknown' shows an amber 'couldn't confirm' banner, never the 'Nothing was saved' copy", async () => {
@@ -439,5 +439,135 @@ describe("SetupWizard — Task 29 status & accessibility", () => {
     expect(msg.closest('[role="alert"]')).toBeNull();
     // Step 1 keeps no assertive alert — the resolution result is polite only.
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("SetupWizard — Task 32: responsive + accessible polish", () => {
+  const ok = (over: Partial<{ priceUsd: string; assetId: string }> = {}) => ({
+    ok: true as const,
+    assetId: over.assetId ?? "1",
+    assetClass: "equity" as const,
+    priceUsd: over.priceUsd ?? "100.00",
+    priceDate: "2026-08-25",
+  });
+
+  async function addHolding(ticker: string, qty: string, cost: string) {
+    fireEvent.change(screen.getByLabelText("Ticker symbol"), { target: { value: ticker } });
+    fireEvent.blur(screen.getByLabelText("Ticker symbol"));
+    await waitFor(() => expect(screen.getByText(/resolved/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: qty } });
+    fireEvent.change(screen.getByLabelText("Average cost per unit (USD)"), { target: { value: cost } });
+    fireEvent.click(screen.getByRole("button", { name: /\+ add holding/i }));
+    await waitFor(() => expect(within(screen.getByRole("table")).getByText(ticker)).toBeInTheDocument());
+  }
+
+  async function reachReview() {
+    await addHolding("AAPL", "10", "150");
+    fireEvent.click(screen.getByRole("button", { name: /next: review/i }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: /^review$/i })).toBeInTheDocument());
+  }
+
+  it("T32-1: shows a plain 'Step 1 of 2' / 'Step 2 of 2' indicator that is not a button or link", async () => {
+    resolveTickerActionMock.mockResolvedValue(ok());
+    render(<SetupWizard />);
+
+    const s1 = screen.getByText("Step 1 of 2");
+    expect(s1).toBeInTheDocument();
+    expect(s1.closest("button")).toBeNull();
+    expect(s1.closest("a")).toBeNull();
+    expect(screen.queryByRole("button", { name: /step 1 of 2/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /step 1 of 2/i })).toBeNull();
+    expect(screen.queryByText("Step 2 of 2")).toBeNull();
+
+    await reachReview();
+
+    const s2 = screen.getByText("Step 2 of 2");
+    expect(s2.closest("button")).toBeNull();
+    expect(s2.closest("a")).toBeNull();
+    expect(screen.queryByText("Step 1 of 2")).toBeNull();
+  });
+
+  it("T32-2: Step 1 entered-holdings table is wrapped in .editor-table with ordered .cell-label labels; action cell has none", async () => {
+    resolveTickerActionMock.mockResolvedValue(ok());
+    render(<SetupWizard />);
+    await addHolding("AAPL", "10", "150");
+
+    const table = screen.getByRole("table");
+    expect(table.closest(".editor-table")).not.toBeNull();
+
+    const dataRow = within(table).getAllByRole("row")[1];
+    const labels = within(dataRow)
+      .getAllByRole("cell")
+      .map((c) => c.querySelector(".cell-label")?.textContent ?? null);
+    expect(labels).toEqual(["Ticker", "Type", "Qty", "Avg cost", "Cost basis", null]);
+  });
+
+  it("T32-3: Step 2 Review table is wrapped in .editor-table with the same 5 ordered .cell-label labels", async () => {
+    resolveTickerActionMock.mockResolvedValue(ok());
+    render(<SetupWizard />);
+    await reachReview();
+
+    const table = screen.getByRole("table");
+    expect(table.closest(".editor-table")).not.toBeNull();
+
+    const dataRow = within(table).getAllByRole("row")[1];
+    const labels = within(dataRow)
+      .getAllByRole("cell")
+      .map((c) => c.querySelector(".cell-label")?.textContent ?? null);
+    expect(labels).toEqual(["Ticker", "Type", "Qty", "Avg cost", "Cost basis"]);
+  });
+
+  it("T32-4: Step 1 row-action buttons carry per-row 'Edit <TICKER>' / 'Remove <TICKER>' names, one each", async () => {
+    resolveTickerActionMock.mockImplementation(async (sym: string) => ok({ assetId: sym }));
+    render(<SetupWizard />);
+    await addHolding("AAPL", "10", "150");
+    await addHolding("MSFT", "5", "200");
+
+    expect(screen.getByRole("button", { name: "Edit AAPL" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove AAPL" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit MSFT" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove MSFT" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Edit \S/ })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^Remove \S/ })).toHaveLength(2);
+  });
+
+  it("T32-5: ticker-resolution stays a single always-mounted polite live region; 'Add anyway' is outside it", async () => {
+    resolveTickerActionMock.mockResolvedValue({
+      ok: false,
+      assetId: "1",
+      message:
+        'Couldn\'t find a price for "ZZZZ". Check the symbol, or add it anyway if you\'re sure it\'s correct.',
+    });
+    render(<SetupWizard />);
+
+    expect(document.querySelectorAll('[aria-live="polite"]')).toHaveLength(1);
+    expect(document.querySelector('[aria-live="polite"]')).toHaveAttribute("aria-atomic", "true");
+
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "ZZZZ" } });
+    fireEvent.blur(ticker);
+
+    const addAnyway = await screen.findByRole("button", { name: /add anyway/i });
+    expect(addAnyway.closest("[aria-live]")).toBeNull();
+    expect(document.querySelectorAll('[aria-live="polite"]')).toHaveLength(1);
+  });
+
+  it("T32-6: exactly one set of form controls / actions per step — no duplicated mobile markup", async () => {
+    resolveTickerActionMock.mockResolvedValue(ok());
+    render(<SetupWizard />);
+
+    expect(screen.getAllByLabelText("Ticker symbol")).toHaveLength(1);
+    expect(screen.getAllByLabelText("Quantity")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /next: review/i })).toHaveLength(1);
+
+    await addHolding("AAPL", "10", "150");
+    expect(screen.getAllByRole("table")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /next: review/i }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: /^review$/i })).toBeInTheDocument());
+
+    expect(screen.getAllByRole("table")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /^save$/i })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /^←? ?back$/i })).toHaveLength(1);
   });
 });

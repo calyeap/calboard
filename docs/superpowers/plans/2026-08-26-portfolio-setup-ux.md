@@ -1853,3 +1853,111 @@ Task 30's Holdings editor to share code — reuse the CSS mechanism as-is.
 **Browser acceptance widths:** 1280px, 640px, 375px. At 375px
 `document.documentElement.scrollWidth <= document.documentElement.clientWidth` must hold (no
 page-level horizontal overflow), including with long ticker / long value content.
+
+---
+
+## UI-pass extension — Task 32 (Command Center authorized)
+
+*Supersedes the note under the Task 31 section that read "No Task 32 content is defined." Task 32
+was authorized via Command Center after Task 31, on the same footing as Tasks 27–31 (recorded in
+git history / this plan's UI-pass extension). Its contract is recorded here so the repository
+carries it. This is the final approved task in the UI-pass sequence; no Task 33 content is defined.*
+
+### Task 32 — setup-wizard polish
+
+**Goal:** improve the existing two-step setup wizard (`/accounts/new`, `app/accounts/new/`) so it
+is clearer, more balanced, accessible, and usable across desktop and narrow screens. A bounded
+**presentation, responsive-layout, and accessibility** refinement of the already-approved setup
+flow. NOT a visual-branding exercise, redesign, workflow change, or new-feature task; NOT
+permission to change portfolio or persistence logic. The journey is unchanged: Step 1 enter
+snapshot → Step 2 review → Save → Dashboard.
+
+**Overall wizard:** make the current step and next action easy to understand; keep the existing
+narrow setup shell (`.page-shell .page-shell--narrow`, no NavBar); improve section hierarchy,
+spacing, grouping, alignment, and action placement; stay visually consistent with the Task 28–31
+shared foundation; no decorative UI merely to fill space; no interactive stepper, sidebar,
+animation system, or new navigation model. A plain text step indicator ("Step 1 of 2") may be
+added/refined only if useful and must not change navigation behaviour.
+
+**Step 1 — enter snapshot.** Improve presentation of: as-of-date selection; cost-basis-mode
+selection + explanation; disabled/locked cost-basis state; ticker entry + resolution status;
+"Add anyway"; quantity + average-cost inputs; entered-holdings presentation; row removal;
+validation/status feedback; the primary action advancing to Review. Group related controls
+visually without changing meaning or order. Ticker-resolution messages stay visually associated
+with the ticker being checked. Entered holdings stay easy to scan with several holdings.
+
+**Step 2 — review.** Improve presentation of: current step + review purpose; snapshot/as-of-date
+context; cost-basis context where already displayed; the holdings Review table; validation/save
+feedback; Back vs Save hierarchy. Save stays the clear primary action; Back stays available
+without competing visually with Save. No third confirmation step, no new review data, no
+additional workflow.
+
+**Success / failure:** preserve the current successful-save destination and behaviour; add no new
+success screen; existing save failures stay clearly presented and accessible; field-level and
+form-level validation boundaries unchanged; Task 29 status / alert / live-region behaviour intact.
+
+**Responsive — widths 1280 / 640 / 375, reuse the existing 640px breakpoint.**
+Above 640px: both wizard tables (Step 1 entered-holdings, Step 2 Review) keep native desktop
+`<table>` presentation with intact `<thead>` semantics; controls not stretched unnecessarily
+across the shell; compact layout, clear reading order.
+At/below 640px: both wizard tables restack into readable narrow-width presentation using the
+established single-DOM `.editor-table` / `.cell-label` pattern from Tasks 30–31; no separate
+mobile tables; no duplicated controls; no duplicated holdings data; responsive cells use **real
+DOM text** for field context (not CSS `::before`); editable fields, read-only financial values,
+and row-removal controls each stay clearly associated with the correct holding; controls do not
+overlap, clip, or become unusably narrow; long tickers / status text / financial values wrap or
+stay contained; no page-level horizontal scrolling. At every width
+`document.documentElement.scrollWidth <= document.documentElement.clientWidth` must hold. A
+contained desktop-table scroll region above the breakpoint is acceptable only if genuinely
+necessary and must never cause page-level overflow.
+
+**Desktop reading order — Step 1:** (1) wizard title + current step, (2) snapshot/as-of-date
+settings, (3) cost-basis settings + state, (4) add-holding controls + ticker resolution,
+(5) entered holdings, (6) validation/status feedback, (7) Continue/Review action.
+**Narrow — Step 1:** same logical order in one vertical flow, with ticker-resolution feedback +
+"Add anyway" (5) between add-holding controls (4) and responsive holding rows (6).
+**Desktop — Step 2:** (1) title + step, (2) review explanation + snapshot context, (3) Review
+table, (4) validation/save feedback, (5) Back + Save.
+**Narrow — Step 2:** (1) title + step, (2) snapshot context, (3) responsive Review rows,
+(4) validation/save feedback, (5) Back + Save.
+No Dashboard-style widgets, multi-column sidebars, or new information architecture.
+
+**Accessibility — preserve or improve:** the always-mounted polite ticker-resolution live region
+(`aria-live="polite"`, `aria-atomic="true"`) with its checking / resolved / not-found
+announcements; validation alert semantics; existing `aria-invalid` / `aria-describedby`;
+accessible field labels; logical keyboard + DOM order; visible keyboard focus; keyboard access to
+"Add anyway", row removal, Back, Continue/Review, Save; disabled/locked cost-basis semantics + its
+textual explanation; colour-independent status/validation; native desktop table headers +
+semantics; real-text field context for restacked cells. **"Add anyway" MUST remain OUTSIDE the
+ticker live region.** Do not add ARIA where native HTML already supplies semantics. Visible mobile
+cell labels must not create confusing duplicate accessible names for editable controls; existing
+explicit input labels/names stay clear. If restacking occurs, underlying DOM + keyboard order stay
+logical.
+
+**Must preserve unchanged (behaviour):** ticker-resolution requests / decision logic /
+resolved / not-found / "Add anyway" behaviour; duplicate-symbol handling; holding add/remove/edit
+behaviour; quantity / average-cost / as-of-date validation; cost-basis-mode logic + locking rules;
+Step 1→2 transition; Back; Save; successful-save destination; existing server actions; persistence;
+database behaviour; portfolio + allocation calculations; rounding; currency formatting; Task 29
+field-error summaries / alerts / status messages / live-region semantics; existing financial data
+meaning. Existing setup-flow behavioural tests remain authoritative — only presentation-coupled
+assertions may change where necessary for the approved responsive structure; do not weaken
+workflow tests or replace behavioural assertions with class-only assertions. One DOM and one set
+of form controls remain the default.
+
+**Out of scope:** visual rebranding / full redesign / new design system / new wizard steps /
+interactive progress system / new setup functionality / workflow or business-logic change /
+ticker-resolution logic change / new portfolio fields / Dashboard changes / Holdings-editor
+changes / portfolio or allocation calculation changes / persistence / schema / database changes /
+server-action redesign / price-fetch architecture changes / automatic price refreshing / new
+metrics / widgets / historical performance / sector allocation / watchlists / news / AI /
+new dependencies without demonstrated approved need / broad unrelated cleanup / deferred Minor
+findings outside the wizard / push / merge / deploy / any post-UI roadmap task. Do not refactor
+the already-approved Holdings editor or Dashboard solely to share code; a small amount of scoped
+presentational reuse is preferable to a risky cross-feature abstraction.
+
+**Breakpoint:** the project's existing `@media (max-width: 640px)`. No new breakpoint.
+
+**Browser acceptance widths:** 1280px, 640px, 375px. At every width
+`document.documentElement.scrollWidth <= document.documentElement.clientWidth` must hold (no
+page-level horizontal overflow), including with long ticker / long value content.
