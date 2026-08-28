@@ -377,7 +377,7 @@ Swappable model adapter · `model_id`, `prompt_version`, `input_hash` on every r
 
 ### Ledger and portfolio (M1)
 
-> **M1 completion gate (2026-08-27).** Consistent with the snapshot/mirror supersession note at
+> **M1 completion gate (2026-08-28).** Consistent with the snapshot/mirror supersession note at
 > the top of this document, the **current** M1 Portfolio Core gate covers the snapshot-focused
 > vertical slice. In the current gate today: **AC-L5** (append-only `UPDATE`/`DELETE` raise),
 > **AC-L8** (optional note), **AC-MD2** (split-corruption guard), and the "no thesis /

@@ -67,7 +67,7 @@ Estimate triage cost per document, summary cost per event, and expected monthly 
 ## M1 — Portfolio Core
 **3.5–4.5 weeks · depends on M0**
 
-> **M1 completion boundary — updated 2026-08-27 (snapshot/mirror UX).** V1's user-facing model is
+> **M1 completion boundary — updated 2026-08-28 (snapshot/mirror UX).** V1's user-facing model is
 > now snapshot/mirror (see the supersession note at the top of `docs/spec/01-PRD-v1.2.md` and the
 > one in `docs/spec/03-TDD-v1.2.md`). The **current M1 Portfolio Core completion gate** is the
 > implemented snapshot-focused vertical slice defined by
@@ -122,7 +122,7 @@ Estimate triage cost per document, summary cost per event, and expected monthly 
 ## M1H — Portfolio Hardening
 **Deferred from M1 · no fixed duration · security items required before public online exposure**
 
-Established 2026-08-27 when the M1 completion gate narrowed to the snapshot-focused vertical slice
+Established 2026-08-28 when the M1 completion gate narrowed to the snapshot-focused vertical slice
 (see the "M1 completion boundary" note under `## M1 — Portfolio Core`). These are the broader
 original M1 Portfolio Core requirements — **preserved and deferred, not deleted.** Nothing here is
 authorised for implementation by the current M1 gate; each item keeps its original specification
@@ -133,7 +133,7 @@ and acceptance criteria (this section adds no new requirement).
 - Managed deploy pipeline · Singapore-region managed Postgres · one live rollback (M0 hosting outputs feed this).
 - **Independent encrypted backup and a verified restore** — **AC-SEC1**; Definition-of-done M1 #5.
 
-**Ledger breadth — needed only if multi-account / transaction-stream use returns to V1 scope:**
+**Ledger breadth — deferred from the original M1 requirements:**
 - Reversal flow — **AC-L4**; property tests (reversal invariance, linked-reversal atomicity).
 - Inter-account transfer behaviour — **AC-L1**, **AC-L6** (transfer conserves cost basis, no realised P&L); Definition-of-done M1 #2.
 - Multi-account portfolio value reconciling to broker statements **per account** for a full month — **AC-L2**; Definition-of-done M1 #1.
@@ -278,7 +278,7 @@ Structured predictions · calibration · AI-vs-user evaluation · **semantic eve
 
 ### M1 (~week 6)
 
-> **Scope note (2026-08-27):** the current M1 completion gate is the snapshot-focused vertical
+> **Scope note (2026-08-28):** the current M1 completion gate is the snapshot-focused vertical
 > slice (see the "M1 completion boundary" note under `## M1 — Portfolio Core`). Of the items
 > below, **#6 and #6a are in the current gate** and both hold today (no thesis / decision /
 > fundamentals / valuation / FX-fixings table; average-cost only, no lot-level state anywhere).
