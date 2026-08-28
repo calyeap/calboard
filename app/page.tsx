@@ -26,6 +26,13 @@ export default async function DashboardPage() {
   const accounts = await listAccounts();
   const portfolio = accounts.length > 0 ? await getPortfolioView() : null;
 
+  // Empty vs. populated Dashboard is derived purely from whether any holdings
+  // exist (spec §2.3) — never from whether an account row exists. An account
+  // whose holdings were all removed in /holdings (every position zeroed via
+  // ADJUSTMENT) still exists, but getPortfolioView returns no positions; that
+  // state shows the same "Add your holdings" empty state, not a $0.00 view.
+  const hasHoldings = portfolio !== null && portfolio.positions.length > 0;
+
   // V1 keeps exactly one hidden portfolio account. Only read freshness when
   // that invariant holds; if more than one account somehow exists, don't
   // guess which is "the" portfolio — omit the line rather than risk showing
@@ -50,7 +57,7 @@ export default async function DashboardPage() {
       <main className="page-shell">
         <h1>Dashboard</h1>
 
-        {!portfolio ? (
+        {!hasHoldings ? (
           <section>
             <p>No holdings yet.</p>
             <Link href="/accounts/new" className="button-link">Add your holdings</Link>

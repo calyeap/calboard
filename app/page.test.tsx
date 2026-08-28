@@ -297,3 +297,44 @@ describe("Dashboard — Task 31: hierarchy & responsive Dashboard", () => {
     expect(freshness).toHaveClass("dashboard-note");
   });
 });
+
+describe("Dashboard — empty state derives from holdings existence (Rev-3 §2.3)", () => {
+  it("an active account whose holdings were all removed shows the empty-state CTA, not a $0.00 populated Dashboard", async () => {
+    // The confirmed reachable bug: an existing portfolio, then /holdings ->
+    // remove every holding -> Save. The account row persists (is_active), so
+    // listAccounts() still returns it, but getPortfolioView() has no positions.
+    // Rev-3 §2.3: the Dashboard's empty vs. full state is derived entirely from
+    // whether any holdings exist — not from whether an account row exists.
+    listAccountsMock.mockResolvedValue([{ id: 1, name: "My Portfolio", custodian: null }]);
+    getPortfolioViewMock.mockResolvedValue(portfolio([]));
+    getLastSnapshotConfirmationMock.mockResolvedValue({
+      confirmedAt: new Date("2026-08-28T10:00:00Z"),
+      asOfDate: "2026-08-28",
+    });
+
+    render(await DashboardPage());
+
+    // The existing zero-holdings empty state + its existing CTA / destination.
+    expect(screen.getByText(/no holdings yet/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /add your holdings/i })).toHaveAttribute(
+      "href",
+      "/accounts/new"
+    );
+
+    // None of the populated-Dashboard content renders.
+    expect(screen.queryByRole("heading", { name: /portfolio value/i })).toBeNull();
+    expect(screen.queryByRole("heading", { name: /^holdings$/i })).toBeNull();
+    expect(screen.queryByRole("heading", { name: /allocation/i })).toBeNull();
+    expect(screen.queryByText(/holdings last updated/i)).toBeNull();
+  });
+
+  it("a portfolio with at least one holding still renders the populated Dashboard", async () => {
+    getPortfolioViewMock.mockResolvedValue(portfolio([position({ symbol: "AAPL" })]));
+
+    render(await DashboardPage());
+
+    expect(screen.getByRole("heading", { name: /portfolio value/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^holdings$/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no holdings yet/i)).toBeNull();
+  });
+});
