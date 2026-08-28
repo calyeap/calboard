@@ -1,3 +1,5 @@
+import "./globals.css";
+
 export const metadata = {
   title: "Calboard",
   description: "Private portfolio tracker",

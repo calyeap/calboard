@@ -67,6 +67,36 @@ Estimate triage cost per document, summary cost per event, and expected monthly 
 ## M1 — Portfolio Core
 **3.5–4.5 weeks · depends on M0**
 
+> **M1 completion boundary — updated 2026-08-28 (snapshot/mirror UX).** V1's user-facing model is
+> now snapshot/mirror (see the supersession note at the top of `docs/spec/01-PRD-v1.2.md` and the
+> one in `docs/spec/03-TDD-v1.2.md`). The **current M1 Portfolio Core completion gate** is the
+> implemented snapshot-focused vertical slice defined by
+> `docs/superpowers/plans/2026-08-25-m1-portfolio-vertical-slice.md` and
+> `docs/superpowers/specs/2026-08-26-portfolio-setup-ux-design.md` (Revision 3, final) — those two
+> documents control M1 completion where this section's older wording conflicts.
+>
+> **In the current gate:** the full canonical `001_portfolio_core` schema and the ledger
+> primitives (append-only `transactions`, `ADJUSTMENT`, derived positions at `(account_id,
+> asset_id)`, the split-corruption guard, `audit_log`); a single hidden account; the snapshot
+> setup wizard → Review → Save → populated Dashboard loop; the `/holdings` editor (add / remove /
+> update holdings, atomic save); Dashboard portfolio value, current / stale / unavailable price
+> handling with **manual** Retry, market value, aggregate and per-holding unrealised P&L, holdings
+> freshness, missing-price exclusion disclosure, priced allocation with text legend; and the
+> Tasks 28–32 responsive / accessibility UI pass.
+>
+> **Deferred, not removed — tracked under `## M1H — Portfolio Hardening` below:** passkey auth,
+> managed deploy pipeline, reversal flow, inter-account transfer, account reconciliation against
+> broker statements, `positions_daily` / `account_cash_daily` snapshot jobs, corporate actions
+> *applied* to the ledger, `ProvenanceChip` / broader per-figure provenance, the data-health
+> screen, export / re-import, and independent encrypted backup + verified restore. The
+> Components / Tests / Acceptance lists below are retained unchanged as the original M1 design;
+> the items among them that are not in the current gate belong to M1H.
+>
+> This boundary authorises completing the local snapshot-focused M1 and later Git integration. It
+> does **not** authorise public deployment. Authentication, automated backup + verified restore,
+> and appropriate security controls remain **required** (AC-SEC1; see M1H) before Calboard is
+> exposed online with personal financial data.
+
 **Goal: a usable portfolio tracker.** At the end of M1 you should stop using the spreadsheet.
 
 **Components:** project skeleton (web + worker) · managed deploy pipeline · passkey auth · Postgres + migration `001_portfolio_core` · **`sources` created before `assets`** (FK on `sector_source_id`) · `assets` (+ identifiers, aliases, class attributes) · `accounts` · **single-table `transactions` with `link_id`** · append-only triggers · reversal flow · cash-effect computation and validation · position derivation at **`(account_id, asset_id)`** · `account_cash` · `positions_daily` and `account_cash_daily` at the account grain · `positions_aggregate` view · `prices_daily` · `corporate_actions` + splits applied to the ledger · **split-corruption guard** · account reconciliation · `job_runs` · `data_quality_flags` · `audit_log` · provider adapter interface + first adapter · `ProvenanceChip` · transaction and transfer forms · data-health screen · export · **independent encrypted backup and verified restore**
@@ -86,6 +116,41 @@ Estimate triage cost per document, summary cost per event, and expected monthly 
 **Acceptance:** AC-L1 through AC-L9, AC-MD1, AC-MD2, AC-SEC1. Portfolio value reconciles to real broker statements **per account** for a full month.
 
 **Start using it daily.** M2 and M3 are materially better designed if you have lived with M1 first.
+
+---
+
+## M1H — Portfolio Hardening
+**Deferred from M1 · no fixed duration · security items required before public online exposure**
+
+Established 2026-08-28 when the M1 completion gate narrowed to the snapshot-focused vertical slice
+(see the "M1 completion boundary" note under `## M1 — Portfolio Core`). These are the broader
+original M1 Portfolio Core requirements — **preserved and deferred, not deleted.** Nothing here is
+authorised for implementation by the current M1 gate; each item keeps its original specification
+and acceptance criteria (this section adds no new requirement).
+
+**Security / operational — required before Calboard is served online with real financial data:**
+- Passkey / WebAuthn authentication — **AC-SEC1** ("not publicly reachable without authentication").
+- Managed deploy pipeline · Singapore-region managed Postgres · one live rollback (M0 hosting outputs feed this).
+- **Independent encrypted backup and a verified restore** — **AC-SEC1**; Definition-of-done M1 #5.
+
+**Ledger breadth — deferred from the original M1 requirements:**
+- Reversal flow — **AC-L4**; property tests (reversal invariance, linked-reversal atomicity).
+- Inter-account transfer behaviour — **AC-L1**, **AC-L6** (transfer conserves cost basis, no realised P&L); Definition-of-done M1 #2.
+- Multi-account portfolio value reconciling to broker statements **per account** for a full month — **AC-L2**; Definition-of-done M1 #1.
+- Account reconciliation wired to a UI (`lib/accountReconciliation.ts` exists, currently unused).
+- `positions_daily` / `account_cash_daily` snapshot jobs; per-account cash matching its daily snapshot — **AC-L7**; Definition-of-done M1 #3.
+- Corporate actions **applied** to the ledger (the split-corruption **guard** ships in current M1; applying a confirmed split/dividend to positions is deferred).
+
+**Data quality / provenance / data management:**
+- `ProvenanceChip` and broader "every figure exposes provenance and as-of" — Definition-of-done M1 #4 (current M1 surfaces price date, price-row `source_id`, and "Holdings last updated").
+- Data-health screen (`job_runs` / `data_quality_flags` exist; no screen yet).
+- Export → re-import into an empty instance reproducing identical data — **AC-L9**; Definition-of-done M1 #5.
+- Golden-file ledger fixtures for split / partial sale / dividend-with-withholding / same asset in two accounts / inter-account transfer, passing per account and in aggregate — **AC-L1**.
+
+**AC-MD1** (a killed price *job* producing a stale dashboard with no fabricated day-change) is
+partially satisfied by current M1: staleness handling and the no-fabricated-day-change rule are
+implemented; there is no scheduled price job to kill because V1 fetches EOD prices on demand.
+M2 / M3 / M4 scope is unchanged.
 
 ---
 
@@ -212,11 +277,21 @@ Structured predictions · calibration · AI-vs-user evaluation · **semantic eve
 ## Definition of done
 
 ### M1 (~week 6)
-1. Multi-account portfolio value in USD reconciles to broker statements **per account** for a full month.
-2. Splits, transfers and reversals leave the ledger correct; property tests pass.
-3. Cash per account is correct and matches its daily snapshot.
-4. Every figure exposes provenance and as-of.
-5. Backup restore verified. Export verified.
+
+> **Scope note (2026-08-28):** the current M1 completion gate is the snapshot-focused vertical
+> slice (see the "M1 completion boundary" note under `## M1 — Portfolio Core`). Of the items
+> below, **#6 and #6a are in the current gate** and both hold today (no thesis / decision /
+> fundamentals / valuation / FX-fixings table; average-cost only, no lot-level state anywhere).
+> **#1–#5 are deferred to `## M1H — Portfolio Hardening`** — multi-account per-account
+> reconciliation, transfers / reversals, per-account daily-snapshot cash, `ProvenanceChip` /
+> full per-figure provenance, and backup restore + export. They remain required for their
+> milestone; they are not deleted.
+
+1. Multi-account portfolio value in USD reconciles to broker statements **per account** for a full month. *(M1H)*
+2. Splits, transfers and reversals leave the ledger correct; property tests pass. *(splits: current M1 · transfers/reversals: M1H)*
+3. Cash per account is correct and matches its daily snapshot. *(M1H — no user-facing cash in the snapshot model)*
+4. Every figure exposes provenance and as-of. *(price date + source + "Holdings last updated" in current M1 · `ProvenanceChip` / full coverage: M1H)*
+5. Backup restore verified. Export verified. *(M1H)*
 6. **No thesis, decision, fundamentals, valuation or FX-fixings table exists.**
 6a. Cost basis is average-cost only; no lot-level state exists anywhere.
 

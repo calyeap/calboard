@@ -1,0 +1,314 @@
+/* Calboard CSS foundation (Task 28).
+   Small and restrained: a shared page shell, system typography, a handful
+   of tokens, and visible keyboard focus. This is a foundation, not a design
+   system, and it deliberately does not restyle individual screens. */
+
+:root {
+  --color-text: #1a1a1a;
+  --color-text-muted: #666666;
+  --color-border: #dcdcdc;
+  --color-page-bg: #ffffff;
+  --color-danger: #b00020;
+  --color-warning: #a15c00;
+  --color-success: #0a7a0a;
+
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 2rem;
+
+  --radius: 4px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-page-bg);
+  color: var(--color-text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+}
+
+/* Form controls inherit the page font instead of the browser default. */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* Basic heading / paragraph rhythm. The first-child reset keeps the top of
+   each screen from shifting. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  line-height: 1.25;
+  margin-block: 1.5em 0.5em;
+}
+
+:is(main, section, article) > :first-child {
+  margin-block-start: 0;
+}
+
+/* Visible keyboard focus everywhere. */
+:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
+/* Shared page shell — replaces the duplicated inline <main> styling on the
+   Dashboard, Holdings, and setup-wizard routes. */
+.page-shell {
+  max-width: 900px;
+  margin-inline: auto;
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+.page-shell--narrow {
+  max-width: 640px;
+}
+
+/* Shared navigation shell (NavBar). */
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Narrow-width padding. Declared after both .page-shell and .site-nav so it
+   wins on source order — .site-nav's `padding` shorthand has the same
+   specificity and would otherwise reset the inline padding back to --space-lg,
+   leaving the nav misaligned with the page content it sits above. */
+@media (max-width: 640px) {
+  .page-shell,
+  .site-nav {
+    padding-inline: var(--space-md);
+  }
+}
+
+.site-nav__brand {
+  font-size: 1.1rem;
+}
+
+/* The underline is the at-rest affordance: without it these links are the
+   same dark text as everything else, and a hover-only underline is no
+   affordance at all on a touch device. */
+.site-nav a {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.site-nav a:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* CTA link presented as a button — the CSS replacement for the old exported
+   buttonLinkStyle object. */
+.button-link {
+  display: inline-block;
+  padding: var(--space-sm) var(--space-md);
+  background: #111111;
+  color: #ffffff;
+  text-decoration: none;
+  border-radius: var(--radius);
+}
+
+/* --- Status & feedback messages (Task 29) ------------------------------------
+   One restrained treatment shared by the Dashboard disclosure, the Holdings
+   editor and the setup wizard. Status is never carried by colour alone: every
+   message keeps its wording and signs, and `.status-msg` adds a
+   colour-independent left border so a feedback line never reads as ordinary
+   body text. No cards, shadows, toasts or motion. */
+.status-danger {
+  color: var(--color-danger);
+}
+.status-warning {
+  color: var(--color-warning);
+}
+.status-success {
+  color: var(--color-success);
+}
+.status-neutral {
+  color: var(--color-text-muted);
+}
+/* A pathological long unbroken token (e.g. a pasted ticker echoed back in a
+   not-found resolution message) must wrap rather than force its container
+   wider — these colour-only utilities otherwise have no wrapping behaviour. */
+.status-danger,
+.status-warning,
+.status-success,
+.status-neutral {
+  overflow-wrap: anywhere;
+}
+
+/* Block banner treatment for standalone messages — save outcomes, the
+   row-error summary, step errors, the excluded-holdings disclosure. Field
+   messages that sit inside a table cell take only the colour class above, so
+   the Holdings table's width is left untouched (its overflow is Task 30). */
+.status-msg {
+  display: block;
+  padding: var(--space-sm) var(--space-md);
+  border-inline-start: 3px solid currentColor;
+  overflow-wrap: break-word;
+}
+
+/* --- Responsive restacking table (Task 30 Holdings editor + Task 31 Dashboard) ---
+   Desktop keeps the plain multi-column table. At the project's 640px
+   breakpoint each row restacks into a labelled block, so a narrow screen
+   never has to pan a seven-column editor and the page itself never scrolls
+   sideways. One markup, one set of controls — presentational only. */
+.editor-table {
+  overflow-x: auto;
+}
+
+/* Narrow-width per-cell field labels for the restacked editor. Real DOM text
+   (not ::before) so assistive tech gets the field name independent of CSS
+   generated content; hidden on desktop where the <thead> carries it. */
+.editor-table .cell-label {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .editor-table > table,
+  .editor-table thead,
+  .editor-table tbody,
+  .editor-table tr,
+  .editor-table td {
+    display: block;
+    width: 100%;
+    /* the <table border={1}> HTML hint still paints once display:block wins —
+       drop it so only the per-row card borders show */
+    border: 0;
+  }
+  .editor-table thead {
+    /* the per-cell .cell-label carries the column meaning at this width */
+    display: none;
+  }
+  .editor-table tr {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    margin-block: var(--space-sm);
+    padding: var(--space-sm);
+  }
+  .editor-table td {
+    border: 0;
+    padding: 0.35rem 0;
+    overflow-wrap: anywhere;
+  }
+  .editor-table .cell-label {
+    display: block;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    margin-bottom: 0.15rem;
+  }
+  .editor-table input {
+    width: 100%;
+    max-width: 20rem;
+  }
+  /* A <fieldset>'s UA min-inline-size is min-content, and the add-holding
+     fieldset has no overflow containment — a long unbroken token in its
+     resolution message would otherwise set a min-content floor wider than a
+     ~375px viewport and pan the page sideways. */
+  .page-shell fieldset {
+    min-inline-size: 0;
+  }
+}
+
+/* --- Dashboard hierarchy & allocation layout (Task 31) --------------------
+   Presentation only: Portfolio Value stays the strongest element, health /
+   freshness read as secondary, and the sections get consistent vertical
+   rhythm. No new information, no new components. */
+.dashboard-section + .dashboard-section {
+  margin-top: var(--space-lg);
+}
+.pv-amount {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0.25rem 0;
+}
+.dashboard-note {
+  color: var(--color-text-muted);
+  font-size: 0.9em;
+  margin: 0.25rem 0;
+}
+.allocation-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-lg);
+}
+.allocation-layout > svg {
+  flex: 0 0 auto;
+}
+.allocation-layout > table {
+  flex: 1 1 16rem;
+}
+.allocation-layout td {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .allocation-layout {
+    gap: var(--space-md);
+  }
+}
+
+/* --- Setup-wizard polish (Task 32) --------------------------------------
+   Presentation only: a plain "Step N of 2" indicator, consistent vertical
+   rhythm between the wizard's control groups, a width-contained add-holding
+   column, and a clear primary/secondary split on each step's actions. Both
+   wizard tables reuse the Task 30/31 `.editor-table` / `.cell-label`
+   restacking mechanism unchanged. No new breakpoint; status is never carried
+   by colour alone. */
+.wizard-step {
+  margin: 0.25rem 0 var(--space-md);
+  color: var(--color-text-muted);
+  font-size: 0.9em;
+}
+.wizard-note {
+  color: var(--color-text-muted);
+  font-size: 0.9em;
+}
+.wizard-section + .wizard-section {
+  margin-top: var(--space-lg);
+}
+.wizard .editor-table {
+  margin-top: var(--space-lg);
+}
+.wizard-add {
+  display: grid;
+  gap: var(--space-sm);
+  max-width: 24rem;
+}
+.wizard-add input,
+.wizard-add select {
+  max-width: 100%;
+}
+.wizard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+.wizard-actions .primary {
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .wizard-add {
+    max-width: 100%;
+  }
+}

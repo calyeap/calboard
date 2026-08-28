@@ -139,3 +139,56 @@ describe("applyTransaction integration", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("applyTransaction with an injected client", () => {
+  it("participates in the caller's transaction and rolls back together when the caller rolls back", async () => {
+    const account = await createAccount("Injected Client Test", null);
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await applyTransaction(
+        {
+          accountId: account.id, assetId: null, txnType: "DEPOSIT",
+          tradeDate: "2026-01-01", quantity: null, priceUsd: null,
+          feesUsd: new Decimal(0), grossAmountUsd: new Decimal(500), note: null,
+        },
+        client
+      );
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
+    }
+
+    const cashRow = await pool.query(`SELECT cash_usd FROM account_cash WHERE account_id = $1`, [account.id]);
+    expect(cashRow.rows).toHaveLength(0);
+    const txnRow = await pool.query(`SELECT id FROM transactions WHERE account_id = $1`, [account.id]);
+    expect(txnRow.rows).toHaveLength(0);
+  });
+
+  it("omitted client still commits its own transaction as before (regression)", async () => {
+    const account = await createAccount("No Injected Client Test", null);
+    await applyTransaction({
+      accountId: account.id, assetId: null, txnType: "DEPOSIT",
+      tradeDate: "2026-01-01", quantity: null, priceUsd: null,
+      feesUsd: new Decimal(0), grossAmountUsd: new Decimal(500), note: null,
+    });
+    const pool = getPool();
+    const cashRow = await pool.query(`SELECT cash_usd FROM account_cash WHERE account_id = $1`, [account.id]);
+    expect(new Decimal(cashRow.rows[0].cash_usd).toFixed(2)).toBe("500.00");
+  });
+
+  it("createAccount with an injected client rolls back with the caller's transaction", async () => {
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await createAccount("Injected Client Account", null, client);
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
+    }
+    const row = await pool.query(`SELECT id FROM accounts WHERE name = $1`, ["Injected Client Account"]);
+    expect(row.rows).toHaveLength(0);
+  });
+});

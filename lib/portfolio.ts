@@ -1,18 +1,37 @@
 import Decimal from "decimal.js";
 import { getPool } from "./db";
+import type { AssetClass } from "./assets";
+import { normalizePgDate } from "./dateValidation";
+
+export type PriceStatus = "current" | "stale" | "unavailable";
+
+// Price age is measured against the EOD price's own date (price_date), not
+// when it was fetched (retrieved_at) — a 3-day-old EOD close fetched a
+// minute ago is still a 3-day-old price. 5 days tolerates a normal weekend
+// or market holiday without flagging an ordinary gap as stale.
+const STALE_PRICE_THRESHOLD_DAYS = 5;
+
+function daysSince(dateStr: string, today: Date): number {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dateUtc = Date.UTC(y, m - 1, d);
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  return Math.floor((todayUtc - dateUtc) / (1000 * 60 * 60 * 24));
+}
 
 export interface PositionView {
   accountId: number;
   accountName: string;
-  assetId: number;
+  assetId: string;
   symbol: string;
   assetName: string;
+  assetClass: AssetClass;
   quantity: Decimal;
   avgCostUsd: Decimal | null;
   costBasisUsd: Decimal;
   latestPriceUsd: Decimal | null;
   priceDate: string | null;
   priceSourceId: number | null;
+  priceStatus: PriceStatus;
   marketValueUsd: Decimal | null;
   unrealisedPlUsd: Decimal | null;
 }
@@ -22,15 +41,29 @@ export interface PortfolioView {
   totalCashUsd: Decimal;
   totalMarketValueUsd: Decimal;
   totalPortfolioValueUsd: Decimal;
+  // Symbols excluded from totalMarketValueUsd because no price row exists at
+  // all yet — used to disclose that the total is a floor, not the true value
+  // (spec §8). Stale-but-present prices still contribute their last-known
+  // market value and are NOT in this list.
+  excludedFromTotalSymbols: string[];
+  // Aggregate current unrealized gain/loss vs cost basis — V1's entire
+  // "performance" surface (spec §9.1); no MWR/TWR/IRR, no return series.
+  // Sum of (latestPrice − avgCost) × quantity over every position that has
+  // BOTH a usable latest price and an avg cost (stale prices still count;
+  // only price-unavailable positions are left out). The percentage is that
+  // sum over the summed avg-cost basis (avgCost × quantity) for the same
+  // positions, or null when nothing qualifies (zero denominator).
+  totalUnrealisedPlUsd: Decimal;
+  totalUnrealisedPlPct: Decimal | null;
 }
 
-export async function getPortfolioView(): Promise<PortfolioView> {
+export async function getPortfolioView(asOf: Date = new Date()): Promise<PortfolioView> {
   const pool = getPool();
 
   const positionsResult = await pool.query(`
     SELECT
       pc.account_id, a.name AS account_name,
-      pc.asset_id, ast.primary_symbol AS symbol, ast.name AS asset_name,
+      pc.asset_id, ast.primary_symbol AS symbol, ast.name AS asset_name, ast.asset_class,
       pc.quantity, pc.avg_cost_usd, pc.cost_basis_usd,
       lp.close AS latest_price, lp.price_date, lp.source_id AS price_source_id
     FROM positions_current pc
@@ -57,18 +90,20 @@ export async function getPortfolioView(): Promise<PortfolioView> {
     const latestPriceUsd = row.latest_price ? new Decimal(row.latest_price) : null;
     const marketValueUsd = latestPriceUsd ? quantity.mul(latestPriceUsd) : null;
     const unrealisedPlUsd = marketValueUsd ? marketValueUsd.sub(costBasisUsd) : null;
-    // node-postgres parses `date` columns into JS Date objects (not strings) by
-    // default, but this view's contract (and app/page.tsx, which renders this
-    // value directly as JSX text) is a plain ISO date string. pg constructs
-    // that Date from the date's own year/month/day as LOCAL time components
-    // (not UTC midnight), so we must read it back with the local getters —
-    // toISOString() converts to UTC first and would shift the date by one day
-    // on any machine whose local timezone is behind UTC.
-    const priceDate: string | null = row.price_date
-      ? row.price_date instanceof Date
-        ? `${row.price_date.getFullYear()}-${String(row.price_date.getMonth() + 1).padStart(2, "0")}-${String(row.price_date.getDate()).padStart(2, "0")}`
-        : String(row.price_date)
-      : null;
+    // Reuse the shared normalizePgDate helper (the app's ONE definition of
+    // how a Postgres DATE becomes a plain "YYYY-MM-DD" string) — it handles
+    // both the raw string lib/db.ts's global type-parser override returns
+    // and a JS Date object defensively via LOCAL year/month/day components
+    // (never toISOString(), which converts through UTC and can shift the
+    // date by a day).
+    const priceDate: string | null = row.price_date ? normalizePgDate(row.price_date) : null;
+
+    const priceStatus: PriceStatus =
+      !latestPriceUsd || !priceDate
+        ? "unavailable"
+        : daysSince(priceDate, asOf) > STALE_PRICE_THRESHOLD_DAYS
+          ? "stale"
+          : "current";
 
     return {
       accountId: row.account_id,
@@ -76,12 +111,14 @@ export async function getPortfolioView(): Promise<PortfolioView> {
       assetId: row.asset_id,
       symbol: row.symbol,
       assetName: row.asset_name,
+      assetClass: row.asset_class,
       quantity,
       avgCostUsd,
       costBasisUsd,
       latestPriceUsd,
       priceDate,
       priceSourceId: row.price_source_id ?? null,
+      priceStatus,
       marketValueUsd,
       unrealisedPlUsd,
     };
@@ -95,10 +132,37 @@ export async function getPortfolioView(): Promise<PortfolioView> {
     new Decimal(0)
   );
 
+  const excludedFromTotalSymbols = positions
+    .filter((p) => p.priceStatus === "unavailable")
+    .map((p) => p.symbol);
+
+  // Aggregate unrealized gain/loss vs cost basis (spec §9.1). One formula,
+  // (latestPrice − avgCost) × quantity, used here and per-row on the
+  // Dashboard. Only positions with both a usable price and an avg cost
+  // contribute — a price-unavailable position is left out of numerator and
+  // denominator alike, so the percentage is not diluted by holdings we
+  // can't value yet.
+  let totalUnrealisedPlUsd = new Decimal(0);
+  let aggregateCostBasisUsd = new Decimal(0);
+  for (const p of positions) {
+    if (p.latestPriceUsd && p.avgCostUsd) {
+      totalUnrealisedPlUsd = totalUnrealisedPlUsd.add(
+        p.latestPriceUsd.sub(p.avgCostUsd).mul(p.quantity)
+      );
+      aggregateCostBasisUsd = aggregateCostBasisUsd.add(p.avgCostUsd.mul(p.quantity));
+    }
+  }
+  const totalUnrealisedPlPct = aggregateCostBasisUsd.isZero()
+    ? null
+    : totalUnrealisedPlUsd.div(aggregateCostBasisUsd).mul(100);
+
   return {
     positions,
     totalCashUsd,
     totalMarketValueUsd,
     totalPortfolioValueUsd: totalCashUsd.add(totalMarketValueUsd),
+    excludedFromTotalSymbols,
+    totalUnrealisedPlUsd,
+    totalUnrealisedPlPct,
   };
 }

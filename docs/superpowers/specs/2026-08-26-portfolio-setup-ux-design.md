@@ -1,8 +1,8 @@
 # Portfolio Setup UX — Design
 
-**Status:** Approved for planning. Revision 2 — narrowed per an independent senior UX critique (see §11 for the resolved/deferred breakdown against that critique).
-**Scope:** Presentation-layer redesign of the Phase B UI (`app/page.tsx`, `app/actions.ts`) plus a small set of narrowly-scoped, behaviour-preserving backend additions needed for transactional integrity and honest data display. No change to the M1 accounting model, ledger rules, or schema.
-**Out of scope:** M2/M3/M4 features (attention queue, SGD display, news, AI), visual branding/polish, transaction reversal/correction UI, a full periodic-reconciliation workflow, mixed cost-basis-mode-per-holding.
+**Status:** Approved for planning. Revision 3 (final) — narrowed per a product-scope correction and an independent Opus review (see §12). Calboard V1 is a monitoring **mirror** of the equity and selected-crypto holdings the user owns elsewhere — not a transaction ledger the user keeps by hand.
+**Scope:** Presentation-layer redesign of the Phase B UI (`app/page.tsx`, `app/actions.ts`) plus a small set of narrowly-scoped, behaviour-preserving backend additions needed for an atomic first-time write and honest data display. No change to the M1 accounting model, ledger rules, or schema.
+**Out of scope for V1 user-facing:** brokerage cash, multiple accounts, per-broker / per-exchange "source" breakdown, Buy/Sell/Deposit/Withdrawal entry, money-weighted / time-weighted / contribution-aware returns, an investment-return time series, watchlist / news / events / AI (M2+), visual branding polish, mixed cost-basis-mode-per-holding.
 
 ---
 
@@ -13,23 +13,23 @@ The M1 portfolio core, historical backfill guardrails, and spot-only opening-imp
 - Dashboard, account creation, ongoing transactions, and one-time opening import all compete on one page.
 - Forms rely on placeholder text instead of persistent labels.
 - Implementation vocabulary ("Phase B", "cutover", "OPENING IMPORT:") is user-visible.
-- There is no setup progression, no pre-commit review, and no way to check imported data against a real statement before it becomes an irreversible append-only commit.
+- There is no setup progression and no pre-commit review.
 
-This document defines the minimum UX restructuring needed before real data entry. It does not reopen the accounting model, ledger design, or schema (see §10, "Settled — do not reopen").
+This document defines the minimum UX restructuring needed before real data entry. It does not reopen the accounting model, ledger design, or schema (see §10).
+
+**Product model (the frame for every decision below).** Calboard V1 mirrors the equity and selected-crypto positions the user owns elsewhere, as **one combined portfolio**. It focuses on holdings, quantities, current value, current unrealized gain/loss versus cost basis, allocation, and (later, M2+) market/news/event monitoring and AI decision support. **Calboard does not execute trades**, and the user's separate trading app is the system of record for every buy and sell. Calboard's job is to reflect the user's *current* position, kept current by the user updating quantities and average cost when their real holdings change — not by re-keying a transaction stream. There is no cash, no multi-account, and no per-broker view in V1: if the same asset is held at more than one real-world broker or exchange, the user enters the combined quantity and combined average cost. The existing append-only ledger, `accounts`/`sources` tables, and accounting primitives remain, used under the hood (a single hidden account; each user update recorded as an `ADJUSTMENT`); none of that is surfaced.
 
 ---
 
 ## 2. Information architecture
 
-*(Unchanged from revision 1 — carried forward as approved.)*
-
 ### 2.1 Persistent primary navigation
 
-The steady-state app (Dashboard, Accounts, Transactions) carries a persistent navigation bar — no reliance on browser Back or hidden links:
+```
+Calboard   ·   Dashboard | Holdings
+```
 
-```
-Calboard   ·   Dashboard | Transactions | Accounts
-```
+The Dashboard is the product. **Holdings** is the single secondary destination — the pre-filled editor where the user keeps the mirror current (§5). There is no Transactions screen, no Accounts screen, no cash screen.
 
 The setup wizard (§4) suppresses this nav while active, to keep the flow focused. Its own "Cancel setup" is the only exit path during the draft steps.
 
@@ -37,23 +37,23 @@ The setup wizard (§4) suppresses this nav while active, to keep the flow focuse
 
 | Route | Purpose |
 |---|---|
-| `/` Dashboard | Read-oriented: portfolio value, holdings table, accounts summary. |
-| `/accounts` | Account list, "+ Add account" (launches the wizard), per-account "Reconcile" (optional, periodic — see §7). |
-| `/transactions` | Ongoing transaction entry (deposit/withdrawal/buy/sell) + a simple chronological list. No reversal/correction UI in this pass. |
-| *(wizard, not a route users navigate to directly)* | Per-account guided setup. Reachable from the Dashboard empty state and from `/accounts`. |
+| `/` Dashboard | Read-oriented, and the primary experience: one combined portfolio — Portfolio Value, holdings table, allocation, "Holdings last updated: [when]". No entry forms. |
+| `/holdings` Holdings | **The pre-filled editor itself** — every current holding as an editable row, plus add/remove. Save brings Calboard into line with the user's real holdings today. Zero-holdings state launches the setup wizard. There is no separate read-only recap table before the editor. |
+| *(wizard, not a route users navigate to directly)* | First-time guided portfolio setup. Reachable from the Dashboard empty state and from `/holdings`. |
+
+The wizard currently lives at the route `/accounts/new` for implementation-history reasons; that path is legacy and not worth renaming in this pass. Nothing user-facing says "account".
 
 ### 2.3 No persisted "setup mode" flag
 
-Whether the Dashboard shows its empty state or the full portfolio view is derived entirely from whether any accounts/data exist — no new schema column or app-level "setup complete" flag. The wizard is an *action*, launched from two entry points:
+Whether the Dashboard shows its empty state or the full portfolio view is derived entirely from whether any holdings exist — no new schema column or app-level "setup complete" flag. The wizard is an *action*, launched from two entry points:
 
-1. **First run** — Dashboard has zero accounts → its empty state's one CTA is "Add your first account."
-2. **Later** — `/accounts` → "+ Add account," for any account opened after initial setup.
+1. **First run** — Dashboard has zero holdings → its empty state's one CTA is "Add your holdings."
+2. **Later** — `/holdings` with zero holdings shows the same CTA.
 
 ### 2.4 Empty states
 
-- **Dashboard, zero accounts:** one primary CTA, "Add your first account."
-- **`/accounts`, zero accounts:** same CTA and copy.
-- **`/transactions`, zero accounts:** the entry form is not shown. Instead: *"You need an account before you can add transactions."* + `[+ Add account]`.
+- **Dashboard, zero holdings:** one primary CTA, "Add your holdings."
+- **`/holdings`, zero holdings:** same CTA and copy (the editor has nothing to pre-fill yet).
 
 No screen shows an unusable form (an empty `<select>`, a placeholder-only field).
 
@@ -63,367 +63,266 @@ No screen shows an unusable form (an empty `<select>`, a placeholder-only field)
 
 ### 3.1 Draft state is disposable
 
-Before Confirm & Save, all wizard data (account name/custodian, the portfolio-as-of date, opening cash, the holdings list) lives in **client-side state only**. Cancelling, closing the tab, or navigating away at any point before Confirm & Save leaves no empty account, no partial rows, nothing to clean up. No draft persistence/recovery across a browser refresh is in scope for this pass.
+Before Save, all wizard data (the as-of date and the holdings list) lives in **client-side state only**. Cancelling, closing the tab, or navigating away at any point before Save leaves nothing to clean up. No draft persistence/recovery across a browser refresh is in scope.
 
-### 3.2 Atomic commit
+### 3.2 Atomic first write
 
-Confirm & Save is the single moment real data is written, and it is genuinely atomic. This matters because `transactions` is append-only (`UPDATE`/`DELETE` raise, per L4/AC-L5): a partial failure across separate auto-committing calls would leave irreversible committed rows with no delete path.
+Save is the single moment real data is written, and it is genuinely atomic. This matters because `transactions` is append-only (`UPDATE`/`DELETE` raise, per L4/AC-L5): a partial failure across separate auto-committing calls would leave irreversible committed rows with no delete path.
 
-**Approved implementation approach (unchanged from revision 1):**
+**Approved implementation approach:**
 
-- `createAccount` (`lib/accounts.ts`), `applyTransaction` (`lib/ledger/applyTransaction.ts`), and `applyOpeningCashAdjustment` / `applyOpeningPositionAdjustment` (`lib/ledger/openingImport.ts`) each gain an **optional injected `client` parameter**.
+- `createAccount` (`lib/accounts.ts`), `applyTransaction` (`lib/ledger/applyTransaction.ts`), and `applyOpeningPositionAdjustment` (`lib/ledger/openingImport.ts`) each gain an **optional injected `client` parameter**.
   - **Omitted:** behaviour is unchanged — the function owns its own connection and its own `BEGIN`/`COMMIT`/`ROLLBACK`. Every existing caller and test is unaffected.
   - **Provided:** the function uses the given client and skips its own transaction control, letting a caller compose several calls into one transaction.
-- A new orchestration function (e.g. `lib/ledger/setupAccount.ts`) owns the transaction: acquire one client, `BEGIN`, `createAccount`, `applyOpeningCashAdjustment` (only if a non-zero amount was entered), `applyOpeningPositionAdjustment` per holding, `COMMIT` on full success, `ROLLBACK` on any failure.
+- A new orchestration function (`lib/ledger/setupAccount.ts`) owns the transaction: acquire one client, `BEGIN`, `createAccount` (always the single hidden `"My Portfolio"` account, `custodian: null` — no user input), `applyOpeningPositionAdjustment` per holding, **one portfolio snapshot-confirmation row in `audit_log`** (see §9.2), `COMMIT` on full success, `ROLLBACK` on any failure. A genuinely ambiguous `COMMIT` outcome (connection dropped mid-commit) throws the distinct `SetupCommitUncertainError` rather than being reported as a definite failure. **No opening-cash adjustment is ever written** — there is no cash in V1.
 - No schema change. No new accounting rule. No change to what any existing function computes.
 
-**Testing requirement (unchanged):** a test proving that a failure on a later holding (e.g. the 3rd of 3) rolls back the entire setup — no account row, no cash row, no earlier holdings rows remain.
+**Testing requirement:** a test proving that a failure on a later holding (e.g. the 3rd of 3) rolls back the entire setup — no account row, no earlier holdings rows remain.
 
-### 3.3 The human broker-statement check happens before the commit, not after
+### 3.3 Review is plain; Save is plain
 
-Discovering a typo only after an append-only commit is a poor recovery path. The statement check therefore happens on the **Review** step, before Confirm & Save — see §4, Step 4. What happens *after* Confirm & Save is a fully automatic **read-back verification** (§4, "Saved-data verification") that confirms the database stored exactly what the user approved — it is a system-integrity check, not a second manual data-entry exercise, and it requires no broker-statement re-entry.
+The user reviews a plain summary of the holdings they entered, then clicks Save. There is no sign-off checkbox, no "check against your statement" framing, and no automatic post-save read-back verification screen — this is a mirror the user maintains.
 
-**Read-back verification implementation:** after the atomic commit succeeds, a small new read-only function re-fetches the just-created account, its `account_cash` row, and its `positions_current` rows (using the same query shapes already used in `lib/portfolio.ts` and `lib/accountReconciliation.ts`) and compares them to the exact draft the user approved on Review. This is additive and read-only — it writes nothing, and it does not call `recordAccountReconciliation` (that function is reserved for the optional periodic action in §7).
+- **Success:** a brief confirmation, then the Dashboard.
+- **Failure (transaction rolled back):** stays on Review, all data intact, with a plain-language message and, where the error maps to a specific row, a link to it.
+- **Uncertain (`SetupCommitUncertainError`, or the Save call itself rejecting):** an honest "we couldn't confirm whether this saved — check the Dashboard before trying again" message; never "nothing was saved".
+
+An optional internal integrity check (`verifySetup`) may be added later behind the scenes; it is not part of the user-facing flow and is deferred (§9).
 
 ---
 
 ## 4. Setup wizard — step by step
 
-Four numbered steps (down from six screens in revision 1 — see §11 for the simplification rationale), followed by an automatic post-save check and a Complete screen.
+Two numbered steps, followed by a brief confirmation.
 
-### Step 1 of 4 — Account & portfolio-as-of date
-
-```
-Let's set up an account
-An account is a brokerage, exchange, or bank account you hold
-investments or cash in — e.g. Interactive Brokers, Coinbase,
-DBS Multiplier.
-
-Account name (required)
-[__________________]
-e.g. Interactive Brokers, Coinbase, DBS Multiplier
-
-Custodian / broker (optional)
-[__________________]
-The bank or broker that holds this account.
-
-Portfolio as of (required)
-[2026-08-26 ▾]
-These balances and holdings are correct as of this date. From
-the next day onward, record every real transaction in Calboard
-under Transactions — don't also enter transactions from before
-this date here.
-
-[Cancel setup]                          [Next: Opening cash →]
-```
-
-- Validation: account name required, non-empty. Date required, cannot be in the future (checked at the orchestration/action layer — see §9, not inside `lib/ledger/openingImport.ts`, whose own validation is unchanged).
-- **Asked once.** This single date applies to the opening-cash adjustment and every opening-position adjustment in this account's setup — no per-section or per-holding date fields anywhere else in the wizard.
-- The internal term "cutover" never appears in this copy; the field is labelled "Portfolio as of."
-- Soft, non-blocking duplicate-account-name check, unchanged from revision 1.
-- Cancel: unchanged from revision 1 (confirm-discard only if content has been entered).
-
-### Step 2 of 4 — Opening cash
+### Step 1 of 2 — Your holdings
 
 ```
-How much cash does [Account name] currently hold?
-This is a starting balance, not a transaction — the amount
-sitting in this account as of [portfolio-as-of date]. Leave it
-at $0 if there's no cash to declare.
+Add your holdings
+Calboard mirrors the equities and crypto you already hold
+elsewhere — as one combined portfolio. Enter what you hold now;
+update it here whenever your real holdings change. Calboard never
+places trades — you keep doing that in your own trading app.
 
-Opening cash balance (USD)
-[0.00]
-Enter 0 if this account holds no cash right now.
+These figures are current as of 2026-08-26.   [Change date]
 
-[← Back]  [Cancel setup]              [Next: Current holdings →]
-```
-
-No date field here — it references the date set in Step 1. Validation and $0-is-a-no-op behaviour unchanged from revision 1.
-
-### Step 3 of 4 — Current holdings (repeatable)
-
-```
-What does [Account name] currently hold?
-Add each position you currently hold as of [portfolio-as-of
-date]. If this account is cash-only, skip straight to Review.
-
-For this account, you'll enter cost as:
+Enter cost as:
   ( ) Average cost per unit   ( ) Total cost basis
-Use whichever your broker/exchange statement shows — Calboard
-computes the other figure for you. Chosen once for this
-account; every holding below uses the same figure.
+Use whichever your statement shows — Calboard computes the other.
+Chosen once; every holding below uses it.
 
 Ticker symbol            [AAPL___]        e.g. AAPL, VOO, BTC
   → checking...  /  ✓ Resolved — last price $228.50 (2026-08-25)
-  → Couldn't find a price for "XYZQ". Check the symbol, or
-    add it anyway if you're sure it's correct.  [Add anyway]
+  → Couldn't find a price for "XYZQ". Check the symbol, or add
+    it anyway if you're sure it's correct.  [Add anyway]
 
 Asset type                ( ) Equity  ( ) ETF  ( ) Crypto
 Quantity you hold         [______]
 Average cost per unit (USD)   [______]
-  (label follows the mode chosen above — "Total cost basis
-  (USD)" if that mode is selected)
+  (label follows the mode chosen above)
 
 [+ Add holding]
 
 Added so far:
-| Ticker | Type    | Qty | Avg cost | Cost basis |            |
-|--------|---------|-----|----------|------------|------------|
-| AAPL   | Equity  | 10  | $180.00  | $1,800.00  | Edit/Remove|
+| Ticker | Type   | Qty | Avg cost | Cost basis |            |
+|--------|--------|-----|----------|------------|------------|
+| AAPL   | Equity | 10  | $180.00  | $1,800.00  | Edit/Remove|
 
-(empty state: "No holdings added yet. Add one above, or
-continue if this account is cash-only.")
-
-[← Back]  [Cancel setup]                      [Next: Review →]
+[Cancel setup]                                     [Next: Review →]
 ```
 
-- **Cost-basis mode is chosen once per account setup**, not re-asked per holding. If Total cost basis is chosen, the wizard divides by quantity to derive average cost for internal use and storage — `applyOpeningPositionAdjustment` continues to receive only `avgCostUsd`, unchanged.
-- **Ticker resolution:** on entering a ticker, the wizard calls the existing `upsertLatestPrice` (already used elsewhere in the app for ordinary Buy/Sell) as the resolution signal. A successful fetch shows a concrete confirmation (last price and date) before the holding can be added; a failed fetch shows a clear, non-silent "couldn't find a price" state with an explicit "Add anyway" override — an unresolved symbol never *silently* becomes a position. (This does not display a company/asset name — see §11 for why that's deferred rather than invented.)
-- **Case-insensitive duplicate-ticker block within the draft**, unchanged from revision 1 — adding a ticker already present in this account's draft list is refused inline.
-- "Next: Review" is enabled with zero holdings — cash-only accounts are valid.
+- **The as-of date is not prominent.** It defaults to today and is shown as a single sentence; a small "Change date" affordance reveals a date picker for entering an older statement. Validation: must be a valid date, cannot be in the future (checked at the orchestration/action layer — §9). One date applies to the whole snapshot.
+- **Cost-basis mode is chosen once**, not per holding. If Total cost basis is chosen, the wizard divides by quantity to derive average cost for internal use — `applyOpeningPositionAdjustment` continues to receive only `avgCostUsd`, unchanged. Locked once the first holding is added (removing all holdings unlocks it).
+- **Ticker resolution:** on entering a ticker, the wizard calls the existing `upsertLatestPrice` as the resolution signal. A successful fetch shows a concrete confirmation (last price and date) before the holding can be added; a failed fetch shows a clear "couldn't find a price" state with an explicit "Add anyway" override — an unresolved symbol never *silently* becomes a position.
+- Resolved ticker/asset identity must not go stale: editing the ticker text or asset type after resolution immediately clears the resolved identity, and Add is blocked until it's re-resolved.
+- **Case-insensitive duplicate-ticker block within the draft.** If the same asset is held at two real brokers, the user enters one combined row.
+- At least one holding is required to reach Review.
+- Cancel: confirm-discard only if content has been entered.
 
-### Step 4 of 4 — Review against your statement
-
-*(This is the merged review-and-broker-check step — the one and only place a human compares Calboard's draft against the real statement, and it happens entirely before anything is written.)*
+### Step 2 of 2 — Review & save
 
 ```
-Review against your statement
-Nothing has been saved yet. Compare everything below against
-your broker/exchange statement, then confirm.
+Review
+Nothing has been saved yet. Check the figures, then save.
 
-Account — Interactive Brokers                            [Edit]
-Portfolio as of — 2026-08-26                              [Edit]
-Opening cash — $5,000.00                                  [Edit]
-Holdings                                                   [Edit]
+As of — 2026-08-26                                          [Edit]
+Holdings                                                    [Edit]
 | Ticker | Type   | Qty | Avg cost | Cost basis |
 |--------|--------|-----|----------|------------|
 | AAPL   | Equity | 10  | $180.00  | $1,800.00  |
 
-Total starting value entered: $6,800.00
-Based on your entered average cost, not live market prices.
+Total cost basis entered: $1,800.00
+This is what you paid, not today's market value.
 
-☐ I have checked these figures against my broker/exchange
-  statement.
+[  Save  ]
 
-[  Confirm & Save  ]   (disabled until the checkbox is ticked)
-After saving, any corrections are recorded separately so your
-portfolio history stays accurate.
+You can change any of these figures later from Holdings.
 ```
 
-- The user is **never asked to re-type** any quantity or cost a second time — the statement check is a read-and-compare against the already-entered draft, with Edit links back to the relevant step for a fix.
-- One deliberate final checkbox gates Confirm & Save — the same "require one explicit sign-off" principle from revision 1, now positioned before the write instead of after it.
+- No sign-off checkbox. No "check against your statement" framing. A plain summary with Edit links back to Step 1, and one Save button.
 - On click: "Saving…", disabled (no double-submit).
-- **Success:** advances to the automatic Saved-data verification below.
-- **Failure (transaction rolled back):** stays on Review, all data intact. Red banner: *"Nothing was saved. Fix the issue below and try again."* — plain-language translation of the failure, with a "Take me to the problem" link where the error maps to a specific step/row.
-
-### Saved-data verification *(automatic, no user input)*
-
-```
-✓ Interactive Brokers has been created and saved to your portfolio.
-Verifying your saved data...
-```
-
-Near-instant in the common case. Two outcomes:
-
-- **Match (expected outcome):** proceeds straight to Complete. No screen lingers here — this is a confirmation, not a task.
-- **Mismatch (should not normally happen):** a clear **technical failure** state, distinct in tone from a data-entry problem —
-  ```
-  Your setup was saved, but Calboard couldn't automatically
-  confirm the saved data matches what you approved. This is a
-  system issue, not a sign your broker figures were wrong.
-  Check the Accounts page, or try refreshing.
-  ```
-  This is not framed as "reconcile with your broker" language — it is an app-integrity signal.
-
-### Complete
-
-```
-Setup complete for Interactive Brokers
-Cash: $5,000.00 · Holdings: 1 position
-
-[+ Add another account]              [Go to dashboard →]
-```
-
-Equal visual weight on both actions, unchanged from revision 1.
+- **Success:** brief "Portfolio saved" confirmation, then `[Go to dashboard →]`.
+- **Failure (rolled back):** stays on Review, all data intact, plain-language message + "Take me to the problem" link where it maps to a row.
+- **Uncertain:** honest "couldn't confirm whether this saved — check the Dashboard" message; never "nothing was saved".
 
 ### Back/Cancel, summarized
 
-Steps 1–4 preserve data on Back. Cancel — or closing the tab, or the browser back button — discards all client-side state, confirming only if something has been entered. Saved-data verification and Complete have no Back — the data is already committed.
+Step 1 → Step 2 preserves data on Back. Cancel — or closing the tab, or the browser back button — discards all client-side state, confirming only if something has been entered. The post-save confirmation has no Back — the data is already committed.
 
 ---
 
-## 5. Dashboard, Accounts, Transactions
+## 5. Dashboard and keeping the portfolio current
 
 ### `/` Dashboard — empty / populated states
 
-Unchanged from revision 1: one-CTA empty state; populated state shows portfolio value, holdings table, accounts summary, no entry forms. See §9 for the revised price/data-health treatment of the holdings table.
+- **Empty (zero holdings):** one-CTA empty state, "Add your holdings."
+- **Populated:** one combined portfolio:
+  - **Portfolio Value** (a.k.a. Total Investments) — the sum of each holding's current market value. Not labelled "Net Worth"; Calboard does not track cash or non-investment assets in V1.
+  - **Holdings table** — symbol, quantity, average cost, current price (with the day's price movement where the provider supplies it), current market value, and **current unrealized gain/loss versus cost basis** in dollars and percent. See §8 for price/data-health treatment.
+  - **Allocation** — share of portfolio value by holding (and optionally by asset type).
+  - **"Holdings last updated: [when]"** — shown near the Portfolio Value, so manually mirrored quantities cannot go stale invisibly. This is the **confirmation time** of the last successful Save (wizard or `/holdings`) — i.e. the moment the user last confirmed the whole visible portfolio as correct, *not* the date any one holding changed, and *not* the snapshot's as-of date. Every successful Save advances it, including a Save that changed nothing. The snapshot's as-of date may be shown as secondary detail ("snapshot as of …"). Source: the latest `audit_log` `snapshot_confirm` row (§9.2).
+  - No cash line, no per-broker breakdown, no entry forms.
 
-### `/accounts`
+### `/holdings` — the pre-filled editor
 
-Unchanged structurally from revision 1 — list, "+ Add account", per-account "Reconcile." See §7 for what "Reconcile" now means on its own, now that it's fully decoupled from initial setup.
+The surface for keeping the mirror current. It **is** the editor — no read-only recap precedes it. Every current holding is rendered as an editable row (ticker, quantity, average cost), pre-filled from `positions_current`, with add-a-holding and remove-a-holding controls (the add path reuses Step 1's ticker-resolution + staleness guard). The as-of date defaults to today, is **not prominent**, and an older date is available only behind a small **"Change date"** affordance.
 
-### `/transactions`
+- Save computes which holdings changed (quantity or average cost) and writes, per changed holding, **one `ADJUSTMENT` row carrying the absolute desired quantity and average cost** — an `ADJUSTMENT` sets the position absolutely, so one row fixes both at once; a removed holding is `quantity: 0`. It is **not** a quantity delta and does **not** use `applyOpeningPositionAdjustment`. All rows plus the snapshot-confirmation `audit_log` row (§9.2) commit in **one atomic transaction** (same injected-`client` mechanism as §3.2). A downward revision creates no realised P&L (§9.1). No `BUY`/`SELL`/`DEPOSIT`/`WITHDRAWAL`.
+- **When a holding's quantity increases but its average cost is left unchanged**, show a non-blocking note beside that row: *"Your existing average cost is $X. Update it if your real average cost changed."* It informs; it never blocks Save.
+- Entered values are preserved if validation fails (controlled inputs + a Server Action returning structured field errors, never a throwing `<form action>`).
+- Submit is disabled while the request is in flight. Errors render inline, beside the relevant field, in plain language.
+- Zero-holdings state: the editor is empty; the "Add your holdings" CTA launches the wizard.
 
-```
-Transactions
+### Activity (optional, deferred)
 
-Add a transaction
-Account          [select ▾]
-Type             ( ) Deposit  ( ) Withdrawal  ( ) Buy  ( ) Sell
-Trade date       [2026-08-26 ▾]   (defaults to today; historical
-                  dates allowed; future dates rejected)
-
-  — Deposit/Withdrawal —
-  Amount (USD)     [______]
-
-  — Buy —
-  Ticker           [______]
-    → checking... / ✓ Resolved — last price $228.50 (2026-08-25)
-      / Couldn't find a price — check the symbol, or add anyway
-  Asset type       ( ) Equity  ( ) ETF  ( ) Crypto
-  Quantity         [______]
-  Price (USD)      [______]
-
-  — Sell —
-  Holding          [select: AAPL — 10 held ▾]   (populated from
-                    this account's actual current holdings; no
-                    separate/contradictable asset-type field)
-  Quantity         [______]
-  Price (USD)      [______]
-
-Fees (USD)         [0.00]   (optional)
-Note                [______]  (optional)
-
-Interactive Brokers cash after this transaction: $3,182.00
-  (currently $5,000.00, decreasing by $1,818.00)
-
-[Add transaction]   (disabled while saving)
-
-Recent transactions
-(reverse-chronological: date, account, type, amount/qty×price,
-note — read-only; no edit/reversal UI in this pass)
-```
-
-**Zero-account empty state**, unchanged from revision 1: form is not rendered; *"You need an account before you can add transactions."* + `[+ Add account]`.
+Because every update writes `ADJUSTMENT` rows, a read-only "Activity" list of what changed and when could be added later if it proves useful. It is not built in this pass. No transaction-entry UI exists anywhere.
 
 ---
 
-## 6. Transaction number-entry, resolution, and preview
+## 6. Holdings entry — number entry and resolution
 
-Applies to `/transactions` and, where noted, the wizard.
+Applies to the wizard's Step 1 and the `/holdings` editor.
 
-- **All amounts are entered positive.** Deposit vs. Withdrawal determines cash direction; Buy vs. Sell determines meaning. The user never enters or sees a signed number. Fees are zero or positive. Matches existing backend validation (`parseDecimalField` already enforces this) — a copy/layout requirement, not a new rule.
-- **Trade date is a visible, required field** — never silently stamped. Defaults to today, allows historical dates, rejects future dates (enforced at the action/orchestration layer, same technique as amount/quantity validation — see §9). Preserved on validation failure, same as every other field (§9).
-- **No raw ledger/implementation detail is exposed** — no "cash effect" field, no signed values, no `txn_type`/`cash_effect_usd` naming.
-- **Corrected cash-preview semantics**, shown above the submit button as a plain-language resulting balance (per PRD L7's "cash effect is computed and validated... shown before commit," phrased as a balance rather than a signed figure):
-
-  | Type | Effect on cash |
-  |---|---|
-  | Buy | decreases by `quantity × price + fees` |
-  | Sell | increases by `quantity × price − fees` |
-  | Deposit | increases by the entered amount |
-  | Withdrawal | decreases by the entered amount |
-
-  The preview shows the **resulting account cash balance**, with the current balance and the delta as supporting detail (using the account's already-loaded cash figure — no new backend call).
-- **Ticker resolution on Buy** uses the same live-price-fetch confirmation as the wizard's holdings step (§4, Step 3) — consistent treatment in both places.
-- **Sell selects from the account's actual current holdings** (a new small read-only query against `positions_current`, filtered by account, `quantity <> 0`) instead of free-text ticker + a separately chosen asset type that could contradict the real position. Quantity currently held is shown as context; no oversell block is added (not requested, and would be a new business rule).
-- **Entered values are preserved if validation fails.** The current pattern (`<form action={serverAction}>` that throws on invalid input) does not guarantee this. Closing this gap — via controlled inputs and a server action that returns structured field errors instead of throwing — is required by this design; the exact mechanism is an implementation-plan decision.
-- **Submit is disabled while the request is in flight**, on every form in this redesign.
-- **Errors render inline, beside the relevant field, in plain language.**
+- **All quantities and costs are entered positive.** The user never enters or sees a signed number.
+- **The as-of date is a light, non-prominent field** — defaults to today, older dates only behind "Change date", future dates rejected (enforced at the action/orchestration layer, per §9). Preserved on validation failure. It is never called a "trade date" or an "effective date".
+- **No raw ledger/implementation detail is exposed** — no "cash effect" field, no signed values, no `txn_type`/`ADJUSTMENT` vocabulary, no "opening balance", no "starting value". Step 2's summary line is "Total cost basis entered", explicitly framed as what the user paid.
+- **No cash-effect preview** — the editor shows the resulting holding quantities as plain current-state values, because that *is* what the user is editing.
+- **Ticker resolution** on adding a holding uses the existing live-price-fetch confirmation, reusing `resolveTickerAction` — consistent in the wizard and the editor.
+- **Editing an existing holding** operates on its known asset identity from `positions_current`; there is no free-text ticker + separately-chosen asset type that could contradict the real position.
+- **Submit is disabled while the request is in flight.**
 
 ---
 
-## 7. Duplicate-transaction warning, and periodic reconciliation
+## 7. Reconciliation
 
-### 7.1 Duplicate-transaction warning
+In the snapshot/mirror model, "reconcile against my broker statement" and "update holdings" are the same action: the user compares Calboard to their real accounts and edits Calboard to match. The `/holdings` editor (§5) is that mechanic; "Holdings last updated" (§5) is the staleness signal that prompts it.
 
-Before submitting an ordinary transaction, a lightweight, non-blocking check looks for a likely duplicate — same account, asset, type, quantity, and price, within a nearby date window (a small new read-only query against `transactions`, no schema change). If found:
-
-```
-This looks similar to a transaction from 2026-08-24 (same
-account, ticker, type, quantity and price). Add it anyway?
-
-[Add anyway]   [Cancel]
-```
-
-It warns, never silently rejects — legitimate repeated transactions exist.
-
-### 7.2 Periodic reconciliation (`/accounts` → "Reconcile")
-
-Fully decoupled from initial setup (§3.3, §4). This optional, on-demand action reuses `recordAccountReconciliation` (`lib/accountReconciliation.ts`) — unchanged — for a human, evidence-based comparison against a statement at any later point in time: broker-reported cash and, per holding, broker-reported quantity and cost (average or total, same derivation as §4 Step 3) entered beside Calboard's current values, with computed Match/Difference and a final sign-off checkbox. This is the same mechanic revision 1 had proposed for the *mandatory* post-save step; it now lives exclusively here, as a genuinely optional, lightweight action — not built out further in this pass beyond confirming it's the right home for that mechanic.
+`recordAccountReconciliation` (`lib/accountReconciliation.ts`) remains in the codebase, untouched and unused by any UI in this pass. A fuller evidence-based periodic-reconciliation workflow is deferred — not built here. There is no duplicate-transaction warning, because there is no transaction stream being hand-entered.
 
 ---
 
 ## 8. Price / data-health states
 
-The dashboard must not silently understate portfolio value when a current price is unavailable. Today, `getPortfolioView` (`lib/portfolio.ts`) treats a position with no fetched price as contributing **$0** to `totalMarketValueUsd` — a real, currently-existing gap, not a new concern introduced here (see §11 for how this is scoped as a small additive fix rather than an accounting change).
+The dashboard must not silently understate portfolio value when a current price is unavailable. Today, `getPortfolioView` (`lib/portfolio.ts`) treats a position with no fetched price as contributing **$0** to `totalMarketValueUsd` — a real, currently-existing gap, not a new concern introduced here (see §11).
 
 Three explicit states, none implying setup failed:
 
 | State | Meaning | Holdings-table treatment |
 |---|---|---|
-| **Price unavailable** | No price row exists yet for this asset (e.g. a provider fetch never completed) | Price/market-value cells show "No price yet" instead of blank or $0 |
+| **Price unavailable** | No price row exists yet for this asset | Price/market-value cells show "No price yet" instead of blank or $0 |
 | **Stale price** | A price exists but is older than the freshness threshold | Price shown greyed with an age badge, e.g. "as of 2026-08-20 (4 days ago)" |
 | **Fetch failure** | An active fetch attempt errored | "Price fetch failed" with the last-known price (if any) still shown, plus a retry affordance |
 
-**Portfolio total:** when any position lacks a current price, the total is no longer silently short — a visible disclosure accompanies it, e.g. *"Portfolio total excludes 1 holding with no price yet — true value is higher."* This requires a small, additive change to `lib/portfolio.ts`: each `PositionView` gains a price-status classification, and `PortfolioView` gains a flag/list for positions excluded from the computed total. It does not change what the total computes for any priced position, and it does not touch ledger or cost-basis logic.
+**Portfolio Value:** when any position lacks a current price, the total is no longer silently short — a visible disclosure accompanies it, e.g. *"Portfolio Value excludes 1 holding with no price yet — true value is higher."* This requires a small, additive change to `lib/portfolio.ts`: each `PositionView` gains a price-status classification, and `PortfolioView` gains a flag/list for positions excluded from the computed total. It does not change what the total computes for any priced position, and it does not touch ledger or cost-basis logic.
+
+**Day price movement:** where the provider supplies a prior-close or intraday figure, the holdings table shows the day's change (absolute and percent) per holding. Where it does not, the cell is simply omitted — no fabricated value.
 
 ---
 
-## 9. Where new validation and read logic lives
+## 9. What V1 performance means, and where new logic lives
 
-To keep the "no change to already-tested ledger/accounting code" promise precise, this section states explicitly where each new check is implemented:
+### 9.1 Performance scope (explicit)
 
-- **"Portfolio as of" cannot be in the future** and **transaction trade date cannot be in the future** — enforced at the app/action layer (alongside the existing `parseDecimalField`-style validation in `app/actions.ts`/the wizard's orchestration), *not* inside `lib/ledger/openingImport.ts`'s `requireValidTradeDate` or `applyTransaction`. Those functions' own validation (calendar-date format only) is unchanged.
-- **Read-back verification** (§3.3) — a new, read-only function, reusing existing query shapes from `lib/portfolio.ts`/`lib/accountReconciliation.ts`. Writes nothing.
-- **Account holdings list for the Sell picker** (§6) — a new, small, read-only query against `positions_current`. No write, no new table.
-- **Duplicate-transaction check** (§7.1) — a new, small, read-only query against `transactions`. No write, no new table.
-- **Price-status classification and total-exclusion disclosure** (§8) — an additive change to the existing read/aggregation query in `lib/portfolio.ts`. No change to cost basis, cash effect, or any write path.
-- **Ticker resolution** (§4 Step 3, §6) — reuses the existing `upsertLatestPrice`/`MarketDataProvider.fetchLatestEod` call, just invoked earlier (at draft-entry time) in addition to its existing use. No new provider capability.
+V1 shows, and only shows:
+
+- **Current market value** per holding and for the portfolio.
+- **Current unrealized gain/loss versus cost basis** — `(current price − average cost) × quantity`, in dollars and percent, per holding and aggregated.
+- **Relevant current / day price movement** where the market-data provider supplies it.
+
+V1 does **not** compute or display: money-weighted return, time-weighted return, IRR, any contribution-aware return, or any investment-return time series. Snapshot-only data (current quantity + current average cost, with no per-trade cash-flow history entered by the user) cannot support those honestly, and V1 must not appear to offer them.
+
+### 9.2 Where new validation and read logic lives
+
+- **"As of" date cannot be in the future** (wizard and `/holdings`) — enforced at the app/action layer alongside the existing `parseDecimalField`-style validation, *not* inside `lib/ledger/openingImport.ts` or `lib/ledger/applyTransaction.ts`. Those functions' own validation (calendar-date format only) is unchanged.
+- **Holdings-update diff → absolute `ADJUSTMENT` writes** — a new orchestration/action layer computes, per holding whose **quantity or average cost changed**, the **absolute desired target** `{ assetId, quantity, avgCostUsd }` (a removed holding → `quantity: 0`, with the prior positive average cost reused as the internal `priceUsd` placeholder). It writes **exactly one** `applyTransaction({ txnType: "ADJUSTMENT", accountId: <hidden>, assetId, tradeDate: asOfDate, quantity: desiredQuantity, priceUsd: desiredAvgCostUsd, feesUsd: 0, grossAmountUsd: 0, note: "SNAPSHOT UPDATE: <asOfDate>" }, client)` per changed holding — an `ADJUSTMENT` sets the position **absolutely** (`positions.ts` `applyAdjustment` ignores the prior quantity/cost), so a single row fixes quantity and average cost together. It does **not** send a quantity delta, and it does **not** call `applyOpeningPositionAdjustment` (that wrapper refuses any pre-existing non-zero position, forbids `quantity: 0`, and demands an `OPENING IMPORT:` note — it is for the empty-portfolio wizard only). All rows for one Save are composed into one transaction via the injected-`client` mechanism (§3.2). **A downward snapshot revision records no realised P&L** — V1 is a mirror/snapshot, not trade attribution (§9.1); the user's trading app owns realised-P&L history. No new accounting rule; no new write primitive.
+- **Current-holdings read** (for the Dashboard table and the `/holdings` editor pre-fill) — a small read-only query against `positions_current` + `assets`. No write, no new table. No cash read.
+- **"Holdings last updated" write** — on every successful Save (`setupAccount` and `updateHoldingsAction`), **including a zero-delta Save**, append one row to the existing `audit_log` table, **inside the same transaction as the Save** so a failed Save cannot advance freshness: `table_name = 'accounts'`, `row_id = <hidden account id>`, `action = 'snapshot_confirm'`, `actor = 'user'`, `after = {"as_of_date": "<asOfDate>"}` (JSONB), `before = NULL`, `at` = default `now()` (the confirmation timestamp). No schema change; `audit_log` has no CHECK/UNIQUE/trigger, so repeated same-day confirmations are just separate honest rows.
+- **"Holdings last updated" read** — `SELECT at, after->>'as_of_date' FROM audit_log WHERE action = 'snapshot_confirm' AND row_id = <hidden account id> ORDER BY at DESC LIMIT 1`. The Dashboard shows `at` (confirmation time); `as_of_date` is optional secondary detail. Read-only; can live in `lib/portfolio.ts` or a tiny `lib/snapshotConfirmation.ts`.
+- **Price-status classification and Portfolio-Value-exclusion disclosure** (§8) — an additive change to the existing read/aggregation query in `lib/portfolio.ts`. No change to cost basis or any write path.
+- **Ticker resolution** — reuses the existing `upsertLatestPrice`/`MarketDataProvider.fetchLatestEod` call, invoked at draft-entry time. No new provider capability.
+- **`verifySetup` read-back** — deferred. If added later it is an internal, read-only integrity check with no user-facing screen; it writes nothing.
 
 ---
 
 ## 10. Settled — do not reopen
 
-- The M1 accounting model: USD-only, single-table transactions, append-only ledger, average-cost-only cost basis, derived cash, account-level position grain.
+- **The product model:** Calboard V1 is a monitoring mirror of equity + selected-crypto holdings owned elsewhere, presented as one combined portfolio. It does not execute trades; the user's trading app is the system of record. No trade-by-trade bookkeeping, no `BUY`/`SELL`/`DEPOSIT`/`WITHDRAWAL` entry UI, no realized-P&L attribution, no return time series. Ongoing currency is maintained by the user editing current quantities and average cost.
+- **No user-facing cash.** V1 does not track brokerage cash. The metric is "Portfolio Value" / "Total Investments", not "Net Worth". Cash may return later as an asset/category if it proves genuinely useful — not retained now merely because the backend supports it.
+- **No user-facing multi-account or per-broker "source".** One combined portfolio; combined quantity and average cost when an asset is held in several real places. The `accounts`/`sources` tables persist, used internally (a single hidden account).
+- The M1 accounting model: USD-only, single-table transactions, append-only ledger, average-cost-only cost basis, account-level position grain (one hidden account). Unchanged.
 - The opening-import guardrails in `lib/ledger/openingImport.ts` (mandatory `OPENING IMPORT:` note prefix, refusal on an existing non-zero position) — unchanged, only reached through the wizard.
-- Schema — no new tables, no new columns, no new constraints. Every backend touch in this document (§3.2, §3.3, §6, §7.1, §8) is additive plumbing or a new read query, changing no computation any existing caller relies on.
-- M2/M3/M4 features: SGD display, attention queue, material moves, news/events, AI.
-- Transaction reversal/correction UI.
-- Draft persistence/recovery across a browser refresh.
-- A full periodic-reconciliation workflow beyond the existing `recordAccountReconciliation` reused as-is in §7.2.
-- Mixed cost-basis-mode-per-holding — one mode per account setup is sufficient; no evidence of a genuine need for more.
+- `ADJUSTMENT` transaction support (already built) — the primitive behind every holdings update; unchanged.
+- Schema — no new tables, no new columns, no new constraints.
+- M2/M3/M4 features: watchlist, attention queue, material moves, news/events, AI, SGD display.
+- Transaction reversal/correction UI; draft persistence across refresh; mixed cost-basis-mode-per-holding.
 - Visual branding and styling polish.
 
 ---
 
-## 11. Self-review against the independent critique
+## 11. Self-review against the earlier independent (senior-UX) critique
 
-**Resolved:**
+*(Historical record from revision 2 — no task reopens any of these. Where revision 3 has since removed the surrounding feature, that is noted in §12.)*
 
-1. **One account-level "Portfolio as of" date** replaces separate/per-holding dates — folded into Step 1, applied uniformly, "cutover" avoided in UI copy. UI/orchestration-layer only; the ledger functions' own signatures and validation are unchanged.
-2. **`/transactions` has a visible, required trade date** — defaults to today, allows historical dates, rejects future dates, preserved on validation failure.
-3. **The broker-statement check moved before Confirm & Save** and no longer requires re-typing any figure — Step 4 ("Review against your statement") is now the single merged review-and-check step, with Edit links back and one sign-off checkbox.
-4. **Post-save verification is now automatic read-back**, not manual re-entry — confirms the database stored what was approved; a mismatch is framed as a technical failure, not a broker discrepancy. `recordAccountReconciliation` is no longer called during setup at all.
-5. **Ticker resolution before acceptance**, with a clear "couldn't find a price" state and an explicit override — resolved using the *existing* price-fetch capability. **Company/asset-name display is deferred** (see below) — no such lookup exists in the codebase today.
-6. **Cost-basis mode (average vs. total) is chosen once per account setup**, not per row, with explicit "match your broker's reported basis" guidance.
-7. **Cash-preview formulas corrected** (buy/sell/deposit/withdrawal, fees applied correctly) and the **resulting balance** is shown, not just the delta. **Sell now selects from the account's real holdings** instead of a free-text ticker plus a contradictable asset-type field.
-8. **Non-blocking duplicate-transaction warning** added.
-9. **Price-unavailable/stale/fetch-failure states defined**, and the **portfolio total no longer silently excludes unpriced positions without disclosure**.
-10. **Step count reduced and renamed honestly** — four numbered steps (from six screens), Step 4 doing double duty as review-and-check, post-save reduced to a brief automatic transition rather than a fifth manual screen.
+1. **One account-level "as of" date** replaces separate/per-holding dates — now a single non-prominent field, "cutover" avoided in copy.
+2. **A visible as-of date** on the ongoing-entry surface — defaults to today, older dates behind "Change date", future dates rejected, preserved on validation failure.
+3. **Review moved before the write** and requires no re-typing of any figure.
+4. **Post-save re-entry replaced** — revision 2 used automatic read-back; revision 3 removes even that from the user flow (§3.3, §12).
+5. **Ticker resolution before acceptance**, with a clear "couldn't find a price" state and an explicit override — using the *existing* price-fetch capability. Company/asset-name display remains deferred (no such lookup exists in the codebase).
+6. **Cost-basis mode (average vs. total) is chosen once**, not per row.
+7. **Cash-preview formulas** were corrected in revision 2; revision 3 removes the cash preview entirely, along with all user-facing cash (§12).
+8. **Duplicate-transaction warning** — added in revision 2, removed in revision 3 (§12).
+9. **Price-unavailable/stale/fetch-failure states defined**, and Portfolio Value no longer silently excludes unpriced positions without disclosure. Retained.
+10. **Step count reduced** — revision 2 reached four steps; revision 3 reaches two (§4).
 
-**Intentionally deferred, with reasons:**
+**Deferred, with reasons:** company/asset-name confirmation on ticker entry (no lookup capability exists); mixed cost-basis mode within one snapshot (no genuine need); a fuller periodic-reconciliation workflow (`recordAccountReconciliation` retained, unused); transaction reversal/correction UI; draft persistence across refresh; M2+ features; visual polish.
 
-- **Company/asset-name confirmation on ticker entry.** The codebase has no symbol-search or name-lookup capability — `MarketDataProvider` only exposes EOD price fetches. Building one would be a genuine new provider-adapter capability, not a presentation change, so it's out of scope for this UX pass. The resolution confirmation instead uses the existing price fetch (ticker + last price + date) — real, verifiable data, not invented.
-- **Mixed cost-basis mode within a single account's holdings.** You asked for one simple choice unless a genuine mixed-mode need exists; none was identified.
-- **A fuller periodic-reconciliation workflow.** `/accounts` → "Reconcile" reuses the existing, unmodified `recordAccountReconciliation` mechanic as-is; building it out further wasn't requested and would expand scope beyond this pass.
-- **Oversell prevention on Sell.** Showing quantity-held as context was added; blocking a sale that exceeds current holdings would be a new business rule, not requested here.
-- **Transaction reversal/correction UI**, draft persistence across refresh, M2+ features, visual polish — unchanged exclusions from revision 1.
+**Did any approved v1.2 accounting/backend rule change? No.** Every backend-adjacent item is the already-approved optional-injected-`client` parameter, a new small read-only query, or an additive change to the existing read/aggregation query in `lib/portfolio.ts`. No schema changes. "No future date" validation lives at the action/orchestration layer.
 
-**Did any approved v1.2 accounting/backend rule change? No.** Every backend-adjacent item in this revision is one of:
+---
 
-- the already-approved optional-injected-`client` parameter (unchanged from revision 1),
-- a new, small, **read-only** query (read-back verification; the Sell-picker holdings list; the duplicate-transaction check) that writes nothing and changes no existing computation, or
-- an **additive** change to the existing read/aggregation query in `lib/portfolio.ts` (§8) that adds a price-status classification and a total-exclusion disclosure — it changes what is *displayed*, not what any ledger function computes, and touches no accounting rule, cost-basis method, or cash-effect formula.
+## 12. Revision history — how this design narrowed
 
-No schema changes anywhere. "No future date" validation lives at the action/orchestration layer, not inside `lib/ledger/openingImport.ts` or `lib/ledger/applyTransaction.ts` — those functions' own tested validation is untouched.
+**Revision 2** modelled Calboard as a system-of-record bookkeeping ledger: hand-keyed Buy/Sell/Deposit/Withdrawal, derived cash, an irreversible accounting close, forensic corrections.
+
+**Revision 3 (product-scope correction)** reframed it as a monitoring mirror: the trading app is the system of record; Calboard reflects the user's current position, kept current by editing figures.
+
+**Revision 3 (final) — accepted Opus-review corrections, 2026-08-27:**
+
+| Area | Before (rev 2) | Revision 3 (final) |
+|---|---|---|
+| Primary model | Dashboard + Accounts + Transactions | One combined portfolio Dashboard; **Holdings** as the only secondary destination |
+| Nav | `Dashboard \| Transactions \| Accounts` | `Dashboard \| Holdings` |
+| Broker / source | First-class setup concept | **Removed from V1 UX.** Combined quantity + average cost across real places. `accounts`/`sources` persist internally only. |
+| Cash | Opening-cash step; derived cash; "Net Worth" | **Removed from V1 UX.** Metric is **Portfolio Value / Total Investments**. No cash field. |
+| Wizard | 4 steps + automatic read-back verification | **2 steps** (Your holdings → Review & save) + brief confirmation |
+| Review | "Review against your statement" + sign-off checkbox | Plain "Review" + one Save button |
+| Post-save | Match / Mismatch / Unverified screens | Brief confirmation → Dashboard. `verifySetup` deferred to an optional internal check. |
+| Save result | 4-way union | 3-way: `saved` / `save_failed` / `save_unknown` |
+| `/holdings` | Read-only recap + a separate editor | **The pre-filled editor itself** — no recap table before it |
+| Performance | Implied broader "performance and allocation" | **Explicitly scoped** (§9.1): current market value, current unrealized gain/loss vs cost basis, day price movement where available. No MWR/TWR/IRR, no return time series. |
+| Staleness | — | **"Holdings last updated: [when]"** on the Dashboard = **confirmation time** of the last successful Save (latest `audit_log` `snapshot_confirm` row's `at`), advanced by every Save incl. zero-delta — not the as-of date, not a per-holding timestamp |
+| As-of date | A labelled required field | Not prominent; defaults to today; older dates behind a small **"Change date"** affordance |
+| Increased qty, same avg cost | — | Non-blocking per-row note prompting an average-cost update |
+| Language | "trade/effective date", "opening balance", "starting value" | Neutral snapshot/portfolio language only |
+
+**Preserved unchanged throughout:** the M1 accounting model and schema; the append-only ledger and `ADJUSTMENT` support; the atomic-first-write mechanism (injected `client` + `setupAccount` orchestration + `SetupCommitUncertainError`); ticker resolution via the existing price fetch; cost-basis-mode-chosen-once; the price/data-health states and honest Portfolio-Value disclosure (§8); disposable client-side draft state; the local-timezone date convention and future-date validation placement (§9).

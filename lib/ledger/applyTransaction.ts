@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import type { PoolClient } from "pg";
 import { getPool } from "../db";
 import { computeCashEffectUsd, SupportedTxnType } from "./cashEffect";
 import { EMPTY_POSITION, applyBuy, applySell, applyAdjustment, avgCostUsd, PositionState } from "./positions";
@@ -15,7 +16,10 @@ export interface NewTransactionInput {
   note: string | null;
 }
 
-export async function applyTransaction(input: NewTransactionInput): Promise<{ transactionId: string }> {
+export async function applyTransaction(
+  input: NewTransactionInput,
+  providedClient?: PoolClient
+): Promise<{ transactionId: string }> {
   const cashEffectUsd = computeCashEffectUsd({
     txnType: input.txnType,
     quantity: input.quantity,
@@ -25,9 +29,10 @@ export async function applyTransaction(input: NewTransactionInput): Promise<{ tr
   });
 
   const pool = getPool();
-  const client = await pool.connect();
+  const client = providedClient ?? (await pool.connect());
+  const ownsTransaction = !providedClient;
   try {
-    await client.query("BEGIN");
+    if (ownsTransaction) await client.query("BEGIN");
 
     // For DEPOSIT/WITHDRAWAL/BUY/SELL this column is always a non-negative
     // magnitude. For an opening-cash ADJUSTMENT it instead carries
@@ -128,12 +133,12 @@ export async function applyTransaction(input: NewTransactionInput): Promise<{ tr
       );
     }
 
-    await client.query("COMMIT");
+    if (ownsTransaction) await client.query("COMMIT");
     return { transactionId };
   } catch (err) {
-    await client.query("ROLLBACK");
+    if (ownsTransaction) await client.query("ROLLBACK");
     throw err;
   } finally {
-    client.release();
+    if (ownsTransaction) client.release();
   }
 }

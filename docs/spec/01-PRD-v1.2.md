@@ -7,6 +7,8 @@
 
 Every requirement below is **V1** unless explicitly marked V2/V3/V4. There are no sub-tiers.
 
+> **Supersession note (2026-08-27) — snapshot/mirror UX.** V1's user-facing model is now snapshot/mirror: the user records the **current** quantity and average cost of each holding and updates those figures when their real holdings change. Users do **not** enter Buy / Sell / Deposit / Withdrawal transactions, and V1 has no brokerage-cash, multi-account, or per-broker UX. Any remaining transaction/ledger wording in this document refers to internal backend primitives (the append-only `transactions` table, `ADJUSTMENT` rows, derived positions) unless a requirement explicitly concerns user-entered transactions. Where older transaction-entry wording conflicts with user-facing behaviour, **Revision 3 of the Portfolio Setup UX design** (`docs/superpowers/specs/2026-08-26-portfolio-setup-ux-design.md`) governs. Accounting model, schema, and ledger rules are unchanged.
+
 ---
 
 ## 1. Product vision
@@ -374,6 +376,22 @@ Swappable model adapter · `model_id`, `prompt_version`, `input_hash` on every r
 ## 16. Acceptance criteria
 
 ### Ledger and portfolio (M1)
+
+> **M1 completion gate (2026-08-28).** Consistent with the snapshot/mirror supersession note at
+> the top of this document, the **current** M1 Portfolio Core gate covers the snapshot-focused
+> vertical slice. In the current gate today: **AC-L5** (append-only `UPDATE`/`DELETE` raise),
+> **AC-L8** (optional note), **AC-MD2** (split-corruption guard), and the "no thesis /
+> fundamentals / valuation / FX-fixings table" + "average-cost only, no lot state" absence tests.
+> **AC-L1–AC-L4, AC-L6, AC-L7, AC-L9, AC-MD1** (a killed price *job*) and **AC-SEC1** require
+> multi-account reconciliation, inter-account transfer / reversal flows, daily-snapshot jobs,
+> export / re-import, authentication, and verified backup / restore — these are **deferred to
+> M1H — Portfolio Hardening** (`docs/spec/04-BUILD-PLAN-v1.2.md`); they are preserved, not
+> removed. `docs/superpowers/plans/2026-08-25-m1-portfolio-vertical-slice.md` and
+> `docs/superpowers/specs/2026-08-26-portfolio-setup-ux-design.md` (Revision 3) control the
+> current gate where older wording conflicts. This does **not** authorise public deployment —
+> authentication and verified backup / restore (AC-SEC1) remain required before online exposure
+> with real financial data.
+
 - **AC-L1** Fixture ledger (4-for-1 split, partial sale, dividend with withholding, **same asset in two accounts**, **inter-account transfer**, deposit, fee) produces expected per-account quantity, cost basis, cash and realised P&L to the cent, and correct aggregates.
 - **AC-L2** Portfolio value reconciles to real broker statements **per account** for a full month.
 - **AC-L3** Same asset in two accounts appears as two position rows and one aggregate row; aggregate equals the sum.
