@@ -631,4 +631,60 @@ describe("HoldingsEditor", () => {
     expect(screen.getByRole("button", { name: "Remove AAPL" })).toBeInTheDocument();
     expect(screen.getAllByLabelText("Quantity for AAPL")).toHaveLength(1);
   });
+
+  // --- M1.1 BTC live regression: Crypto selected BEFORE the ticker is typed ---
+
+  it("BTC-1: selecting Crypto then typing BTC resolves as (BTC, crypto) — never the bare-ticker equity path", async () => {
+    resolveTickerActionMock.mockResolvedValue({
+      ok: true,
+      assetId: "btc",
+      assetClass: "crypto",
+      priceUsd: "80000.00",
+      priceDate: "2026-08-28",
+    });
+    render(<HoldingsEditor initial={baseInitial()} />);
+
+    // 1. select Crypto BEFORE typing anything
+    fireEvent.change(screen.getByLabelText("Asset type"), { target: { value: "crypto" } });
+    // 2. type BTC
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "BTC" } });
+    // 3. resolution fires
+    fireEvent.blur(ticker);
+
+    await waitFor(() => expect(resolveTickerActionMock).toHaveBeenCalled());
+    // every resolution attempt for BTC must carry assetClass "crypto"
+    for (const call of resolveTickerActionMock.mock.calls) {
+      expect(call).toEqual(["BTC", "crypto"]);
+    }
+    expect(resolveTickerActionMock).toHaveBeenCalledWith("BTC", "crypto");
+    expect(resolveTickerActionMock).not.toHaveBeenCalledWith("BTC", "equity");
+  });
+
+  it("BTC-2: switching away from Crypto after a BTC resolve invalidates it; a late crypto response cannot resurrect it", async () => {
+    let resolveCrypto: (v: any) => void = () => {};
+    resolveTickerActionMock
+      .mockImplementationOnce(() => new Promise((res) => { resolveCrypto = res; }))
+      .mockImplementationOnce(async () => ({
+        ok: false,
+        assetId: null,
+        message: 'Couldn\'t find a price for "BTC". Check the symbol, or add it anyway if you\'re sure it\'s correct.',
+      }));
+    render(<HoldingsEditor initial={baseInitial()} />);
+
+    fireEvent.change(screen.getByLabelText("Asset type"), { target: { value: "crypto" } });
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "BTC" } });
+    fireEvent.blur(ticker); // call 1 (crypto) — pending
+
+    // user switches to Equity before the crypto resolve lands
+    fireEvent.change(screen.getByLabelText("Asset type"), { target: { value: "equity" } });
+    await waitFor(() => expect(resolveTickerActionMock).toHaveBeenLastCalledWith("BTC", "equity"));
+
+    // the late crypto ok-result must not overwrite the current (equity) state
+    resolveCrypto({ ok: true, assetId: "btc", assetClass: "crypto", priceUsd: "80000.00", priceDate: "2026-08-28" });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(screen.queryByText(/last price \$80000\.00/i)).toBeNull();
+  });
 });
