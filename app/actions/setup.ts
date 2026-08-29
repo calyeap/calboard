@@ -65,7 +65,11 @@ export async function resolveTickerAction(
   };
 
   try {
-    await upsertLatestPrice(asset.id, symbol, assetClass);
+    // Crypto resolves through the verified registry symbol every time: never
+    // let a fresh bare-ticker price cached against this asset identity by a
+    // pre-hotfix resolve (the ~$35 Grayscale ETF close) short-circuit the
+    // fetch. equity/ETF keep the shared 12h price cache untouched.
+    await upsertLatestPrice(asset.id, symbol, assetClass, { force: assetClass === "crypto" });
   } catch {
     return notFound;
   }

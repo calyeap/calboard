@@ -109,6 +109,55 @@ describe("resolveTickerAction", () => {
     expect(row.rows[0].name).toBe("Bitcoin");
   });
 
+  it("BTC LIVE REGRESSION: a fresh bare-ticker price cached against the BTC identity is never surfaced — the resolve re-fetches through BTC-USD", async () => {
+    // Pre-hotfix residue: the BTC crypto asset already exists with its
+    // canonical name (PR #2 deployed), but prices_daily still holds a FRESH
+    // row from the old bare-ticker fetch — Yahoo's "BTC" is the ~$35 Grayscale
+    // Bitcoin Mini Trust ETF, not Bitcoin. Within upsertLatestPrice's 12h
+    // freshness window the resolve path must NOT serve that cached close.
+    const asset = await resolveOrCreateAsset("BTC", "crypto", "Bitcoin");
+    const pool = getPool();
+    const source = await pool.query<{ id: number }>(`SELECT id FROM sources WHERE name = 'YAHOO'`);
+    // Last trading day before the hotfix, fetched only hours ago — still
+    // inside upsertLatestPrice's 12h freshness window.
+    await pool.query(
+      `INSERT INTO prices_daily (asset_id, price_date, close, adj_close, source_id, retrieved_at)
+       VALUES ($1, CURRENT_DATE - 1, 35.34, 35.34, $2, now() - interval '3 hours')`,
+      [asset.id, source.rows[0].id]
+    );
+
+    mockChart.mockResolvedValue(chartClose(80123.45, "2026-08-29"));
+    const result = await resolveTickerAction("BTC", "crypto");
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // Bitcoin's price via the verified BTC-USD pair — never the $35 ETF close.
+      expect(result.priceUsd).toBe("80123.45");
+      expect(new Decimal(result.priceUsd).gt(1000)).toBe(true);
+    }
+    expect(mockChart).toHaveBeenCalledWith("BTC-USD", expect.anything());
+    expect(mockChart).not.toHaveBeenCalledWith("BTC", expect.anything());
+  });
+
+  it("EQUITY REGRESSION: a fresh cached equity price is still served without a provider call", async () => {
+    // The crypto force-refresh must not leak into the equity/ETF path — the
+    // shared 12h cache short-circuit stays intact for a bare-ticker instrument.
+    const asset = await resolveOrCreateAsset("CSHORT", "equity", "Cache Short Corp");
+    const pool = getPool();
+    const source = await pool.query<{ id: number }>(`SELECT id FROM sources WHERE name = 'YAHOO'`);
+    await pool.query(
+      `INSERT INTO prices_daily (asset_id, price_date, close, adj_close, source_id, retrieved_at)
+       VALUES ($1, CURRENT_DATE, 42.50, 42.50, $2, now())`,
+      [asset.id, source.rows[0].id]
+    );
+
+    const result = await resolveTickerAction("CSHORT", "equity");
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.priceUsd).toBe("42.50");
+    expect(mockChart).not.toHaveBeenCalled();
+  });
+
   it("rejects an unsupported crypto clearly and creates no add-anyway asset", async () => {
     // A symbol not in the verified registry must not resolve to an equity,
     // an ETF, or any other instrument — and must not leave a row the caller

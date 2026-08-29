@@ -33,7 +33,13 @@ export function isPriceCacheFresh(retrievedAt: Date, now: Date = new Date()): bo
 export async function upsertLatestPrice(
   assetId: string, // BIGINT — node-postgres returns int8 as string, never Number
   ticker: string,
-  assetClass: AssetClass
+  assetClass: AssetClass,
+  // `force` skips the recent-price short-circuit and always calls the
+  // provider. The resolve path uses it for crypto so a pre-hotfix
+  // bare-ticker close cached against the same asset identity (Yahoo's "BTC"
+  // == the ~$35 Grayscale ETF) can never be surfaced instead of a fresh
+  // BTC-USD quote. equity/ETF and the Retry path keep the shared cache.
+  { force = false }: { force?: boolean } = {}
 ): Promise<{ fromCache: boolean; provider: string }> {
   const provider = activeProvider();
   const pool = getPool();
@@ -59,7 +65,11 @@ export async function upsertLatestPrice(
      ORDER BY price_date DESC LIMIT 1`,
     [assetId, sourceId]
   );
-  if (cached.rows.length > 0 && isPriceCacheFresh(new Date(cached.rows[0].retrieved_at))) {
+  if (
+    !force &&
+    cached.rows.length > 0 &&
+    isPriceCacheFresh(new Date(cached.rows[0].retrieved_at))
+  ) {
     return { fromCache: true, provider: provider.sourceName };
   }
 
