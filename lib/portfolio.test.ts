@@ -16,7 +16,7 @@ beforeEach(async () => {
 describe("getPortfolioView", () => {
   it("combines positions, latest price, and cash into totals", async () => {
     const account = await createAccount("Test Brokerage", "IBKR");
-    const asset = await resolveOrCreateAsset("AAPL", "equity", "Apple Inc.");
+    const asset = await resolveOrCreateAsset({ symbol: "AAPL", assetClass: "equity", name: "Apple Inc." });
 
     await applyTransaction({
       accountId: account.id, assetId: null, txnType: "DEPOSIT",
@@ -54,9 +54,9 @@ describe("getPortfolioView", () => {
 
   it("aggregate unrealized G/L counts only positions with a usable price AND avg cost", async () => {
     const account = await createAccount("Mixed Brokerage", null);
-    const gain = await resolveOrCreateAsset("GAIN", "equity", "Gain Corp");
-    const loss = await resolveOrCreateAsset("LOSS", "equity", "Loss Corp");
-    const noprice = await resolveOrCreateAsset("NOPX", "equity", "No Price Corp");
+    const gain = await resolveOrCreateAsset({ symbol: "GAIN", assetClass: "equity", name: "Gain Corp" });
+    const loss = await resolveOrCreateAsset({ symbol: "LOSS", assetClass: "equity", name: "Loss Corp" });
+    const noprice = await resolveOrCreateAsset({ symbol: "NOPX", assetClass: "equity", name: "No Price Corp" });
 
     // GAIN: 10 @ 100 cost, price 120 -> +200, basis 1000
     await applyTransaction({
@@ -94,7 +94,7 @@ describe("getPortfolioView", () => {
 
   it("classifies a position with no price row as unavailable and excludes it from the total, with disclosure", async () => {
     const account = await createAccount("No Price Brokerage", null);
-    const asset = await resolveOrCreateAsset("NOPRICE", "equity", "No Price Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "NOPRICE", assetClass: "equity", name: "No Price Corp" });
     await applyTransaction({
       accountId: account.id, assetId: asset.id, txnType: "BUY",
       tradeDate: "2026-01-02", quantity: new Decimal(5), priceUsd: new Decimal(50),
@@ -114,7 +114,7 @@ describe("getPortfolioView", () => {
 
   it("classifies a price older than the freshness threshold as stale, but still includes it in the total", async () => {
     const account = await createAccount("Stale Price Brokerage", null);
-    const asset = await resolveOrCreateAsset("STALE", "equity", "Stale Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "STALE", assetClass: "equity", name: "Stale Corp" });
     await applyTransaction({
       accountId: account.id, assetId: asset.id, txnType: "BUY",
       tradeDate: "2026-01-02", quantity: new Decimal(5), priceUsd: new Decimal(50),
@@ -140,7 +140,7 @@ describe("getPortfolioView", () => {
 
   it("classifies a fresh price (within the threshold) as current", async () => {
     const account = await createAccount("Current Price Brokerage", null);
-    const asset = await resolveOrCreateAsset("CURR", "equity", "Current Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "CURR", assetClass: "equity", name: "Current Corp" });
     await applyTransaction({
       accountId: account.id, assetId: asset.id, txnType: "BUY",
       tradeDate: "2026-01-02", quantity: new Decimal(2), priceUsd: new Decimal(10),

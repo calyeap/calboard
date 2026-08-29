@@ -72,8 +72,8 @@ describe("checkSplitCorruption", () => {
   }
 
   it("flags a clear common-ratio split with no matching corporate action, when the benchmark moved normally (NVDA's real 10:1 June 2024 split, benchmark SPY)", async () => {
-    const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
-    const benchmark = await resolveOrCreateAsset("SPY", "etf", "SPDR S&P 500 ETF");
+    const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
+    const benchmark = await resolveOrCreateAsset({ symbol: "SPY", assetClass: "etf", name: "SPDR S&P 500 ETF" });
     await linkBenchmark(asset.id, benchmark.id);
     await insertBenchmarkPrice(benchmark.id, "2024-06-06", 527.5);
     await insertBenchmarkPrice(benchmark.id, "2024-06-07", 529.0); // ordinary ~0.3% day
@@ -99,7 +99,7 @@ describe("checkSplitCorruption", () => {
   });
 
   it("does not treat a split as unrecorded when a matching corporate action exists", async () => {
-    const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
     const pool = getPool();
     await pool.query(
       `INSERT INTO corporate_actions (asset_id, action_type, ex_date, ratio_num, ratio_den)
@@ -120,7 +120,7 @@ describe("checkSplitCorruption", () => {
   });
 
   it("does not falsely classify an ordinary price move as a split", async () => {
-    const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
 
     // Deliberately no benchmark configured — the ratio never matches a split
     // ratio, so the benchmark leg is never reached.
@@ -136,8 +136,8 @@ describe("checkSplitCorruption", () => {
   });
 
   it("does not raise a duplicate flag for the same suspected split on re-check", async () => {
-    const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
-    const benchmark = await resolveOrCreateAsset("SPY", "etf", "SPDR S&P 500 ETF");
+    const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
+    const benchmark = await resolveOrCreateAsset({ symbol: "SPY", assetClass: "etf", name: "SPDR S&P 500 ETF" });
     await linkBenchmark(asset.id, benchmark.id);
     await insertBenchmarkPrice(benchmark.id, "2024-06-06", 527.5);
     await insertBenchmarkPrice(benchmark.id, "2024-06-07", 529.0);
@@ -152,8 +152,8 @@ describe("checkSplitCorruption", () => {
 
   describe("benchmark leg (TDD §3.1 third conjunct)", () => {
     it("does not classify a split-like move as asset-specific when the benchmark moved by a comparable split-sized ratio", async () => {
-      const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
-      const benchmark = await resolveOrCreateAsset("SPY", "etf", "SPDR S&P 500 ETF");
+      const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
+      const benchmark = await resolveOrCreateAsset({ symbol: "SPY", assetClass: "etf", name: "SPDR S&P 500 ETF" });
       await linkBenchmark(asset.id, benchmark.id);
       // Benchmark itself shows a ~10x ratio too (e.g. a market-wide data/feed
       // anomaly) — the asset's move is not specific to it, so no
@@ -176,7 +176,7 @@ describe("checkSplitCorruption", () => {
     });
 
     it("blocks rather than silently passing clean when no benchmark_asset_id is configured", async () => {
-      const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
+      const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
       // No linkBenchmark() call — benchmark_asset_id stays NULL.
 
       const result = await checkSplitCorruption(asset.id, "2024-06-06", 1210, "2024-06-07", 121);
@@ -195,8 +195,8 @@ describe("checkSplitCorruption", () => {
     });
 
     it("blocks rather than silently passing clean when the benchmark price is missing for either required date", async () => {
-      const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
-      const benchmark = await resolveOrCreateAsset("SPY", "etf", "SPDR S&P 500 ETF");
+      const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
+      const benchmark = await resolveOrCreateAsset({ symbol: "SPY", assetClass: "etf", name: "SPDR S&P 500 ETF" });
       await linkBenchmark(asset.id, benchmark.id);
       // Only T is populated — T-1 is missing.
       await insertBenchmarkPrice(benchmark.id, "2024-06-07", 529.0);
@@ -216,8 +216,8 @@ describe("checkSplitCorruption", () => {
     });
 
     it("uses the benchmark's raw/unadjusted close, not its adjusted close", async () => {
-      const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
-      const benchmark = await resolveOrCreateAsset("SPY", "etf", "SPDR S&P 500 ETF");
+      const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
+      const benchmark = await resolveOrCreateAsset({ symbol: "SPY", assetClass: "etf", name: "SPDR S&P 500 ETF" });
       await linkBenchmark(asset.id, benchmark.id);
       const pool = getPool();
       const sourceId = await eodhdSourceId();

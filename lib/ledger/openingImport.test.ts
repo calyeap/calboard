@@ -71,7 +71,7 @@ describe("applyOpeningCashAdjustment", () => {
 describe("applyOpeningPositionAdjustment", () => {
   it("sets quantity, cost basis, and average cost exactly, with zero cash effect, stored as ADJUSTMENT", async () => {
     const account = await createAccount("Cutover Brokerage", "Fidelity");
-    const asset = await resolveOrCreateAsset("ZZZTEST", "equity", "Smoke Test Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "ZZZTEST", assetClass: "equity", name: "Smoke Test Corp" });
 
     const { transactionId } = await applyOpeningPositionAdjustment({
       accountId: account.id,
@@ -100,7 +100,7 @@ describe("applyOpeningPositionAdjustment", () => {
 
   it("rejects a non-positive quantity", async () => {
     const account = await createAccount("Cutover Brokerage", "Fidelity");
-    const asset = await resolveOrCreateAsset("ZZZTEST", "equity", "Smoke Test Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "ZZZTEST", assetClass: "equity", name: "Smoke Test Corp" });
     await expect(
       applyOpeningPositionAdjustment({
         accountId: account.id,
@@ -115,7 +115,7 @@ describe("applyOpeningPositionAdjustment", () => {
 
   it("rejects a non-positive average cost", async () => {
     const account = await createAccount("Cutover Brokerage", "Fidelity");
-    const asset = await resolveOrCreateAsset("ZZZTEST", "equity", "Smoke Test Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "ZZZTEST", assetClass: "equity", name: "Smoke Test Corp" });
     await expect(
       applyOpeningPositionAdjustment({
         accountId: account.id,
@@ -130,7 +130,7 @@ describe("applyOpeningPositionAdjustment", () => {
 
   it("rejects a note that doesn't start with OPENING IMPORT:", async () => {
     const account = await createAccount("Cutover Brokerage", "Fidelity");
-    const asset = await resolveOrCreateAsset("ZZZTEST", "equity", "Smoke Test Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "ZZZTEST", assetClass: "equity", name: "Smoke Test Corp" });
     await expect(
       applyOpeningPositionAdjustment({
         accountId: account.id,
@@ -145,7 +145,7 @@ describe("applyOpeningPositionAdjustment", () => {
 
   it("rejects opening a position that already has a non-zero quantity on record", async () => {
     const account = await createAccount("Cutover Brokerage", "Fidelity");
-    const asset = await resolveOrCreateAsset("ZZZTEST", "equity", "Smoke Test Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "ZZZTEST", assetClass: "equity", name: "Smoke Test Corp" });
     await applyOpeningPositionAdjustment({
       accountId: account.id,
       assetId: asset.id,
@@ -178,7 +178,7 @@ describe("applyOpeningPositionAdjustment", () => {
 
   it("allows opening a position when a prior positions_current row exists but is fully zeroed out (e.g. a closed-out BUY/SELL history)", async () => {
     const account = await createAccount("Cutover Brokerage", "Fidelity");
-    const asset = await resolveOrCreateAsset("ZZZTEST", "equity", "Smoke Test Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "ZZZTEST", assetClass: "equity", name: "Smoke Test Corp" });
     // Fully close out a prior position so positions_current has a real row
     // at quantity = 0, not merely the absence of a row.
     await applyTransaction({

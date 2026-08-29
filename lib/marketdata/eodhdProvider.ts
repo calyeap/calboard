@@ -1,9 +1,16 @@
-import type { MarketDataProvider, EodPricePoint } from "./provider";
+import type { MarketDataProvider, EodPricePoint, InstrumentResolution } from "./provider";
 import type { AssetClass } from "../assets";
 
 export function toEodhdSymbol(ticker: string, assetClass: AssetClass): string {
   const symbol = ticker.toUpperCase();
   return assetClass === "crypto" ? `${symbol}.CC` : `${symbol}.US`;
+}
+
+interface EodhdSearchRow {
+  Code: string;
+  Exchange: string;
+  Name: string;
+  Type: string;
 }
 
 export class EodhdQuotaExceededError extends Error {
@@ -18,6 +25,50 @@ export class EodhdQuotaExceededError extends Error {
 
 export const eodhdProvider: MarketDataProvider = {
   sourceName: "EODHD",
+  // Resolves identity ONLY, via EODHD's /search endpoint — never touching
+  // price. A quota/rate-limit response, a 5xx, or a thrown network/parse
+  // error all map to "unavailable", not "unknown": a provider outage is
+  // never treated as proof the symbol doesn't exist.
+  async resolveInstrument(ticker: string): Promise<InstrumentResolution> {
+    const apiKey = process.env.EODHD_API_KEY;
+    if (!apiKey) {
+      throw new Error("EODHD_API_KEY is not set — check .env.local");
+    }
+    const symbol = ticker.trim().toUpperCase();
+    let res: Response;
+    try {
+      res = await fetch(
+        `https://eodhd.com/api/search/${encodeURIComponent(symbol)}?api_token=${apiKey}&fmt=json`
+      );
+    } catch {
+      return { outcome: "unavailable" };
+    }
+    if (!res.ok) {
+      return { outcome: "unavailable" };
+    }
+    let rows: EodhdSearchRow[];
+    try {
+      rows = (await res.json()) as EodhdSearchRow[];
+    } catch {
+      return { outcome: "unavailable" };
+    }
+    const match = rows.find((r) => r.Code?.toUpperCase() === symbol && r.Exchange === "US");
+    if (!match) {
+      return { outcome: "unknown" };
+    }
+    if (match.Type !== "Common Stock" && match.Type !== "ETF") {
+      return { outcome: "unsupported" };
+    }
+    if (!match.Name) {
+      return { outcome: "unknown" };
+    }
+    return {
+      outcome: "resolved",
+      symbol: match.Code.toUpperCase(),
+      assetClass: match.Type === "Common Stock" ? "equity" : "etf",
+      name: match.Name,
+    };
+  },
   async fetchLatestEod(ticker: string, assetClass: AssetClass): Promise<EodPricePoint> {
     const apiKey = process.env.EODHD_API_KEY;
     if (!apiKey) {

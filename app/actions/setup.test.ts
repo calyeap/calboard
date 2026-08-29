@@ -7,13 +7,27 @@ import { SetupCommitUncertainError } from "@/lib/ledger/setupAccount";
 import { resolveTickerAction, setupAccountAction } from "./setup";
 
 // Deterministic provider: the Yahoo client is stubbed so no test touches the
-// network or live prices. `chart` is the single seam — tests assert the exact
-// symbol the adapter sent, and control the close it gets back.
-const { mockChart } = vi.hoisted(() => ({ mockChart: vi.fn() }));
-vi.mock("yahoo-finance2", () => ({ default: class { chart = mockChart; } }));
+// network or live prices. `chart` serves price lookups; `quote` serves
+// identity resolution (resolveInstrument) — tests assert the exact symbol
+// the adapter sent to each, and control what each gets back.
+const { mockChart, mockQuote } = vi.hoisted(() => ({ mockChart: vi.fn(), mockQuote: vi.fn() }));
+vi.mock("yahoo-finance2", () => ({
+  default: class {
+    chart = mockChart;
+    quote = mockQuote;
+  },
+}));
 
 function chartClose(close: number, date = "2026-08-28") {
   return { quotes: [{ date: new Date(`${date}T00:00:00Z`), close, adjclose: close }] };
+}
+
+function equityQuote(symbol: string, name: string) {
+  return { symbol, quoteType: "EQUITY", longName: name };
+}
+
+function etfQuote(symbol: string, name: string) {
+  return { symbol, quoteType: "ETF", longName: name };
 }
 
 // revalidatePath is a request-scoped Next primitive with nothing to
@@ -43,6 +57,7 @@ describe("resolveTickerAction", () => {
   beforeEach(() => {
     process.env.MARKET_DATA_PROVIDER = "YAHOO";
     mockChart.mockReset();
+    mockQuote.mockReset();
   });
   afterEach(() => {
     if (originalProvider === undefined) delete process.env.MARKET_DATA_PROVIDER;
@@ -64,6 +79,9 @@ describe("resolveTickerAction", () => {
     }
     expect(mockChart).toHaveBeenCalledWith("BTC-USD", expect.anything());
     expect(mockChart).not.toHaveBeenCalledWith("BTC", expect.anything());
+    // Crypto identity never goes through the provider's resolveInstrument —
+    // only the verified registry.
+    expect(mockQuote).not.toHaveBeenCalled();
 
     // Canonical identity persisted for later price retrieval / Retry.
     const pool = getPool();
@@ -98,7 +116,7 @@ describe("resolveTickerAction", () => {
 
   it("corrects a stale bare-ticker name left on an existing BTC asset", async () => {
     // Pre-hotfix state: a BTC crypto asset saved with its ticker as the name.
-    const stale = await resolveOrCreateAsset("BTC", "crypto", "BTC");
+    const stale = await resolveOrCreateAsset({ symbol: "BTC", assetClass: "crypto", name: "BTC" });
     mockChart.mockResolvedValue(chartClose(80500));
 
     const result = await resolveTickerAction("BTC", "crypto");
@@ -115,7 +133,7 @@ describe("resolveTickerAction", () => {
     // row from the old bare-ticker fetch — Yahoo's "BTC" is the ~$35 Grayscale
     // Bitcoin Mini Trust ETF, not Bitcoin. Within upsertLatestPrice's 12h
     // freshness window the resolve path must NOT serve that cached close.
-    const asset = await resolveOrCreateAsset("BTC", "crypto", "Bitcoin");
+    const asset = await resolveOrCreateAsset({ symbol: "BTC", assetClass: "crypto", name: "Bitcoin" });
     const pool = getPool();
     const source = await pool.query<{ id: number }>(`SELECT id FROM sources WHERE name = 'YAHOO'`);
     // Last trading day before the hotfix, fetched only hours ago — still
@@ -142,7 +160,7 @@ describe("resolveTickerAction", () => {
   it("EQUITY REGRESSION: a fresh cached equity price is still served without a provider call", async () => {
     // The crypto force-refresh must not leak into the equity/ETF path — the
     // shared 12h cache short-circuit stays intact for a bare-ticker instrument.
-    const asset = await resolveOrCreateAsset("CSHORT", "equity", "Cache Short Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "CSHORT", assetClass: "equity", name: "Cache Short Corp" });
     const pool = getPool();
     const source = await pool.query<{ id: number }>(`SELECT id FROM sources WHERE name = 'YAHOO'`);
     await pool.query(
@@ -156,6 +174,7 @@ describe("resolveTickerAction", () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.priceUsd).toBe("42.50");
     expect(mockChart).not.toHaveBeenCalled();
+    expect(mockQuote).not.toHaveBeenCalled();
   });
 
   it("rejects an unsupported crypto clearly and creates no add-anyway asset", async () => {
@@ -176,20 +195,40 @@ describe("resolveTickerAction", () => {
   });
 
   it("EQUITY REGRESSION: NOW and NVDA still resolve by their bare ticker", async () => {
+    mockQuote.mockResolvedValueOnce(equityQuote("NOW", "ServiceNow Inc."));
     mockChart.mockResolvedValue(chartClose(912.34));
     const now = await resolveTickerAction("NOW", "equity");
     expect(now.ok).toBe(true);
+    expect(mockQuote).toHaveBeenCalledWith("NOW");
     expect(mockChart).toHaveBeenCalledWith("NOW", expect.anything());
 
     mockChart.mockClear();
+    mockQuote.mockResolvedValueOnce(equityQuote("NVDA", "NVIDIA Corporation"));
     mockChart.mockResolvedValue(chartClose(178.9));
     const nvda = await resolveTickerAction("NVDA", "equity");
     expect(nvda.ok).toBe(true);
+    expect(mockQuote).toHaveBeenCalledWith("NVDA");
     expect(mockChart).toHaveBeenCalledWith("NVDA", expect.anything());
   });
 
+  it("resolves a valid ETF: identity confirmed via the provider, then priced", async () => {
+    mockQuote.mockResolvedValueOnce(etfQuote("SPY", "SPDR S&P 500 ETF Trust"));
+    mockChart.mockResolvedValue(chartClose(550.12));
+
+    const result = await resolveTickerAction("SPY", "etf");
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.assetClass).toBe("etf");
+      expect(result.priceUsd).toBe("550.12");
+    }
+    const pool = getPool();
+    const asset = await pool.query(`SELECT asset_class, name FROM assets WHERE primary_symbol = 'SPY'`);
+    expect(asset.rows[0]).toMatchObject({ asset_class: "etf", name: "SPDR S&P 500 ETF Trust" });
+  });
+
   it("resolves from a fresh cached price without a live provider call", async () => {
-    const asset = await resolveOrCreateAsset("CACHED", "equity", "Cached Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "CACHED", assetClass: "equity", name: "Cached Corp" });
     const pool = getPool();
     const source = await pool.query<{ id: number }>(`SELECT id FROM sources WHERE name = 'YAHOO'`);
     // A fresh prices_daily row makes upsertLatestPrice hit its cache
@@ -214,6 +253,27 @@ describe("resolveTickerAction", () => {
     }
   });
 
+  it("existing asset skips provider identity resolution even when its price cache is stale", async () => {
+    // The identity short-circuit (findAssetBySymbol) must fire regardless of
+    // whether price ends up hitting the provider — this isolates the
+    // identity-call assertion from the price-cache-freshness one above.
+    const asset = await resolveOrCreateAsset({ symbol: "STALEPX", assetClass: "equity", name: "Stale Price Corp" });
+    const pool = getPool();
+    const source = await pool.query<{ id: number }>(`SELECT id FROM sources WHERE name = 'YAHOO'`);
+    await pool.query(
+      `INSERT INTO prices_daily (asset_id, price_date, close, adj_close, source_id, retrieved_at)
+       VALUES ($1, CURRENT_DATE - 2, 10.00, 10.00, $2, now() - interval '2 days')`,
+      [asset.id, source.rows[0].id]
+    );
+    mockChart.mockResolvedValue(chartClose(11.5));
+
+    const result = await resolveTickerAction("STALEPX", "equity");
+
+    expect(result.ok).toBe(true);
+    expect(mockQuote).not.toHaveBeenCalled();
+    expect(mockChart).toHaveBeenCalledWith("STALEPX", expect.anything());
+  });
+
   it("rejects an empty ticker with a friendly message and creates no asset", async () => {
     const result = await resolveTickerAction("   ", "equity");
 
@@ -226,12 +286,128 @@ describe("resolveTickerAction", () => {
     const pool = getPool();
     expect((await pool.query(`SELECT 1 FROM assets`)).rows).toHaveLength(0);
   });
+
+  // --- M1 identity-resolution defect fix -----------------------------------
+
+  it("an unknown symbol (DSADASD) resolves to no identity and creates no asset or transaction", async () => {
+    mockQuote.mockResolvedValueOnce(undefined);
+
+    const result = await resolveTickerAction("DSADASD", "equity");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.assetId).toBeNull();
+      expect(result.message).toMatch(/couldn't find/i);
+    }
+    expect(mockChart).not.toHaveBeenCalled();
+
+    const pool = getPool();
+    expect((await pool.query(`SELECT 1 FROM assets`)).rows).toHaveLength(0);
+    expect((await pool.query(`SELECT 1 FROM transactions`)).rows).toHaveLength(0);
+  });
+
+  it("an unsupported instrument type (e.g. a mutual fund) is rejected and creates no asset", async () => {
+    mockQuote.mockResolvedValueOnce({ symbol: "VBTLX", quoteType: "MUTUALFUND", longName: "Vanguard Total Bond Market" });
+
+    const result = await resolveTickerAction("VBTLX", "equity");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.assetId).toBeNull();
+      expect(result.message).toMatch(/isn't a supported equity or etf/i);
+    }
+    const pool = getPool();
+    expect((await pool.query(`SELECT 1 FROM assets`)).rows).toHaveLength(0);
+  });
+
+  it("crypto submitted as equity is rejected as unsupported, not silently accepted", async () => {
+    // The provider recognises this ticker, but as a cryptocurrency — never a
+    // valid identity for the equity/ETF lane.
+    mockQuote.mockResolvedValueOnce({ symbol: "BTC-USD", quoteType: "CRYPTOCURRENCY", longName: "Bitcoin USD" });
+
+    const result = await resolveTickerAction("BTC-USD", "equity");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.assetId).toBeNull();
+      expect(result.message).toMatch(/isn't a supported equity or etf/i);
+    }
+    const pool = getPool();
+    expect((await pool.query(`SELECT 1 FROM assets`)).rows).toHaveLength(0);
+  });
+
+  it.each([
+    ["a network timeout", new Error("network timeout")],
+    ["an HTTP 429", new Error("HTTP 429: Too Many Requests")],
+    ["an HTTP 5xx", new Error("HTTP 503: Service Unavailable")],
+    ["an unclassified thrown value", "not even an Error instance"],
+  ])("%s from the provider resolves to unavailable, never treated as an invalid symbol", async (_label, rejection) => {
+    mockQuote.mockRejectedValueOnce(rejection);
+
+    const result = await resolveTickerAction("NVDA", "equity");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.assetId).toBeNull();
+      expect(result.message).toMatch(/unavailable|try again/i);
+      expect(result.message).not.toMatch(/couldn't find/i);
+    }
+    const pool = getPool();
+    expect((await pool.query(`SELECT 1 FROM assets`)).rows).toHaveLength(0);
+  });
+
+  it("canonicalises whitespace and casing before resolving identity", async () => {
+    mockQuote.mockResolvedValueOnce(equityQuote("NVDA", "NVIDIA Corporation"));
+    mockChart.mockResolvedValue(chartClose(178.9));
+
+    const result = await resolveTickerAction("  nvda  ", "equity");
+
+    expect(mockQuote).toHaveBeenCalledWith("NVDA");
+    expect(result.ok).toBe(true);
+    const pool = getPool();
+    expect((await pool.query(`SELECT 1 FROM assets WHERE primary_symbol = 'NVDA'`)).rows).toHaveLength(1);
+  });
+
+  it("successful identity resolution + a later price failure still saves the asset", async () => {
+    mockQuote.mockResolvedValueOnce(equityQuote("NEWCO", "New Company Inc."));
+    mockChart.mockRejectedValue(new Error("No EOD data returned for NEWCO from Yahoo"));
+
+    const result = await resolveTickerAction("NEWCO", "equity");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      // The asset WAS created — identity resolved independently of price —
+      // so the caller can still add the holding with a not-yet-available price.
+      expect(result.assetId).not.toBeNull();
+      expect(result.message).toMatch(/price is unavailable/i);
+    }
+    const pool = getPool();
+    const asset = await pool.query(`SELECT asset_class, name FROM assets WHERE primary_symbol = 'NEWCO'`);
+    expect(asset.rows).toHaveLength(1);
+    expect(asset.rows[0]).toMatchObject({ asset_class: "equity", name: "New Company Inc." });
+  });
+
+  it("an existing valid holding survives a later pricing failure — it stays a valid asset", async () => {
+    const asset = await resolveOrCreateAsset({ symbol: "SURVIVE", assetClass: "equity", name: "Survive Corp" });
+    mockChart.mockRejectedValue(new Error("No EOD data returned for SURVIVE from Yahoo"));
+
+    const result = await resolveTickerAction("SURVIVE", "equity");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.assetId).toBe(asset.id);
+    }
+    // The identity itself is untouched by the price failure.
+    const pool = getPool();
+    const row = await pool.query(`SELECT asset_class, name FROM assets WHERE id = $1`, [asset.id]);
+    expect(row.rows[0]).toMatchObject({ asset_class: "equity", name: "Survive Corp" });
+  });
 });
 
 describe("setupAccountAction", () => {
   async function twoValidHoldings() {
-    const a = await resolveOrCreateAsset("SAA", "equity", "Setup Action A");
-    const b = await resolveOrCreateAsset("SAB", "etf", "Setup Action B ETF");
+    const a = await resolveOrCreateAsset({ symbol: "SAA", assetClass: "equity", name: "Setup Action A" });
+    const b = await resolveOrCreateAsset({ symbol: "SAB", assetClass: "etf", name: "Setup Action B ETF" });
     return {
       asOfDate: "2026-02-10",
       holdings: [
@@ -258,7 +434,7 @@ describe("setupAccountAction", () => {
   });
 
   it("rejects a non-positive quantity as save_failed at the action layer, before any write", async () => {
-    const a = await resolveOrCreateAsset("SANEG", "equity", "Setup Action Neg");
+    const a = await resolveOrCreateAsset({ symbol: "SANEG", assetClass: "equity", name: "Setup Action Neg" });
     const result = await setupAccountAction({
       asOfDate: "2026-02-10",
       holdings: [{ assetId: a.id, quantity: "-1", avgCostUsd: "50" }],
@@ -319,7 +495,7 @@ describe("setupAccountAction", () => {
   });
 
   it("normalizes a >10dp quantity once (unsurfaced) and round-trips it at exactly 10dp", async () => {
-    const a = await resolveOrCreateAsset("SADP", "crypto", "Setup Action DP");
+    const a = await resolveOrCreateAsset({ symbol: "SADP", assetClass: "crypto", name: "Setup Action DP" });
     const result = await setupAccountAction({
       asOfDate: "2026-02-10",
       holdings: [{ assetId: a.id, quantity: "1.123456789012345", avgCostUsd: "30000" }],
@@ -340,7 +516,7 @@ describe("setupAccountAction", () => {
     setupAccountMock.mockRejectedValueOnce(
       new SetupCommitUncertainError("COMMIT failed — state unknown", new Error("connection reset"))
     );
-    const a = await resolveOrCreateAsset("SAUNK", "equity", "Setup Action Unknown");
+    const a = await resolveOrCreateAsset({ symbol: "SAUNK", assetClass: "equity", name: "Setup Action Unknown" });
 
     const result = await setupAccountAction({
       asOfDate: "2026-02-10",

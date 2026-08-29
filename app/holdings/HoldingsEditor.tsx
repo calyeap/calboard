@@ -194,7 +194,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
     // Staleness guard: the current identity must have been resolved for
     // exactly this normalized symbol AND the currently selected asset type.
     if (!draftAssetId || resolvedTicker !== normalized || resolvedAssetClass !== assetType) {
-      setAddError("Resolve the ticker first — enter it and tab out, or press Add anyway.");
+      setAddError("Resolve the ticker first — enter it and tab out.");
       return;
     }
     if (isDuplicateTickerInDraft(rows.map((r) => r.symbol), normalized)) {
@@ -509,7 +509,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
           {/* One polite live region for every ticker-resolution state, so a
               screen reader hears the meaningful result without it being an
               assertive interruption and without a second region announcing
-              the same thing. The "Add anyway" affordance sits outside it. */}
+              the same thing. */}
           <div aria-live="polite" aria-atomic="true">
             {resolving && <span className="status-neutral">checking…</span>}
             {resolution && resolution.ok && (
@@ -521,11 +521,6 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
               <span className="status-warning">{resolution.message}</span>
             )}
           </div>
-          {resolution && !resolution.ok && draftAssetId && (
-            <button type="button" onClick={addRow}>
-              Add anyway
-            </button>
-          )}
 
           <label>
             Asset type

@@ -3,8 +3,8 @@
 import Decimal from "decimal.js";
 import { revalidatePath } from "next/cache";
 import { getPool } from "@/lib/db";
-import { resolveOrCreateAsset, type AssetClass } from "@/lib/assets";
-import { upsertLatestPrice } from "@/lib/marketdata";
+import { resolveOrCreateAsset, findAssetBySymbol, type Asset, type AssetClass } from "@/lib/assets";
+import { upsertLatestPrice, activeProvider } from "@/lib/marketdata";
 import { lookupCrypto } from "@/lib/marketdata/cryptoSymbols";
 import { isValidCalendarDate, isFutureDate, normalizePgDate } from "@/lib/dateValidation";
 import { setupAccount, SetupCommitUncertainError } from "@/lib/ledger/setupAccount";
@@ -13,13 +13,29 @@ export type TickerResolutionResult =
   | { ok: true; assetId: string; assetClass: AssetClass; priceUsd: string; priceDate: string }
   | { ok: false; assetId: string | null; message: string };
 
-// The wizard's holdings step and the /holdings editor both call this on a
-// ticker the user typed. resolveOrCreateAsset always upserts a reference
-// row (so an unresolved-but-real symbol can still be "added anyway"); the
-// live price fetch — reusing the app's existing upsertLatestPrice, cache
-// and all — is the resolution signal. A failed/absent price never silently
-// becomes a confirmed holding; it returns ok:false with the assetId so the
-// caller can offer an explicit override.
+const NOT_A_SYMBOL_MESSAGE = (symbol: string) =>
+  `Couldn't find "${symbol}". Check the symbol and try again.`;
+const UNSUPPORTED_TYPE_MESSAGE = (symbol: string) =>
+  `"${symbol}" isn't a supported equity or ETF.`;
+const PROVIDER_UNAVAILABLE_MESSAGE = (symbol: string) =>
+  `Couldn't verify "${symbol}" right now — the market data provider is unavailable. Try again shortly.`;
+const NOT_A_CRYPTO_MESSAGE = (symbol: string) =>
+  `"${symbol}" is not a supported cryptocurrency. Calboard tracks a specific ` +
+  `set of verified cryptocurrencies, and this symbol is not one of them.`;
+const PRICE_UNAVAILABLE_MESSAGE = (symbol: string) =>
+  `Identity confirmed for "${symbol}", but its live price is unavailable right now. ` +
+  `You can still add it — the price will refresh automatically once it's back.`;
+
+// Resolves the (ticker, assetClass) the user typed to a real instrument's
+// identity — separately from whether a live price is available for it right
+// now. Equity/ETF identity comes from the active provider's
+// resolveInstrument(); crypto identity comes only from the verified registry
+// (lib/marketdata/cryptoSymbols.ts), unchanged. An unknown, unsupported, or
+// provider-unavailable identity NEVER creates an asset row — there is
+// nothing left to "add anyway". Once identity is confirmed, a failed price
+// fetch still returns the created asset's id so the holding can still be
+// added (price shows as unavailable and can be retried later); it is never
+// treated as proof the identity itself was invalid.
 export async function resolveTickerAction(
   ticker: string,
   assetClass: AssetClass
@@ -29,39 +45,55 @@ export async function resolveTickerAction(
     return { ok: false, assetId: null, message: "Enter a ticker symbol." };
   }
 
-  // A cryptocurrency is resolved only through the verified crypto registry —
-  // never by its bare ticker, which on the price provider can be an unrelated
-  // ETF or equity (the M1.1 "BTC -> Grayscale Bitcoin Mini Trust ETF" bug).
-  // An unverified crypto symbol fails closed: no asset row, nothing to "add
-  // anyway", and never a silently-substituted instrument.
-  let canonicalName = symbol;
+  let asset: Asset;
+
   if (assetClass === "crypto") {
+    // A cryptocurrency is resolved only through the verified crypto
+    // registry — never by its bare ticker, which on the price provider can
+    // be an unrelated ETF or equity (the M1.1 "BTC -> Grayscale Bitcoin Mini
+    // Trust ETF" bug). This is a cheap local lookup, not a provider call, so
+    // it always runs — even for an already-known asset — to correct a stale
+    // pre-hotfix name.
     const instrument = lookupCrypto(symbol);
     if (!instrument) {
-      return {
-        ok: false,
-        assetId: null,
-        message:
-          `"${symbol}" is not a supported cryptocurrency. Calboard tracks a specific ` +
-          `set of verified cryptocurrencies, and this symbol is not one of them.`,
-      };
+      return { ok: false, assetId: null, message: NOT_A_CRYPTO_MESSAGE(symbol) };
     }
-    canonicalName = instrument.name;
+    asset = await resolveOrCreateAsset({ symbol, assetClass: "crypto", name: instrument.name });
+    if (asset.name !== instrument.name) {
+      await getPool().query(`UPDATE assets SET name = $1 WHERE id = $2`, [instrument.name, asset.id]);
+      asset = { ...asset, name: instrument.name };
+    }
+  } else {
+    // An already-known symbol short-circuits identity resolution entirely —
+    // never a provider call for a symbol already on file.
+    const existing = await findAssetBySymbol(symbol);
+    if (existing) {
+      asset = existing;
+    } else {
+      const resolution = await activeProvider().resolveInstrument(symbol);
+      if (resolution.outcome === "unknown") {
+        return { ok: false, assetId: null, message: NOT_A_SYMBOL_MESSAGE(symbol) };
+      }
+      if (resolution.outcome === "unsupported") {
+        return { ok: false, assetId: null, message: UNSUPPORTED_TYPE_MESSAGE(symbol) };
+      }
+      if (resolution.outcome === "unavailable") {
+        // Provider/network failure is never proof the symbol is invalid —
+        // no asset row, but a distinct message from "unknown".
+        return { ok: false, assetId: null, message: PROVIDER_UNAVAILABLE_MESSAGE(symbol) };
+      }
+      asset = await resolveOrCreateAsset({
+        symbol: resolution.symbol,
+        assetClass: resolution.assetClass,
+        name: resolution.name,
+      });
+    }
   }
 
-  const asset = await resolveOrCreateAsset(symbol, assetClass, canonicalName);
-
-  // Upgrade a pre-hotfix asset that stored its bare ticker as the name to the
-  // verified canonical name (idempotent — a no-op once corrected).
-  if (assetClass === "crypto" && asset.name !== canonicalName) {
-    await getPool().query(`UPDATE assets SET name = $1 WHERE id = $2`, [canonicalName, asset.id]);
-    asset.name = canonicalName;
-  }
-
-  const notFound: TickerResolutionResult = {
+  const priceUnavailable: TickerResolutionResult = {
     ok: false,
     assetId: asset.id,
-    message: `Couldn't find a price for "${symbol}". Check the symbol, or add it anyway if you're sure it's correct.`,
+    message: PRICE_UNAVAILABLE_MESSAGE(symbol),
   };
 
   try {
@@ -69,9 +101,9 @@ export async function resolveTickerAction(
     // let a fresh bare-ticker price cached against this asset identity by a
     // pre-hotfix resolve (the ~$35 Grayscale ETF close) short-circuit the
     // fetch. equity/ETF keep the shared 12h price cache untouched.
-    await upsertLatestPrice(asset.id, symbol, assetClass, { force: assetClass === "crypto" });
+    await upsertLatestPrice(asset.id, symbol, asset.assetClass, { force: asset.assetClass === "crypto" });
   } catch {
-    return notFound;
+    return priceUnavailable;
   }
 
   const pool = getPool();
@@ -80,13 +112,13 @@ export async function resolveTickerAction(
     [asset.id]
   );
   if (priceRow.rows.length === 0) {
-    return notFound;
+    return priceUnavailable;
   }
 
   return {
     ok: true,
     assetId: asset.id,
-    assetClass,
+    assetClass: asset.assetClass,
     priceUsd: new Decimal(priceRow.rows[0].close).toFixed(2),
     priceDate: normalizePgDate(priceRow.rows[0].price_date),
   };

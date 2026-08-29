@@ -22,7 +22,7 @@ async function raiseFlag(assetId: string, rule: string, detail: string): Promise
 
 describe("recordConfirmedSplit", () => {
   it("records a valid split confirmation", async () => {
-    const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
 
     const result = await recordConfirmedSplit({ ticker: "nvda", exDate: "2024-06-07", ratioNum: 10, ratioDen: 1 });
 
@@ -44,7 +44,7 @@ describe("recordConfirmedSplit", () => {
   });
 
   it("classifies ratioNum < ratioDen as a reverse_split", async () => {
-    await resolveOrCreateAsset("XYZ", "equity", "Some Reverse-Split Co.");
+    await resolveOrCreateAsset({ symbol: "XYZ", assetClass: "equity", name: "Some Reverse-Split Co." });
 
     const result = await recordConfirmedSplit({ ticker: "XYZ", exDate: "2024-01-15", ratioNum: 1, ratioDen: 10 });
 
@@ -71,35 +71,35 @@ describe("recordConfirmedSplit", () => {
   });
 
   it("rejects a malformed date", async () => {
-    await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
+    await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
     await expect(
       recordConfirmedSplit({ ticker: "NVDA", exDate: "06/07/2024", ratioNum: 10, ratioDen: 1 })
     ).rejects.toThrow(/valid YYYY-MM-DD/i);
   });
 
   it("rejects a calendar-invalid date", async () => {
-    await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
+    await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
     await expect(
       recordConfirmedSplit({ ticker: "NVDA", exDate: "2024-02-30", ratioNum: 10, ratioDen: 1 })
     ).rejects.toThrow(/valid YYYY-MM-DD/i);
   });
 
   it("rejects a non-positive ratio", async () => {
-    await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
+    await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
     await expect(
       recordConfirmedSplit({ ticker: "NVDA", exDate: "2024-06-07", ratioNum: -10, ratioDen: 1 })
     ).rejects.toThrow(/positive/i);
   });
 
   it("rejects a 1:1 ratio (not a split)", async () => {
-    await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
+    await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
     await expect(
       recordConfirmedSplit({ ticker: "NVDA", exDate: "2024-06-07", ratioNum: 1, ratioDen: 1 })
     ).rejects.toThrow(/must differ/i);
   });
 
   it("resolves the matching possible_unrecorded_split flag for that asset and date", async () => {
-    const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
     const flagId = await raiseFlag(
       asset.id,
       "possible_unrecorded_split",
@@ -116,7 +116,7 @@ describe("recordConfirmedSplit", () => {
   });
 
   it("resolves a benchmark_unavailable flag for the same asset/date too", async () => {
-    const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
     const flagId = await raiseFlag(
       asset.id,
       "split_check_benchmark_unavailable",
@@ -131,8 +131,8 @@ describe("recordConfirmedSplit", () => {
   });
 
   it("leaves unrelated flags untouched — different date, different asset, already-resolved", async () => {
-    const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
-    const otherAsset = await resolveOrCreateAsset("AAPL", "equity", "Apple Inc.");
+    const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
+    const otherAsset = await resolveOrCreateAsset({ symbol: "AAPL", assetClass: "equity", name: "Apple Inc." });
 
     const differentDateFlag = await raiseFlag(
       asset.id,
@@ -161,7 +161,7 @@ describe("recordConfirmedSplit", () => {
   });
 
   it("rolls back both the flag resolution and the insert when the corporate_actions write fails (duplicate confirmation)", async () => {
-    const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
     // Simulate the split having already been confirmed by someone else a
     // moment earlier, directly at the DB layer.
     const pool = getPool();
