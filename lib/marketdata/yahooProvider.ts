@@ -1,5 +1,7 @@
 import YahooFinance from "yahoo-finance2";
 import type { MarketDataProvider, EodPricePoint } from "./provider";
+import type { AssetClass } from "../assets";
+import { lookupCrypto, UnsupportedCryptoError } from "./cryptoSymbols";
 
 // yahoo-finance2 v4 (installed: see package.json) exports the class itself as
 // the default export rather than a ready-made singleton (v2 API assumed by
@@ -8,13 +10,31 @@ import type { MarketDataProvider, EodPricePoint } from "./provider";
 // (scripts/spike-yahoo.ts).
 const yahooFinance = new YahooFinance();
 
+// Resolve the caller's (ticker, assetClass) to the exact symbol Yahoo needs.
+//
+// Equities and ETFs use their bare ticker, exactly as before — Yahoo's plain
+// US-ticker convention (NOW, NVDA, …) is unchanged.
+//
+// A cryptocurrency is NEVER looked up by its bare ticker: Yahoo lists "BTC"
+// as the Grayscale Bitcoin Mini Trust ETF, not Bitcoin. It is resolved only
+// through the verified crypto registry (BTC -> "BTC-USD"); anything not in
+// that registry is rejected outright rather than guessed at or silently
+// falling through to a colliding instrument.
+function toYahooSymbol(ticker: string, assetClass: AssetClass): string {
+  if (assetClass === "crypto") {
+    const instrument = lookupCrypto(ticker);
+    if (!instrument) {
+      throw new UnsupportedCryptoError(ticker);
+    }
+    return instrument.yahooSymbol;
+  }
+  return ticker.toUpperCase();
+}
+
 export const yahooProvider: MarketDataProvider = {
   sourceName: "YAHOO",
-  async fetchLatestEod(ticker: string): Promise<EodPricePoint> {
-    // Yahoo's own symbol conventions already match plain US tickers and
-    // "BTC-USD"-style crypto pairs — confirmed in the Task 7 spike, so no
-    // per-asset-class suffix mapping is needed here (unlike EODHD).
-    const symbol = ticker.toUpperCase();
+  async fetchLatestEod(ticker: string, assetClass: AssetClass): Promise<EodPricePoint> {
+    const symbol = toYahooSymbol(ticker, assetClass);
     const today = new Date();
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const result = await yahooFinance.chart(symbol, {
@@ -33,8 +53,13 @@ export const yahooProvider: MarketDataProvider = {
       adjustedClose: latest.adjclose ?? latest.close!,
     };
   },
-  async fetchHistoricalEod(ticker: string, _assetClass, from: string, to: string): Promise<EodPricePoint[]> {
-    const symbol = ticker.toUpperCase();
+  async fetchHistoricalEod(
+    ticker: string,
+    assetClass: AssetClass,
+    from: string,
+    to: string
+  ): Promise<EodPricePoint[]> {
+    const symbol = toYahooSymbol(ticker, assetClass);
     const result = await yahooFinance.chart(symbol, { period1: from, period2: to, interval: "1d" });
     // Only result.quotes (the close-price series) is read here. Yahoo's chart
     // response can also carry result.events.splits / .dividends — those are
