@@ -531,12 +531,11 @@ describe("SetupWizard — Task 32: responsive + accessible polish", () => {
     expect(screen.getAllByRole("button", { name: /^Remove \S/ })).toHaveLength(2);
   });
 
-  it("T32-5: ticker-resolution stays a single always-mounted polite live region; 'Add anyway' is outside it", async () => {
+  it("T32-5: ticker-resolution stays a single always-mounted polite live region; there is no 'Add anyway' override", async () => {
     resolveTickerActionMock.mockResolvedValue({
       ok: false,
-      assetId: "1",
-      message:
-        'Couldn\'t find a price for "ZZZZ". Check the symbol, or add it anyway if you\'re sure it\'s correct.',
+      assetId: null,
+      message: 'Couldn\'t find "ZZZZ". Check the symbol and try again.',
     });
     render(<SetupWizard />);
 
@@ -547,8 +546,8 @@ describe("SetupWizard — Task 32: responsive + accessible polish", () => {
     fireEvent.change(ticker, { target: { value: "ZZZZ" } });
     fireEvent.blur(ticker);
 
-    const addAnyway = await screen.findByRole("button", { name: /add anyway/i });
-    expect(addAnyway.closest("[aria-live]")).toBeNull();
+    await waitFor(() => expect(screen.getByText(/couldn't find "zzzz"/i)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /add anyway/i })).toBeNull();
     expect(document.querySelectorAll('[aria-live="polite"]')).toHaveLength(1);
   });
 

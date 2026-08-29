@@ -661,6 +661,45 @@ describe("HoldingsEditor", () => {
     expect(resolveTickerActionMock).not.toHaveBeenCalledWith("BTC", "equity");
   });
 
+  // --- M1 identity-resolution defect fix: the override path is gone -------
+
+  it("renders no 'Add anyway' control, even when a ticker fails to resolve", async () => {
+    resolveTickerActionMock.mockResolvedValue({
+      ok: false,
+      assetId: null,
+      message: 'Couldn\'t find "DSADASD". Check the symbol and try again.',
+    });
+    render(<HoldingsEditor initial={baseInitial()} />);
+
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "DSADASD" } });
+    fireEvent.blur(ticker);
+
+    await waitFor(() => expect(screen.getByText(/couldn't find "dsadasd"/i)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /add anyway/i })).toBeNull();
+  });
+
+  it("a resolved-but-price-unavailable identity can still be added via the normal Add button (no override needed)", async () => {
+    resolveTickerActionMock.mockResolvedValue({
+      ok: false,
+      assetId: "9",
+      message: "Identity confirmed for \"NEWCO\", but its live price is unavailable right now.",
+    });
+    render(<HoldingsEditor initial={baseInitial()} />);
+
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "NEWCO" } });
+    fireEvent.blur(ticker);
+    await waitFor(() => expect(screen.getByText(/price is unavailable/i)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /add anyway/i })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("New holding quantity"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("New holding average cost"), { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: /^\+ add holding$/i }));
+
+    expect(screen.getByLabelText("Quantity for NEWCO")).toBeInTheDocument();
+  });
+
   it("BTC-2: switching away from Crypto after a BTC resolve invalidates it; a late crypto response cannot resurrect it", async () => {
     let resolveCrypto: (v: any) => void = () => {};
     resolveTickerActionMock

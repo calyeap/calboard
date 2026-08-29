@@ -1,5 +1,5 @@
 import YahooFinance from "yahoo-finance2";
-import type { MarketDataProvider, EodPricePoint } from "./provider";
+import type { MarketDataProvider, EodPricePoint, InstrumentResolution } from "./provider";
 import type { AssetClass } from "../assets";
 import { lookupCrypto, UnsupportedCryptoError } from "./cryptoSymbols";
 
@@ -33,6 +33,36 @@ function toYahooSymbol(ticker: string, assetClass: AssetClass): string {
 
 export const yahooProvider: MarketDataProvider = {
   sourceName: "YAHOO",
+  // Resolves identity ONLY — a canonical symbol, its EQUITY/ETF type, and a
+  // display name — never touching price. Any thrown error (network failure,
+  // timeout, Yahoo HTTP error, or anything unclassified) maps to
+  // "unavailable", not "unknown": a provider outage is never treated as
+  // proof the symbol doesn't exist.
+  async resolveInstrument(ticker: string): Promise<InstrumentResolution> {
+    const symbol = ticker.trim().toUpperCase();
+    let result;
+    try {
+      result = await yahooFinance.quote(symbol);
+    } catch {
+      return { outcome: "unavailable" };
+    }
+    if (!result) {
+      return { outcome: "unknown" };
+    }
+    if (result.quoteType !== "EQUITY" && result.quoteType !== "ETF") {
+      return { outcome: "unsupported" };
+    }
+    const name = result.longName || result.shortName;
+    if (!name) {
+      return { outcome: "unknown" };
+    }
+    return {
+      outcome: "resolved",
+      symbol: (result.symbol || symbol).toUpperCase(),
+      assetClass: result.quoteType === "EQUITY" ? "equity" : "etf",
+      name,
+    };
+  },
   async fetchLatestEod(ticker: string, assetClass: AssetClass): Promise<EodPricePoint> {
     const symbol = toYahooSymbol(ticker, assetClass);
     const today = new Date();

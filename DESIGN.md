@@ -168,11 +168,14 @@ token-backed class in `globals.css` for anything new or reused.
   acceptable.
 - **Forms:** controlled `"use client"` components that call a Server Action and render
   its **structured result** — never a throwing `<form action>`. Ticker-lookup
-  resolution is announced through one `aria-live` polite/atomic region, with any
-  override control ("Add anyway") **outside** it (test-asserted). Save outcomes are
-  distinct, each with its own copy (`saved` / `failed` / `unknown` / `unreachable`),
-  persisting until the next real save. **Entered values survive a validation failure**;
-  staged work says so in plain words ("Nothing has been saved yet.").
+  resolution is announced through one `aria-live` polite/atomic region. There is no
+  "Add anyway" override: identity and price are resolved separately, so a symbol whose
+  identity resolves still reaches the normal Add control even if its price is
+  momentarily unavailable; a symbol that never resolves cannot be added at all
+  (test-asserted). Save outcomes are distinct, each with its own copy
+  (`saved` / `failed` / `unknown` / `unreachable`), persisting until the next real save.
+  **Entered values survive a validation failure**; staged work says so in plain words
+  ("Nothing has been saved yet.").
 
 **Durable rule.** Calboard must not silently ignore or discard valid, visible user
 input. Staged and saved states must be clear.

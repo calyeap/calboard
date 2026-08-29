@@ -15,7 +15,7 @@ beforeEach(async () => {
 describe("applyTransaction integration", () => {
   it("derives cash and position correctly across deposit + two buys + a sell", async () => {
     const account = await createAccount("Test Brokerage", "IBKR");
-    const asset = await resolveOrCreateAsset("AAPL", "equity", "Apple Inc.");
+    const asset = await resolveOrCreateAsset({ symbol: "AAPL", assetClass: "equity", name: "Apple Inc." });
 
     await applyTransaction({
       accountId: account.id, assetId: null, txnType: "DEPOSIT",
@@ -55,7 +55,7 @@ describe("applyTransaction integration", () => {
 
   it("applies an opening-position ADJUSTMENT directly (quantity x trusted avg cost, zero cash effect, stored as ADJUSTMENT not BUY)", async () => {
     const account = await createAccount("Cutover Brokerage", "Fidelity");
-    const asset = await resolveOrCreateAsset("ZZZTEST", "equity", "Smoke Test Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "ZZZTEST", assetClass: "equity", name: "Smoke Test Corp" });
 
     const { transactionId } = await applyTransaction({
       accountId: account.id, assetId: asset.id, txnType: "ADJUSTMENT",

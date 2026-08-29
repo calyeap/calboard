@@ -24,8 +24,8 @@ async function buy(accountId: number, assetId: string, qty: number, price: numbe
 describe("getAccountHoldings / getAllHoldings", () => {
   it("returns only non-zero positions — a fully-sold holding is excluded", async () => {
     const account = await createAccount("Brokerage", null);
-    const held = await resolveOrCreateAsset("HELD", "equity", "Held Corp");
-    const sold = await resolveOrCreateAsset("SOLD", "equity", "Sold Corp");
+    const held = await resolveOrCreateAsset({ symbol: "HELD", assetClass: "equity", name: "Held Corp" });
+    const sold = await resolveOrCreateAsset({ symbol: "SOLD", assetClass: "equity", name: "Sold Corp" });
     await buy(account.id, held.id, 10, 100);
     await buy(account.id, sold.id, 4, 50);
     await applyTransaction({
@@ -45,8 +45,8 @@ describe("getAccountHoldings / getAllHoldings", () => {
   it("getAccountHoldings scopes to a single account; getAllHoldings spans every account", async () => {
     const a1 = await createAccount("Acct One", null);
     const a2 = await createAccount("Acct Two", null);
-    const x = await resolveOrCreateAsset("XXX", "equity", "X Corp");
-    const y = await resolveOrCreateAsset("YYY", "etf", "Y ETF");
+    const x = await resolveOrCreateAsset({ symbol: "XXX", assetClass: "equity", name: "X Corp" });
+    const y = await resolveOrCreateAsset({ symbol: "YYY", assetClass: "etf", name: "Y ETF" });
     await buy(a1.id, x.id, 5, 20);
     await buy(a2.id, y.id, 7, 30);
 

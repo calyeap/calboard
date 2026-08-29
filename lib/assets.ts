@@ -9,25 +9,39 @@ export interface Asset {
   name: string;
 }
 
-// attributeTable is chosen from a fixed 3-value hardcoded set below, never
-// from external input, so string interpolation here is not a SQL-injection risk.
-export async function resolveOrCreateAsset(
-  ticker: string,
-  assetClass: AssetClass,
-  name: string
-): Promise<Asset> {
-  const pool = getPool();
-  const symbol = ticker.toUpperCase();
+// The output of identity resolution — either a provider's resolveInstrument()
+// (equity/ETF) or the verified crypto registry (lib/marketdata/cryptoSymbols.ts).
+// resolveOrCreateAsset only ever persists an instrument that has already been
+// resolved this way; it never accepts raw, unverified caller input.
+export interface ResolvedInstrument {
+  symbol: string;
+  assetClass: AssetClass;
+  name: string;
+}
 
-  const existing = await pool.query<{
+export async function findAssetBySymbol(symbol: string): Promise<Asset | null> {
+  const pool = getPool();
+  const result = await pool.query<{
     id: string; asset_class: AssetClass; primary_symbol: string; name: string;
   }>(
     `SELECT id, asset_class, primary_symbol, name FROM assets WHERE primary_symbol = $1`,
-    [symbol]
+    [symbol.toUpperCase()]
   );
-  if (existing.rows.length > 0) {
-    const row = existing.rows[0];
-    return { id: row.id, assetClass: row.asset_class, primarySymbol: row.primary_symbol, name: row.name };
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return { id: row.id, assetClass: row.asset_class, primarySymbol: row.primary_symbol, name: row.name };
+}
+
+// attributeTable is chosen from a fixed 3-value hardcoded set below, never
+// from external input, so string interpolation here is not a SQL-injection risk.
+export async function resolveOrCreateAsset(instrument: ResolvedInstrument): Promise<Asset> {
+  const pool = getPool();
+  const symbol = instrument.symbol.toUpperCase();
+  const { assetClass, name } = instrument;
+
+  const existing = await findAssetBySymbol(symbol);
+  if (existing) {
+    return existing;
   }
 
   const client = await pool.connect();

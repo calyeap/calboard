@@ -11,6 +11,17 @@ import { updateHoldingsAction } from "./holdings";
 // test process — stub it so the action's own logic is what's under test.
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
+// updateHoldingsAction must stay provider-free (CORE CONTRACT) — it only
+// ever operates on already-resolved assetIds. These spies prove it: if the
+// action ever called into the market-data provider, one of these would fire.
+const { mockChart, mockQuote } = vi.hoisted(() => ({ mockChart: vi.fn(), mockQuote: vi.fn() }));
+vi.mock("yahoo-finance2", () => ({
+  default: class {
+    chart = mockChart;
+    quote = mockQuote;
+  },
+}));
+
 beforeEach(async () => {
   const pool = getPool();
   await pool.query(
@@ -70,7 +81,7 @@ async function position(accountId: number, assetId: string) {
 describe("updateHoldingsAction", () => {
   it("rejects a future as-of date with a structured error and writes nothing", async () => {
     const account = await createAccount("My Portfolio", null);
-    const a = await resolveOrCreateAsset("AAA", "equity", "A Corp");
+    const a = await resolveOrCreateAsset({ symbol: "AAA", assetClass: "equity", name: "A Corp" });
     await seedPosition(account.id, a.id, "10", "100");
 
     const res = await updateHoldingsAction({
@@ -87,8 +98,8 @@ describe("updateHoldingsAction", () => {
 
   it("returns structured per-field errors for a non-numeric quantity / non-positive avg cost, writing nothing", async () => {
     const account = await createAccount("My Portfolio", null);
-    const a = await resolveOrCreateAsset("AAA", "equity", "A Corp");
-    const b = await resolveOrCreateAsset("BBB", "equity", "B Corp");
+    const a = await resolveOrCreateAsset({ symbol: "AAA", assetClass: "equity", name: "A Corp" });
+    const b = await resolveOrCreateAsset({ symbol: "BBB", assetClass: "equity", name: "B Corp" });
     await seedPosition(account.id, a.id, "10", "100");
     await seedPosition(account.id, b.id, "5", "40");
 
@@ -111,7 +122,7 @@ describe("updateHoldingsAction", () => {
 
   it("a quantity increase writes exactly one ADJUSTMENT and reaches the exact target", async () => {
     const account = await createAccount("My Portfolio", null);
-    const a = await resolveOrCreateAsset("AAA", "equity", "A Corp");
+    const a = await resolveOrCreateAsset({ symbol: "AAA", assetClass: "equity", name: "A Corp" });
     await seedPosition(account.id, a.id, "10", "100");
 
     const res = await updateHoldingsAction({
@@ -133,7 +144,7 @@ describe("updateHoldingsAction", () => {
 
   it("a simultaneous quantity + avg-cost change reaches the exact target in one row", async () => {
     const account = await createAccount("My Portfolio", null);
-    const a = await resolveOrCreateAsset("AAA", "equity", "A Corp");
+    const a = await resolveOrCreateAsset({ symbol: "AAA", assetClass: "equity", name: "A Corp" });
     await seedPosition(account.id, a.id, "10", "100");
 
     const res = await updateHoldingsAction({
@@ -151,7 +162,7 @@ describe("updateHoldingsAction", () => {
 
   it("an avg-cost-only edit writes one row and leaves the quantity unchanged", async () => {
     const account = await createAccount("My Portfolio", null);
-    const a = await resolveOrCreateAsset("AAA", "equity", "A Corp");
+    const a = await resolveOrCreateAsset({ symbol: "AAA", assetClass: "equity", name: "A Corp" });
     await seedPosition(account.id, a.id, "10", "100");
 
     const res = await updateHoldingsAction({
@@ -169,8 +180,8 @@ describe("updateHoldingsAction", () => {
 
   it("a removed holding is set to quantity 0 and drops out of getAccountHoldings", async () => {
     const account = await createAccount("My Portfolio", null);
-    const a = await resolveOrCreateAsset("AAA", "equity", "A Corp");
-    const b = await resolveOrCreateAsset("BBB", "equity", "B Corp");
+    const a = await resolveOrCreateAsset({ symbol: "AAA", assetClass: "equity", name: "A Corp" });
+    const b = await resolveOrCreateAsset({ symbol: "BBB", assetClass: "equity", name: "B Corp" });
     await seedPosition(account.id, a.id, "10", "100");
     await seedPosition(account.id, b.id, "5", "40");
 
@@ -188,7 +199,7 @@ describe("updateHoldingsAction", () => {
 
   it("a zero-delta Save writes exactly one snapshot_confirm row (and no ADJUSTMENT)", async () => {
     const account = await createAccount("My Portfolio", null);
-    const a = await resolveOrCreateAsset("AAA", "equity", "A Corp");
+    const a = await resolveOrCreateAsset({ symbol: "AAA", assetClass: "equity", name: "A Corp" });
     await seedPosition(account.id, a.id, "10", "100");
 
     const res = await updateHoldingsAction({
@@ -206,7 +217,7 @@ describe("updateHoldingsAction", () => {
 
   it("a definite failure rolls the whole transaction back — no snapshot_confirm row, prior position intact", async () => {
     const account = await createAccount("My Portfolio", null);
-    const a = await resolveOrCreateAsset("AAA", "equity", "A Corp");
+    const a = await resolveOrCreateAsset({ symbol: "AAA", assetClass: "equity", name: "A Corp" });
     await seedPosition(account.id, a.id, "10", "100");
 
     const res = await updateHoldingsAction({
@@ -226,7 +237,7 @@ describe("updateHoldingsAction", () => {
 
   it("maps an ambiguous COMMIT to { ok: 'unknown' } without attempting ROLLBACK", async () => {
     const account = await createAccount("My Portfolio", null);
-    const a = await resolveOrCreateAsset("AAA", "equity", "A Corp");
+    const a = await resolveOrCreateAsset({ symbol: "AAA", assetClass: "equity", name: "A Corp" });
     await seedPosition(account.id, a.id, "10", "100");
 
     const pool = getPool();
@@ -262,5 +273,22 @@ describe("updateHoldingsAction", () => {
     } finally {
       connectSpy.mockRestore();
     }
+  });
+
+  it("makes zero market-data provider calls — it only ever operates on already-resolved assetIds", async () => {
+    mockChart.mockReset();
+    mockQuote.mockReset();
+    const account = await createAccount("My Portfolio", null);
+    const a = await resolveOrCreateAsset({ symbol: "AAA", assetClass: "equity", name: "A Corp" });
+    await seedPosition(account.id, a.id, "10", "100");
+
+    const result = await updateHoldingsAction({
+      asOfDate: "2026-02-01",
+      holdings: [{ assetId: a.id, quantity: "15", avgCostUsd: "100" }],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mockChart).not.toHaveBeenCalled();
+    expect(mockQuote).not.toHaveBeenCalled();
   });
 });

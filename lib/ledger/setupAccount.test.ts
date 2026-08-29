@@ -13,8 +13,8 @@ beforeEach(async () => {
 
 describe("setupAccount", () => {
   it("atomically creates the account, every holding, and exactly one audit_log snapshot_confirm row — with no cash and no reconciliation", async () => {
-    const a = await resolveOrCreateAsset("SETA", "equity", "Setup A Corp");
-    const b = await resolveOrCreateAsset("SETB", "etf", "Setup B ETF");
+    const a = await resolveOrCreateAsset({ symbol: "SETA", assetClass: "equity", name: "Setup A Corp" });
+    const b = await resolveOrCreateAsset({ symbol: "SETB", assetClass: "etf", name: "Setup B ETF" });
 
     const result = await setupAccount({
       name: "My Portfolio",
@@ -90,7 +90,7 @@ describe("setupAccount", () => {
   });
 
   it("rolls back the entire setup — account, the earlier holding, and any audit row — when a later holding is invalid", async () => {
-    const a = await resolveOrCreateAsset("ROLLBK", "equity", "Rollback Corp");
+    const a = await resolveOrCreateAsset({ symbol: "ROLLBK", assetClass: "equity", name: "Rollback Corp" });
 
     await expect(
       setupAccount({

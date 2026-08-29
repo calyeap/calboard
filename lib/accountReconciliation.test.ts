@@ -51,7 +51,7 @@ describe("recordAccountReconciliation", () => {
 
   it("includes system-computed position snapshots in the record", async () => {
     const account = await createAccount("Cutover Brokerage", "Fidelity");
-    const asset = await resolveOrCreateAsset("ZZZTEST", "equity", "Smoke Test Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "ZZZTEST", assetClass: "equity", name: "Smoke Test Corp" });
     await applyOpeningPositionAdjustment({
       accountId: account.id,
       assetId: asset.id,

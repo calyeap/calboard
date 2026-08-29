@@ -165,7 +165,7 @@ export function SetupWizard() {
       return;
     }
     if (!draftAssetId || resolvedTicker !== normalized || resolvedAssetClass !== assetType) {
-      setHoldingError("Resolve the ticker first — enter it and tab out, or press Add anyway.");
+      setHoldingError("Resolve the ticker first — enter it and tab out.");
       return;
     }
     if (isDuplicateTickerInDraft(holdings.map((h) => h.ticker), normalized)) {
@@ -353,8 +353,7 @@ export function SetupWizard() {
             </label>
             {/* One polite live region for every ticker-resolution state, so a
                 screen reader hears the meaningful result without an assertive
-                interruption and without a second region repeating it. The
-                "Add anyway" affordance sits outside it. */}
+                interruption and without a second region repeating it. */}
             <div aria-live="polite" aria-atomic="true">
               {resolving && <span className="status-neutral">checking…</span>}
               {resolution?.ok && (
@@ -366,11 +365,6 @@ export function SetupWizard() {
                 <span className="status-warning">{resolution.message}</span>
               )}
             </div>
-            {resolution && !resolution.ok && draftAssetId && (
-              <button type="button" onClick={addHolding}>
-                Add anyway
-              </button>
-            )}
 
             <label>
               Asset type

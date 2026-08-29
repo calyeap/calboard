@@ -7,6 +7,9 @@ import type { MarketDataProvider, EodPricePoint } from "./provider";
 function fakeProvider(sourceName: string, points: EodPricePoint[]): MarketDataProvider {
   return {
     sourceName,
+    async resolveInstrument() {
+      throw new Error("fakeProvider.resolveInstrument is not used by loadHistoricalPrices");
+    },
     async fetchLatestEod() {
       return points[points.length - 1];
     },
@@ -25,7 +28,7 @@ beforeEach(async () => {
 
 describe("loadHistoricalPrices", () => {
   it("idempotently upserts only the requested asset/date history into prices_daily", async () => {
-    const asset = await resolveOrCreateAsset("AAPL", "equity", "Apple Inc.");
+    const asset = await resolveOrCreateAsset({ symbol: "AAPL", assetClass: "equity", name: "Apple Inc." });
     const provider = fakeProvider("EODHD", [
       { date: "2026-01-05", close: 118.11, adjustedClose: 118.11 },
       { date: "2026-01-06", close: 120.47, adjustedClose: 120.47 },
@@ -52,8 +55,8 @@ describe("loadHistoricalPrices", () => {
       { date: "2026-01-05", close: 118.11, adjustedClose: 118.11 },
       { date: "2026-01-06", close: 120.47, adjustedClose: 120.47 },
     ];
-    const assetA = await resolveOrCreateAsset("AAPL", "equity", "Apple Inc.");
-    const assetB = await resolveOrCreateAsset("MSFT", "equity", "Microsoft Corp.");
+    const assetA = await resolveOrCreateAsset({ symbol: "AAPL", assetClass: "equity", name: "Apple Inc." });
+    const assetB = await resolveOrCreateAsset({ symbol: "MSFT", assetClass: "equity", name: "Microsoft Corp." });
 
     const eodhd = fakeProvider("EODHD", points);
     const yahoo = fakeProvider("YAHOO", points);
@@ -74,8 +77,8 @@ describe("loadHistoricalPrices", () => {
   });
 
   it("detects and flags an unrecorded split encountered during ingestion (NVDA's real June 2024 10:1 ratio, benchmark moved normally)", async () => {
-    const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
-    const benchmark = await resolveOrCreateAsset("SPY", "etf", "SPDR S&P 500 ETF");
+    const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
+    const benchmark = await resolveOrCreateAsset({ symbol: "SPY", assetClass: "etf", name: "SPDR S&P 500 ETF" });
     const pool = getPool();
     await pool.query(`UPDATE assets SET benchmark_asset_id = $2 WHERE id = $1`, [asset.id, benchmark.id]);
     const sourceId = (await pool.query<{ id: number }>(`SELECT id FROM sources WHERE name = 'EODHD'`)).rows[0].id;
@@ -104,7 +107,7 @@ describe("loadHistoricalPrices", () => {
   });
 
   it("does not silently pass a suspected split as clean when the asset has no benchmark configured", async () => {
-    const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
     // No benchmark_asset_id set.
     const provider = fakeProvider("EODHD", [
       { date: "2024-06-06", close: 1210, adjustedClose: 1210 },
@@ -123,7 +126,7 @@ describe("loadHistoricalPrices", () => {
   });
 
   it("does not flag a split that has a matching corporate_actions row", async () => {
-    const asset = await resolveOrCreateAsset("NVDA", "equity", "NVIDIA Corp");
+    const asset = await resolveOrCreateAsset({ symbol: "NVDA", assetClass: "equity", name: "NVIDIA Corp" });
     const pool = getPool();
     await pool.query(
       `INSERT INTO corporate_actions (asset_id, action_type, ex_date, ratio_num, ratio_den)
