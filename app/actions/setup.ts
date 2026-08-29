@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getPool } from "@/lib/db";
 import { resolveOrCreateAsset, type AssetClass } from "@/lib/assets";
 import { upsertLatestPrice } from "@/lib/marketdata";
+import { lookupCrypto } from "@/lib/marketdata/cryptoSymbols";
 import { isValidCalendarDate, isFutureDate, normalizePgDate } from "@/lib/dateValidation";
 import { setupAccount, SetupCommitUncertainError } from "@/lib/ledger/setupAccount";
 
@@ -28,7 +29,34 @@ export async function resolveTickerAction(
     return { ok: false, assetId: null, message: "Enter a ticker symbol." };
   }
 
-  const asset = await resolveOrCreateAsset(symbol, assetClass, symbol);
+  // A cryptocurrency is resolved only through the verified crypto registry —
+  // never by its bare ticker, which on the price provider can be an unrelated
+  // ETF or equity (the M1.1 "BTC -> Grayscale Bitcoin Mini Trust ETF" bug).
+  // An unverified crypto symbol fails closed: no asset row, nothing to "add
+  // anyway", and never a silently-substituted instrument.
+  let canonicalName = symbol;
+  if (assetClass === "crypto") {
+    const instrument = lookupCrypto(symbol);
+    if (!instrument) {
+      return {
+        ok: false,
+        assetId: null,
+        message:
+          `"${symbol}" is not a supported cryptocurrency. Calboard tracks a specific ` +
+          `set of verified cryptocurrencies, and this symbol is not one of them.`,
+      };
+    }
+    canonicalName = instrument.name;
+  }
+
+  const asset = await resolveOrCreateAsset(symbol, assetClass, canonicalName);
+
+  // Upgrade a pre-hotfix asset that stored its bare ticker as the name to the
+  // verified canonical name (idempotent — a no-op once corrected).
+  if (assetClass === "crypto" && asset.name !== canonicalName) {
+    await getPool().query(`UPDATE assets SET name = $1 WHERE id = $2`, [canonicalName, asset.id]);
+    asset.name = canonicalName;
+  }
 
   const notFound: TickerResolutionResult = {
     ok: false,

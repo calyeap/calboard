@@ -311,6 +311,9 @@ Swappable model adapter · `model_id`, `prompt_version`, `input_hash` on every r
 ### 12.8 Refusal is a success state
 "Insufficient data", "no identified catalyst", "routine — not surfaced" and "coverage reduced today" are first-class, well-designed outputs, not error styling.
 
+### 12.9 Asset-class scope
+**AI analysis is stock-only.** Crypto holdings — and any future crypto watchlist entries — must be deterministically excluded (by `asset_class`) before any AI-analysis stage. This is a filter on the input universe, not a model instruction.
+
 ---
 
 ## 13. Portfolio analytics requirements *(M2)* — deliberately basic

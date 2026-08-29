@@ -2,8 +2,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Decimal from "decimal.js";
 import { getPool } from "@/lib/db";
 import { resolveOrCreateAsset } from "@/lib/assets";
+import { upsertLatestPrice } from "@/lib/marketdata";
 import { SetupCommitUncertainError } from "@/lib/ledger/setupAccount";
 import { resolveTickerAction, setupAccountAction } from "./setup";
+
+// Deterministic provider: the Yahoo client is stubbed so no test touches the
+// network or live prices. `chart` is the single seam — tests assert the exact
+// symbol the adapter sent, and control the close it gets back.
+const { mockChart } = vi.hoisted(() => ({ mockChart: vi.fn() }));
+vi.mock("yahoo-finance2", () => ({ default: class { chart = mockChart; } }));
+
+function chartClose(close: number, date = "2026-08-28") {
+  return { quotes: [{ date: new Date(`${date}T00:00:00Z`), close, adjclose: close }] };
+}
 
 // revalidatePath is a request-scoped Next primitive with nothing to
 // invalidate in a bare test process — stub it so the action's own logic is
@@ -31,10 +42,101 @@ describe("resolveTickerAction", () => {
   const originalProvider = process.env.MARKET_DATA_PROVIDER;
   beforeEach(() => {
     process.env.MARKET_DATA_PROVIDER = "YAHOO";
+    mockChart.mockReset();
   });
   afterEach(() => {
     if (originalProvider === undefined) delete process.env.MARKET_DATA_PROVIDER;
     else process.env.MARKET_DATA_PROVIDER = originalProvider;
+  });
+
+  // --- M1.1 crypto-resolution hotfix (BTC-only) ---------------------------
+
+  it("resolves Crypto + BTC to Bitcoin (BTC-USD) and persists the canonical identity", async () => {
+    mockChart.mockResolvedValue(chartClose(79950.5));
+
+    const result = await resolveTickerAction("BTC", "crypto");
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.assetClass).toBe("crypto");
+      // Bitcoin's price, never a ~$35 Grayscale Bitcoin Mini Trust ETF share.
+      expect(new Decimal(result.priceUsd).gt(1000)).toBe(true);
+    }
+    expect(mockChart).toHaveBeenCalledWith("BTC-USD", expect.anything());
+    expect(mockChart).not.toHaveBeenCalledWith("BTC", expect.anything());
+
+    // Canonical identity persisted for later price retrieval / Retry.
+    const pool = getPool();
+    const asset = await pool.query(
+      `SELECT primary_symbol, asset_class, name FROM assets WHERE primary_symbol = 'BTC'`
+    );
+    expect(asset.rows[0]).toMatchObject({
+      primary_symbol: "BTC",
+      asset_class: "crypto",
+      name: "Bitcoin",
+    });
+  });
+
+  it("later price retrieval re-uses the saved crypto identity, not a bare-ticker search", async () => {
+    mockChart.mockResolvedValue(chartClose(80000));
+    const first = await resolveTickerAction("BTC", "crypto");
+    expect(first.ok).toBe(true);
+    const assetId = first.ok ? first.assetId : "";
+
+    // Force the price cache stale so the next call goes back to the provider,
+    // exactly as PriceCell's Retry -> retryPriceFetchAction -> upsertLatestPrice
+    // does, using only the columns persisted on the asset.
+    const pool = getPool();
+    await pool.query(`UPDATE prices_daily SET retrieved_at = now() - interval '2 days'`);
+    mockChart.mockClear();
+
+    await upsertLatestPrice(assetId, "BTC", "crypto");
+
+    expect(mockChart).toHaveBeenCalledWith("BTC-USD", expect.anything());
+    expect(mockChart).not.toHaveBeenCalledWith("BTC", expect.anything());
+  });
+
+  it("corrects a stale bare-ticker name left on an existing BTC asset", async () => {
+    // Pre-hotfix state: a BTC crypto asset saved with its ticker as the name.
+    const stale = await resolveOrCreateAsset("BTC", "crypto", "BTC");
+    mockChart.mockResolvedValue(chartClose(80500));
+
+    const result = await resolveTickerAction("BTC", "crypto");
+
+    expect(result.ok).toBe(true);
+    const pool = getPool();
+    const row = await pool.query(`SELECT name FROM assets WHERE id = $1`, [stale.id]);
+    expect(row.rows[0].name).toBe("Bitcoin");
+  });
+
+  it("rejects an unsupported crypto clearly and creates no add-anyway asset", async () => {
+    // A symbol not in the verified registry must not resolve to an equity,
+    // an ETF, or any other instrument — and must not leave a row the caller
+    // could 'add anyway'.
+    const result = await resolveTickerAction("NOTACOIN", "crypto");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.assetId).toBeNull();
+      expect(result.message).toMatch(/not a supported cryptocurrency/i);
+    }
+    expect(mockChart).not.toHaveBeenCalled();
+
+    const pool = getPool();
+    expect((await pool.query(`SELECT 1 FROM assets`)).rows).toHaveLength(0);
+  });
+
+  it("EQUITY REGRESSION: NOW and NVDA still resolve by their bare ticker", async () => {
+    mockChart.mockResolvedValue(chartClose(912.34));
+    const now = await resolveTickerAction("NOW", "equity");
+    expect(now.ok).toBe(true);
+    expect(mockChart).toHaveBeenCalledWith("NOW", expect.anything());
+
+    mockChart.mockClear();
+    mockChart.mockResolvedValue(chartClose(178.9));
+    const nvda = await resolveTickerAction("NVDA", "equity");
+    expect(nvda.ok).toBe(true);
+    expect(mockChart).toHaveBeenCalledWith("NVDA", expect.anything());
   });
 
   it("resolves from a fresh cached price without a live provider call", async () => {
