@@ -24,28 +24,41 @@ describe("globals.css — .cb-dash regressions", () => {
   });
 });
 
-describe("globals.css — .holdings-chrome dark-mode regressions", () => {
-  it("form controls explicitly reset color away from the dark ink value, not var(--color-text)", () => {
-    // The foundation's `button, input, select, textarea { color: inherit }`
-    // rule pulls whatever --color-text resolves to in scope — which
-    // .holdings-chrome[data-theme="dark"] redefines to a pale colour for
-    // static chrome text. Without an explicit reset here, every input,
-    // select and button inside dark Holdings would render pale text on
-    // their native white background: illegible. Must be a literal colour,
-    // not var(--color-text) — that variable is the dark value in this
-    // exact scope, so re-reading it here would silently reintroduce the bug.
-    const match = css.match(
-      /\.holdings-chrome\[data-theme="dark"\]\s+input,[\s\S]*?\.holdings-chrome\[data-theme="dark"\]\s+button\s*\{([^}]*)\}/
-    );
-    expect(match).not.toBeNull();
-    expect(match![1]).toMatch(/color:\s*#1a1a1a\s*;/);
-    expect(match![1]).not.toMatch(/var\(--color-text\)/);
+describe("globals.css — .holdings-chrome control-direction regressions", () => {
+  it("defines its own parallel token set in dark mode, not the legacy --color-* tokens", () => {
+    // 2026-09-0X: .holdings-chrome moved from the earlier minimal dark-only
+    // patch (which redefined the legacy --color-* tokens so unstyled
+    // foundation rules picked them up automatically) to a full,
+    // self-contained system mirroring .cb-dash — HoldingsTopBar and the
+    // rewritten HoldingsEditor no longer render any legacy-foundation class
+    // (.site-nav, .page-shell, the button/input/select{color:inherit}
+    // fallback) inside this wrapper, so there is nothing left for
+    // --color-* to serve here. This replaces the assertion that used to
+    // require the opposite ("redefines the shared --color-* custom
+    // properties rather than introducing a parallel token set") — that
+    // mechanism existed only to keep form controls "deliberately left
+    // native/light," which is exactly the seam this milestone closes.
+    const body = ruleBody('.holdings-chrome[data-theme="dark"]');
+    expect(body).toMatch(/--ink:\s*#E9EAE7\s*;/);
+    expect(body).toMatch(/--field:\s*#1E2124\s*;/);
+    expect(body).toMatch(/--line-strong:\s*#3C4045\s*;/);
+    expect(body).not.toMatch(/--color-text:/);
+    expect(body).not.toMatch(/--color-page-bg:/);
+    expect(body).not.toMatch(/--color-border:/);
   });
 
-  it("redefines the shared --color-* custom properties rather than introducing a parallel token set", () => {
-    const body = ruleBody('.holdings-chrome[data-theme="dark"]');
-    expect(body).toMatch(/--color-text:/);
-    expect(body).toMatch(/--color-page-bg:/);
-    expect(body).toMatch(/--color-border:/);
+  it("form controls theme via the scoped tokens, not a hardcoded light colour", () => {
+    // The old block forced every input/select/button back to a literal
+    // #1a1a1a in dark mode. That seam is closed: .inp and .cellinput read
+    // var(--ink)/var(--field), which the dark block above already
+    // redefines — no separate dark-mode override is needed, and no
+    // hardcoded colour literal survives on either class.
+    const inp = ruleBody(".holdings-chrome .inp");
+    expect(inp).toMatch(/color:\s*var\(--ink\)\s*;/);
+    expect(inp).toMatch(/background-color:\s*var\(--field\)\s*;/);
+    expect(inp).not.toMatch(/#1a1a1a/i);
+    const cellinput = ruleBody(".holdings-chrome .cellinput");
+    expect(cellinput).toMatch(/color:\s*var\(--ink\)\s*;/);
+    expect(cellinput).not.toMatch(/#1a1a1a/i);
   });
 });
