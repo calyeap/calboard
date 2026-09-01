@@ -13,3 +13,5 @@ dist/
 .claude/launch.json
 
 calboard-dashboard-mock-v7.html
+
+.worktrees/
