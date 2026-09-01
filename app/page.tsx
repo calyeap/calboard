@@ -3,6 +3,7 @@ import { listAccounts } from "@/lib/accounts";
 import { getPortfolioView } from "@/lib/portfolio";
 import { getLastSnapshotConfirmation } from "@/lib/holdings";
 import { computeAllocation, groupByAssetClass } from "@/lib/allocation";
+import { formatCheckedAt } from "@/lib/formatCheckedAt";
 import { DashboardShell } from "./components/DashboardShell";
 import { DashboardTopBar } from "./components/DashboardTopBar";
 import { DashboardHoldingsTable } from "./components/DashboardHoldingsTable";
@@ -33,21 +34,6 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 function formatAsOfDate(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
   return `${d} ${MONTHS[m - 1]} ${y}`;
-}
-
-// "Data checked TIME SGT" — Singapore has no DST (fixed UTC+8), so the
-// abbreviation is safe to hardcode rather than trust Intl's zone-name output.
-function formatCheckedAt(now: Date): string {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Singapore",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(now);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  return `${get("day")} ${get("month")}, ${get("hour")}:${get("minute")} SGT`;
 }
 
 export default async function DashboardPage() {
