@@ -412,7 +412,7 @@ describe("Dashboard — M1.5: privacy toggle", () => {
     expect(pvSection.textContent).not.toContain("4000.00");
     expect(pvSection.textContent).not.toContain("200.00"); // total unrealised P&L dollar figure
     expect(pvSection.textContent).toContain("10.00%"); // its percentage stays visible
-    expect(screen.getAllByText("••••••").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/•/).length).toBeGreaterThan(0);
   });
 
   it("hides per-row Quantity, Avg cost and Market value in the Holdings table, but keeps Price visible", async () => {
@@ -445,6 +445,6 @@ describe("Dashboard — M1.5: privacy toggle", () => {
 
     const pvSection = screen.getByRole("heading", { name: "Portfolio Value" }).closest("section")!;
     expect(pvSection.textContent).toContain("US$4000.00");
-    expect(screen.queryByText("••••••")).toBeNull();
+    expect(screen.queryByText(/•/)).toBeNull();
   });
 });

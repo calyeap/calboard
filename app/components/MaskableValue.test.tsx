@@ -23,7 +23,7 @@ describe("MaskableValue", () => {
     expect(screen.getByText("1234.56")).toBeInTheDocument();
   });
 
-  it("renders a placeholder instead of its children once privacy is toggled on", () => {
+  it("masks by replacing each digit with a bullet, preserving length and punctuation (no column-width shift)", () => {
     render(
       <PrivacyProvider>
         <ToggleButton />
@@ -35,7 +35,20 @@ describe("MaskableValue", () => {
     fireEvent.click(screen.getByRole("button", { name: "toggle" }));
 
     expect(screen.queryByText("1234.56")).toBeNull();
-    expect(screen.getByText("••••••")).toBeInTheDocument();
+    const masked = screen.getByText("••••.••");
+    expect(masked).toBeInTheDocument();
+    expect(masked.textContent).toHaveLength("1234.56".length);
+  });
+
+  it("masks a negative/thousands-separated value digit-for-digit, keeping the sign and separators", () => {
+    render(
+      <PrivacyProvider>
+        <ToggleButton />
+        <MaskableValue>-12,345.60</MaskableValue>
+      </PrivacyProvider>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "toggle" }));
+    expect(screen.getByText("-••,•••.••")).toBeInTheDocument();
   });
 
   it("accepts a custom placeholder", () => {
