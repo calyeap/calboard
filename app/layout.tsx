@@ -1,5 +1,6 @@
 import "./globals.css";
 import { PrivacyProvider } from "./components/PrivacyContext";
+import { ThemeProvider } from "./components/ThemeContext";
 
 export const metadata = {
   title: "Calboard",
@@ -10,7 +11,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <PrivacyProvider>{children}</PrivacyProvider>
+        <ThemeProvider>
+          <PrivacyProvider>{children}</PrivacyProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -312,3 +312,380 @@ h6 {
     max-width: 100%;
   }
 }
+
+/* --- Dashboard v2 (2026-09-01 redesign) ---------------------------------
+   Scoped entirely under .cb-dash — /holdings and the setup wizard keep the
+   original foundation above unchanged. See DESIGN.md for why this is a
+   second, parallel token set instead of replacing --color-*. */
+.cb-dash {
+  --ground: #F0F0ED;
+  --ink: #1B1D1F;
+  --muted: #5A6067;
+  --hairline: #DCDCD6;
+  --gain: #1B6B4A;
+  --loss: #A3352A;
+  --stale: #856713;
+  --a1: #0F3357;
+  --a2: #7FD4CE;
+  --a3: #5B4B8A;
+  --a4: #6FA8DC;
+  --a5: #2C7A87;
+  --a6: #BDA9D6;
+
+  display: block;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  min-height: 100vh;
+}
+.cb-dash > .topbar,
+.cb-dash > main {
+  max-width: 1080px;
+  margin-inline: auto;
+  padding-inline: 32px;
+}
+.cb-dash > main {
+  padding-bottom: 96px;
+}
+.cb-dash[data-theme="dark"] {
+  --ground: #16181A;
+  --ink: #E9EAE7;
+  --muted: #979CA1;
+  --hairline: #2C2F33;
+  --gain: #56B98C;
+  --loss: #E27A66;
+  --stale: #D9AB45;
+  --a1: #5C9FE0;
+  --a2: #7FE3DB;
+  --a3: #A98FE0;
+  --a4: #3E7BA8;
+  --a5: #4FC2C9;
+  --a6: #D5C4EC;
+}
+.cb-dash .num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.cb-dash .topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 0 0;
+}
+.cb-dash .brand {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.cb-dash .nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.cb-dash .nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 15px;
+}
+.cb-dash .nav a.on {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 5px;
+  text-decoration-thickness: 1px;
+}
+.cb-dash .ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: none;
+  border: 1px solid var(--hairline);
+  padding: 6px 11px;
+  cursor: pointer;
+  border-radius: 0;
+}
+.cb-dash .ctl:hover {
+  border-color: var(--muted);
+}
+.cb-dash .ctl svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cb-dash .ctl.icononly {
+  padding: 6px 8px;
+}
+
+.cb-dash .valueblock {
+  padding: 56px 0 40px;
+}
+.cb-dash .asof {
+  font-size: 15px;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+.cb-dash .value {
+  font-size: 40px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.cb-dash .delta {
+  font-size: 15px;
+  font-weight: 400;
+  margin-top: 10px;
+}
+.cb-dash .checked {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.cb-dash .gain {
+  color: var(--gain);
+}
+.cb-dash .loss {
+  color: var(--loss);
+}
+.cb-dash .refresh {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-left: 8px;
+  cursor: pointer;
+  color: var(--muted);
+  vertical-align: -2px;
+  line-height: 0;
+}
+.cb-dash .refresh:hover {
+  color: var(--ink);
+}
+.cb-dash .refresh svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cb-dash .refresh-status {
+  font-size: 13px;
+}
+.cb-dash .refresh-status.status-warning {
+  color: var(--stale);
+}
+.cb-dash .refresh-status.status-danger {
+  color: var(--loss);
+}
+
+.cb-dash .dashboard-section {
+  padding-top: 24px;
+}
+.cb-dash .dashboard-section + .dashboard-section {
+  padding-top: 64px;
+}
+.cb-dash .dashboard-section > h2 {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--hairline);
+  margin: 0;
+}
+.cb-dash .dashboard-note {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.cb-dash table.holdings {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 14px;
+  /* Fixed layout + explicit column widths below: column width must never
+     depend on cell content. "•" (the privacy mask) isn't a digit, so it
+     isn't covered by font-variant-numeric: tabular-nums and can render a
+     different glyph width than the digits it replaces — under the default
+     auto layout that visibly shifted every numeric column on toggle. */
+  table-layout: fixed;
+}
+.cb-dash table.holdings col.c-symbol { width: 12%; }
+.cb-dash table.holdings col.c-type { width: 10%; }
+.cb-dash table.holdings col.c-qty,
+.cb-dash table.holdings col.c-cost,
+.cb-dash table.holdings col.c-price,
+.cb-dash table.holdings col.c-mv,
+.cb-dash table.holdings col.c-pl {
+  width: 15.6%;
+}
+.cb-dash table.holdings thead th {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  text-align: right;
+  padding: 14px 0 12px;
+  border-bottom: 1px solid var(--hairline);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cb-dash table.holdings thead th:first-child,
+.cb-dash table.holdings thead th:nth-child(2) {
+  text-align: left;
+}
+.cb-dash table.holdings tbody td {
+  padding: 0;
+  height: 48px;
+  text-align: right;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cb-dash table.holdings tbody td:first-child,
+.cb-dash table.holdings tbody td:nth-child(2) {
+  text-align: left;
+}
+.cb-dash .sym {
+  font-weight: 500;
+}
+.cb-dash .strong {
+  font-weight: 500;
+}
+.cb-dash .dim {
+  color: var(--muted);
+  font-weight: 400;
+}
+.cb-dash .stale {
+  color: var(--stale);
+}
+.cb-dash .marker {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  background: var(--stale);
+  vertical-align: 2px;
+  margin-right: 6px;
+}
+.cb-dash table.holdings tfoot td {
+  padding-top: 16px;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: left;
+  white-space: normal;
+}
+.cb-dash .stack {
+  display: none;
+}
+.cb-dash .hrow {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.cb-dash .hrow .line1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.cb-dash .hrow .mv {
+  font-size: 20px;
+  font-weight: 500;
+  margin-top: 6px;
+}
+.cb-dash .hrow .meta {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.cb-dash .hrow .pl {
+  font-size: 15px;
+  font-weight: 500;
+  margin-top: 6px;
+}
+
+.cb-dash .toggle {
+  /* inline-flex, not flex: a block-level flex container still stretches to
+     its parent's full width like any block box. This toggle sits as a
+     plain sibling of the section heading (not a flex item inside a row
+     that would size it via the mock's .sechead), so it must size to its
+     own content itself. */
+  display: inline-flex;
+  border: 1px solid var(--hairline);
+}
+.cb-dash .toggle button {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 12px;
+  cursor: pointer;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  border-radius: 0;
+}
+.cb-dash .toggle button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--ground);
+}
+.cb-dash .allocation-layout {
+  display: flex;
+  gap: 56px;
+  align-items: flex-start;
+  padding-top: 28px;
+  flex-wrap: wrap;
+}
+.cb-dash .allocation-layout table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.cb-dash .allocation-layout td {
+  height: 36px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 15px;
+}
+
+@media (max-width: 720px) {
+  .cb-dash > .topbar,
+  .cb-dash > main {
+    padding-inline: 20px;
+  }
+  .cb-dash > main {
+    padding-bottom: 72px;
+  }
+  .cb-dash .value {
+    font-size: 32px;
+  }
+  .cb-dash .valueblock {
+    padding: 40px 0 32px;
+  }
+  .cb-dash .dashboard-section + .dashboard-section {
+    padding-top: 48px;
+  }
+  .cb-dash table.holdings {
+    display: none;
+  }
+  .cb-dash .stack {
+    display: block;
+  }
+  .cb-dash .allocation-layout {
+    flex-direction: column;
+    gap: 28px;
+  }
+  .cb-dash .nav {
+    gap: 14px;
+  }
+  .cb-dash .topbar {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+}

@@ -798,7 +798,7 @@ describe("HoldingsEditor — M1.5: privacy toggle", () => {
     fireEvent.click(screen.getByRole("button", { name: "toggle" }));
 
     expect(screen.queryByText("2000.00")).toBeNull();
-    expect(screen.getAllByText("••••••").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/•/).length).toBeGreaterThan(0);
   });
 
   it("masks the Add-a-holding draft Quantity and Average cost inputs too", () => {

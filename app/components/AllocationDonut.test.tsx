@@ -166,6 +166,11 @@ describe("AllocationDonut — M1.5: view by asset class", () => {
     expect(screen.getByRole("table", { name: /allocation by holding/i })).toBeInTheDocument();
   });
 
+  it("the toggle group carries the .toggle CSS hook so the segmented-control styling applies", () => {
+    render(<AllocationDonut allocation={byHolding} allocationByAssetClass={byAssetClass} />);
+    expect(screen.getByRole("group", { name: /allocation view/i })).toHaveClass("toggle");
+  });
+
   it("clicking By asset class swaps the legend and caption to the grouped data, without altering the calculation", () => {
     render(<AllocationDonut allocation={byHolding} allocationByAssetClass={byAssetClass} />);
 

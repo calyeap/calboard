@@ -11,3 +11,5 @@ dist/
 
 # Local dev tooling — not part of the app
 .claude/launch.json
+
+calboard-dashboard-mock-v7.html

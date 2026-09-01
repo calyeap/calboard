@@ -11,12 +11,17 @@ import { PrivacyProvider } from "@/app/components/PrivacyContext";
 vi.mock("@/lib/accounts", () => ({ listAccounts: vi.fn() }));
 vi.mock("@/lib/portfolio", () => ({ getPortfolioView: vi.fn() }));
 vi.mock("@/lib/holdings", () => ({ getLastSnapshotConfirmation: vi.fn() }));
-// Pulled in transitively by <PriceCell> in the Holdings table.
-vi.mock("@/app/actions/prices", () => ({ retryPriceFetchAction: vi.fn() }));
+// Pulled in transitively by <PriceRefreshControl> in the value block.
+vi.mock("@/app/actions/prices", () => ({
+  retryPriceFetchAction: vi.fn(),
+  refreshAllPricesAction: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock("next/link", () => ({
-  default: ({ href, children }: { href: string; children: React.ReactNode }) => (
-    <a href={href}>{children}</a>
+  default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
   ),
 }));
 
@@ -86,7 +91,7 @@ describe("Dashboard — Allocation section", () => {
     expect(screen.queryByRole("heading", { name: /allocation/i })).toBeNull();
   });
 
-  it("two priced holdings: both in the legend with percentage + USD, and the centre total equals the Dashboard Portfolio Value", async () => {
+  it("two priced holdings: both in the legend with percentage + USD, and the centre total equals the value block total", async () => {
     getPortfolioViewMock.mockResolvedValue(
       portfolio([
         position({ symbol: "AAPL", quantity: new Decimal("10"), latestPriceUsd: new Decimal("300"), marketValueUsd: new Decimal("3000") }),
@@ -95,9 +100,9 @@ describe("Dashboard — Allocation section", () => {
     );
     const { container } = render(await DashboardPage());
 
-    // Portfolio Value display
-    const pvHeading = screen.getByRole("heading", { name: "Portfolio Value" });
-    expect(pvHeading.parentElement?.textContent).toContain("US$4000.00");
+    // Value block
+    const valueBlock = container.querySelector(".valueblock")!;
+    expect(valueBlock.textContent).toContain("US$4000.00");
 
     // Allocation legend
     const table = screen.getByRole("table", { name: /allocation by holding/i });
@@ -140,7 +145,7 @@ describe("Dashboard — Allocation section", () => {
         }),
       ])
     );
-    render(await DashboardPage());
+    const { container } = render(await DashboardPage());
 
     // portfolio.totalMarketValueUsd = 3000 + 500 = 3500 (STL's stale price
     // still contributes; NOPX has no usable price).
@@ -164,9 +169,9 @@ describe("Dashboard — Allocation section", () => {
     const allocSection = screen.getByRole("heading", { name: /^allocation$/i }).closest("section")!;
     expect(allocSection.querySelector("svg")?.textContent).toContain("US$3500.00");
 
-    // Dashboard "Portfolio Value" = the same total, from the same aggregate.
-    const pvSection = screen.getByRole("heading", { name: "Portfolio Value" }).closest("section")!;
-    expect(pvSection.textContent).toContain("US$3500.00");
+    // Value block total = the same total, from the same aggregate.
+    const valueBlock = container.querySelector(".valueblock")!;
+    expect(valueBlock.textContent).toContain("US$3500.00");
 
     // The existing NOPX excluded-price disclosure is retained.
     expect(
@@ -210,8 +215,8 @@ describe("Dashboard — Allocation section", () => {
   });
 });
 
-// --- Task 31: hierarchy & responsive Dashboard ---
-describe("Dashboard — Task 31: hierarchy & responsive Dashboard", () => {
+// --- Dashboard v2 (2026-09-01 redesign): hierarchy, responsive markup, sort ---
+describe("Dashboard — hierarchy, weight sort & responsive Dashboard", () => {
   const twoPriced = () =>
     portfolio([
       position({ symbol: "AAPL", quantity: new Decimal("10"), latestPriceUsd: new Decimal("300"), marketValueUsd: new Decimal("3000") }),
@@ -227,48 +232,54 @@ describe("Dashboard — Task 31: hierarchy & responsive Dashboard", () => {
     ).getByRole("table") as HTMLTableElement;
   }
 
-  it("T31-1 (pass-at-baseline regression guard): section reading order is Portfolio Value -> Allocation -> Holdings", async () => {
+  it("section reading order is value block -> Holdings -> Allocation (hierarchy: value block -> holdings (dominant) -> allocation (recedes))", async () => {
     getPortfolioViewMock.mockResolvedValue(twoPriced());
-    render(await DashboardPage());
+    const { container } = render(await DashboardPage());
 
-    const pv = screen.getByRole("heading", { name: "Portfolio Value" });
-    const alloc = screen.getByRole("heading", { name: /^allocation$/i });
+    const valueBlock = container.querySelector(".valueblock")!;
     const holdings = screen.getByRole("heading", { name: /^holdings$/i });
+    const alloc = screen.getByRole("heading", { name: /^allocation$/i });
     const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
 
-    expect(pv.compareDocumentPosition(alloc) & FOLLOWING).toBeTruthy();
-    expect(alloc.compareDocumentPosition(holdings) & FOLLOWING).toBeTruthy();
+    expect(valueBlock.compareDocumentPosition(holdings) & FOLLOWING).toBeTruthy();
+    expect(holdings.compareDocumentPosition(alloc) & FOLLOWING).toBeTruthy();
   });
 
-  it("T31-2: the Dashboard holdings table is wrapped in the .editor-table responsive container", async () => {
+  it("the Dashboard holdings table is a table.holdings wrapped in the .editor-table responsive container", async () => {
     getPortfolioViewMock.mockResolvedValue(twoPriced());
     render(await DashboardPage());
 
     const holdingsTable = holdingsTableOf();
-    expect(holdingsTable).not.toHaveAccessibleName();
+    expect(holdingsTable).toHaveClass("holdings");
     expect(holdingsTable.parentElement).toHaveClass("editor-table");
   });
 
-  it("T31-3: each Dashboard holdings row carries real-text .cell-label field labels in column order", async () => {
+  it("each mobile stack card carries the symbol, quantity, avg cost and asset class as visible text", async () => {
     getPortfolioViewMock.mockResolvedValue(twoPriced());
-    render(await DashboardPage());
+    const { container } = render(await DashboardPage());
 
-    const firstRow = holdingsTableOf().querySelector("tbody tr")!;
-    const labels = Array.from(firstRow.querySelectorAll("td")).map(
-      (td) => td.querySelector(".cell-label")?.textContent ?? null
-    );
-    expect(labels).toEqual([
-      "Symbol",
-      "Type",
-      "Qty",
-      "Avg cost",
-      "Price",
-      "Market value",
-      "Unrealised P&L",
-    ]);
+    const firstCard = container.querySelector(".stack .hrow")!;
+    expect(firstCard.textContent).toContain("AAPL");
+    expect(firstCard.textContent).toMatch(/10\.0000/);
+    expect(firstCard.textContent).toContain("Equity");
   });
 
-  it("T31-4 (pass-at-baseline regression guard): no duplicated holdings markup — one tbody, one row per position, one retry control per unpriced position", async () => {
+  it("holdings render in descending market-value (weight) order, not fetch order", async () => {
+    getPortfolioViewMock.mockResolvedValue(
+      portfolio([
+        position({ symbol: "SMALL", latestPriceUsd: new Decimal("100"), marketValueUsd: new Decimal("100") }),
+        position({ symbol: "BIG", latestPriceUsd: new Decimal("500"), marketValueUsd: new Decimal("500") }),
+        position({ symbol: "MID", latestPriceUsd: new Decimal("200"), marketValueUsd: new Decimal("200") }),
+      ])
+    );
+    render(await DashboardPage());
+
+    const rows = within(holdingsTableOf()).getAllByRole("row").slice(1); // skip header
+    const symbolsInOrder = rows.map((r) => r.querySelector(".sym")?.textContent);
+    expect(symbolsInOrder).toEqual(["BIG", "MID", "SMALL"]);
+  });
+
+  it("(pass-at-baseline regression guard) one tbody, one row per position, and NO per-row Retry control — replaced by the global refresh", async () => {
     getPortfolioViewMock.mockResolvedValue(
       portfolio([
         position({ symbol: "AAPL", priceStatus: "current", latestPriceUsd: new Decimal("300"), marketValueUsd: new Decimal("3000") }),
@@ -281,22 +292,30 @@ describe("Dashboard — Task 31: hierarchy & responsive Dashboard", () => {
     const holdingsTable = holdingsTableOf();
     expect(holdingsTable.querySelectorAll("tbody").length).toBe(1);
     expect(holdingsTable.querySelectorAll("tbody tr").length).toBe(3);
-    // Retry appears for the stale and the unavailable holding only (2), not
-    // for the current one.
-    expect(screen.getAllByRole("button", { name: /retry/i }).length).toBe(2);
+    expect(screen.queryAllByRole("button", { name: /retry/i }).length).toBe(0);
   });
 
-  it("T31-5: Portfolio Value uses the .pv-amount hook and the freshness line uses .dashboard-note", async () => {
+  it("the value figure uses the .value hook and the confirmation line uses .dashboard-note", async () => {
     getPortfolioViewMock.mockResolvedValue(twoPriced());
-    render(await DashboardPage());
+    const { container } = render(await DashboardPage());
 
-    const pvSection = screen.getByRole("heading", { name: "Portfolio Value" }).closest("section")!;
-    const pvAmount = pvSection.querySelector(".pv-amount");
-    expect(pvAmount).not.toBeNull();
-    expect(pvAmount!.textContent).toContain("US$4000.00");
+    const valueEl = container.querySelector(".valueblock .value");
+    expect(valueEl).not.toBeNull();
+    expect(valueEl!.textContent).toContain("US$4000.00");
 
     const freshness = screen.getByText(/holdings last updated:/i);
     expect(freshness).toHaveClass("dashboard-note");
+  });
+
+  it("the Dashboard-only top bar renders (brand, Dashboard/Holdings nav, privacy + theme controls)", async () => {
+    getPortfolioViewMock.mockResolvedValue(twoPriced());
+    render(await DashboardPage());
+
+    expect(screen.getByText("Calboard")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /dashboard/i })).toHaveClass("on");
+    expect(screen.getByRole("link", { name: /^holdings$/i })).toHaveAttribute("href", "/holdings");
+    expect(screen.getByRole("button", { name: /hide values/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /switch to dark mode/i })).toBeInTheDocument();
   });
 });
 
@@ -314,7 +333,7 @@ describe("Dashboard — empty state derives from holdings existence (Rev-3 §2.3
       asOfDate: "2026-08-28",
     });
 
-    render(await DashboardPage());
+    const { container } = render(await DashboardPage());
 
     // The existing zero-holdings empty state + its existing CTA / destination.
     expect(screen.getByText(/no holdings yet/i)).toBeInTheDocument();
@@ -322,9 +341,11 @@ describe("Dashboard — empty state derives from holdings existence (Rev-3 §2.3
       "href",
       "/accounts/new"
     );
+    // Chrome still renders in the empty state.
+    expect(screen.getByText("Calboard")).toBeInTheDocument();
 
     // None of the populated-Dashboard content renders.
-    expect(screen.queryByRole("heading", { name: /portfolio value/i })).toBeNull();
+    expect(container.querySelector(".valueblock")).toBeNull();
     expect(screen.queryByRole("heading", { name: /^holdings$/i })).toBeNull();
     expect(screen.queryByRole("heading", { name: /allocation/i })).toBeNull();
     expect(screen.queryByText(/holdings last updated/i)).toBeNull();
@@ -333,9 +354,9 @@ describe("Dashboard — empty state derives from holdings existence (Rev-3 §2.3
   it("a portfolio with at least one holding still renders the populated Dashboard", async () => {
     getPortfolioViewMock.mockResolvedValue(portfolio([position({ symbol: "AAPL" })]));
 
-    render(await DashboardPage());
+    const { container } = render(await DashboardPage());
 
-    expect(screen.getByRole("heading", { name: /portfolio value/i })).toBeInTheDocument();
+    expect(container.querySelector(".valueblock")).not.toBeNull();
     expect(screen.getByRole("heading", { name: /^holdings$/i })).toBeInTheDocument();
     expect(screen.queryByText(/no holdings yet/i)).toBeNull();
   });
@@ -391,28 +412,29 @@ describe("Dashboard — M1.5: privacy toggle", () => {
 
   async function renderHidden() {
     getPortfolioViewMock.mockResolvedValue(twoPricedDifferentClasses());
-    render(<PrivacyProvider>{await DashboardPage()}</PrivacyProvider>);
+    const result = render(<PrivacyProvider>{await DashboardPage()}</PrivacyProvider>);
     fireEvent.click(screen.getByRole("button", { name: /hide values/i }));
+    return result;
   }
 
   it("before toggling, values render normally", async () => {
     getPortfolioViewMock.mockResolvedValue(twoPricedDifferentClasses());
-    render(<PrivacyProvider>{await DashboardPage()}</PrivacyProvider>);
+    const { container } = render(<PrivacyProvider>{await DashboardPage()}</PrivacyProvider>);
 
-    const pvSection = screen.getByRole("heading", { name: "Portfolio Value" }).closest("section")!;
-    expect(pvSection.textContent).toContain("US$4000.00");
+    const valueBlock = container.querySelector(".valueblock")!;
+    expect(valueBlock.textContent).toContain("US$4000.00");
     const holdingsSection = screen.getByRole("heading", { name: /^holdings$/i }).closest("section")!;
     expect(holdingsSection.textContent).toContain("3000.00");
   });
 
-  it("hides Portfolio Value and the Unrealised P&L dollar figure, but keeps the P&L percentage visible", async () => {
-    await renderHidden();
+  it("hides the value figure and the Unrealised P&L dollar figure, but keeps the P&L percentage visible", async () => {
+    const { container } = await renderHidden();
 
-    const pvSection = screen.getByRole("heading", { name: "Portfolio Value" }).closest("section")!;
-    expect(pvSection.textContent).not.toContain("4000.00");
-    expect(pvSection.textContent).not.toContain("200.00"); // total unrealised P&L dollar figure
-    expect(pvSection.textContent).toContain("10.00%"); // its percentage stays visible
-    expect(screen.getAllByText("••••••").length).toBeGreaterThan(0);
+    const valueBlock = container.querySelector(".valueblock")!;
+    expect(valueBlock.textContent).not.toContain("4000.00");
+    expect(valueBlock.textContent).not.toContain("200.00"); // total unrealised P&L dollar figure
+    expect(valueBlock.textContent).toContain("10.00%"); // its percentage stays visible
+    expect(screen.getAllByText(/•/).length).toBeGreaterThan(0);
   });
 
   it("hides per-row Quantity, Avg cost and Market value in the Holdings table, but keeps Price visible", async () => {
@@ -440,11 +462,13 @@ describe("Dashboard — M1.5: privacy toggle", () => {
   });
 
   it("toggling back off restores every value", async () => {
-    await renderHidden();
+    getPortfolioViewMock.mockResolvedValue(twoPricedDifferentClasses());
+    const { container } = render(<PrivacyProvider>{await DashboardPage()}</PrivacyProvider>);
+    fireEvent.click(screen.getByRole("button", { name: /hide values/i }));
     fireEvent.click(screen.getByRole("button", { name: /show values/i }));
 
-    const pvSection = screen.getByRole("heading", { name: "Portfolio Value" }).closest("section")!;
-    expect(pvSection.textContent).toContain("US$4000.00");
-    expect(screen.queryByText("••••••")).toBeNull();
+    const valueBlock = container.querySelector(".valueblock")!;
+    expect(valueBlock.textContent).toContain("US$4000.00");
+    expect(screen.queryByText(/•/)).toBeNull();
   });
 });

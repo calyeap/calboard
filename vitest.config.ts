@@ -9,6 +9,12 @@ export default defineConfig({
     // tables in beforeEach; running test files in parallel races them against each
     // other. Force serial file execution so each file's setup/teardown is isolated.
     fileParallelism: false,
+    // .claude/worktrees/** holds separate, independently-checked-out git worktrees
+    // (each with its own node_modules and possibly-stale source) — without this
+    // exclude, vitest's default glob picks up their *.test.ts files too and runs
+    // them against THIS checkout's compiled deps, producing failures that have
+    // nothing to do with the code under test here.
+    exclude: ["**/node_modules/**", "**/.git/**", ".claude/worktrees/**"],
   },
   resolve: {
     alias: {
