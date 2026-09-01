@@ -18,6 +18,7 @@
 - **Sort order decision (explicit user call, overrides the literal mock):** `calboard-holdings-final.html`'s "Sorted by weight" note and control-spec §8.2's "holdings sort by weight, fixed" do **not** apply to `/holdings`. Holdings is an editor, not a reading surface — weight is derived from quantity × price, so a weight sort would reorder rows mid-edit as the user types. Keep `getPortfolioView()`'s existing alphabetical order untouched; **omit** the "Sorted by weight" note from the Positions section entirely (do not replace it with "Sorted alphabetically" — the order is self-evident and the label adds nothing). Do not touch Dashboard's own weight sort. Note in the final report that control-spec §8.2 is factually wrong about `/holdings` and that's a spec correction for DESIGN, not something this PR fixes.
 - **Icon-button border assignment (explicit resolution of a mock/spec conflict):** `calboard-holdings-final.html` renders both the privacy and theme-toggle buttons as bare icons (`class="iconbare"` on both); `calboard-dashboard-final.html` renders both as bordered (`class="ctl icononly"` on both). Neither mock actually implements the distinction control-spec §6.1/§6.2 describe. The written spec is authoritative for "control and state rules" per the stated reference precedence, is explicit and deliberate here (dedicated subsections, a named reasoning paragraph, and checklist item "Theme toggle changed from bordered to bare (§6.2)"), so **follow the spec, not the mock markup**: privacy toggle bordered (§6.1) on both routes, theme toggle bare (§6.2) on both routes. Flag this explicitly in the PR description.
 - **Responsive architecture deviation (settled by an existing test, not a new decision):** `calboard-holdings-final.html`'s mobile `.stack` cards duplicate the editable Quantity/Avg cost inputs and the Remove action *outside* the table, as a second parallel markup. `HoldingsEditor.test.tsx`'s existing, passing test **T30-3** ("each editable control and row action is rendered exactly once (no duplicated narrow-width variant)") explicitly forbids this for Holdings' *interactive* elements — a deliberate, tested architectural decision from a prior milestone. Per "do not weaken or delete tests to get green," this plan achieves the same visual outcome (no horizontal scroll, Remove always reachable, readable at 420px) by restyling the **existing single-markup CSS-restack** mechanism (`.editor-table`/`.cell-label`, already used elsewhere in the app) to the control-spec's colours/spacing/typography and a 720px breakpoint, instead of adopting the mock's dual-markup `.stack` approach. Dashboard's own read-only `.stack` (no interactive elements in it) is untouched and out of scope for this deviation.
+- **Test-rewrite cap:** exactly one existing test file's assertions may be rewritten in this milestone — `app/globalsCss.test.ts`'s `.holdings-chrome dark-mode regressions` block, in Task 7, per Calvin's explicit approval (it hard-asserts the mechanism of the old minimal dark-only patch Task 7 supersedes; T30-3 and every other existing test stand as binding contracts). No other task, and no fix-loop round on any task, may edit a test's assertions to make it pass — a conflicting test anywhere else means stop and ask, not rule.
 - No new sections, cards, shadows, toasts or motion beyond `120ms ease-out` colour/border/outline transitions (control-spec §1).
 - No `opacity`-based disabled styling anywhere (control-spec §1).
 - Full `npm test` and `npx tsc --noEmit` must pass before opening the PR. Verify both themes, both routes, in a real browser — not just jsdom.
@@ -33,6 +34,7 @@
 
 **Modified files:**
 - `app/globals.css` — new §0 control-spec tokens added to `.cb-dash` (both themes); dark-mode segmented-control fill correction; new `.cb-dash .iconbare` bare-icon rule; dark-mode focus-ring correction; `.holdings-chrome` rebuilt from a minimal dark-only patch into a full parallel system (light + dark), all control-spec sections, 720px breakpoint.
+- `app/globalsCss.test.ts` — the ONE authorized test rewrite this milestone: `.holdings-chrome dark-mode regressions` assertions replaced to match the new architecture (Task 7 — see the Global Constraints test-rewrite cap).
 - `app/components/DashboardTopBar.tsx` — theme-toggle button's `className` changes from `"ctl icononly"` to `"iconbare"`; privacy toggle unchanged.
 - `app/components/PriceCell.tsx` + `.test.tsx` — Retry entirely removed; simplified to a presentational marker+title price display matching `DashboardHoldingsTable`'s existing pattern; props drop to `priceStatus`/`priceUsd`/`priceDate` only.
 - `app/holdings/HoldingsEditor.tsx` + `.test.tsx` — `Change date` disclosure replaced by a permanently visible `Recording as of` date field; full control-spec markup/class rewrite (buttons, inputs, select, cellinput editable cells, footnote, status placement, pending-button width reservation); `PriceCell` call site drops `assetId`/`symbol`/`assetClass` props.
@@ -1169,6 +1171,9 @@ git commit -m "feat: rewrite HoldingsEditor markup to the control-spec class lan
 
 **Files:**
 - Modify: `app/globals.css`
+- Modify: `app/globalsCss.test.ts`
+
+**Authorized test rewrite (the only one in this milestone — see below):** `app/globalsCss.test.ts`'s `.holdings-chrome dark-mode regressions` describe block hard-asserts the mechanism of the OLD minimal dark-only patch this task deletes (form-control colour forced to a literal `#1a1a1a`; the wrapper redefines the *legacy* `--color-text`/`--color-page-bg`/`--color-border` tokens rather than a parallel set). This build gives `.holdings-chrome` its own self-contained token system exactly like `.cb-dash` — closing the "form controls deliberately left native/light" seam that test's own subject was protecting, which is precisely what this milestone is commissioned to do. Ruled and approved by Calvin before this task was dispatched. **No other test in this plan may be rewritten** — if any other existing test conflicts with this task's CSS, stop and report it (do not rule on it, do not edit it).
 
 This replaces the entire minimal, dark-only `.holdings-chrome` block (the section headed `/* --- Holdings dark-mode chrome (minimal, 2026-09-01) --- */`, currently ~45 lines) with a full parallel system covering both themes and every control now rendered by `HoldingsTopBar` (Task 3) and the rewritten `HoldingsEditor` (Task 6) — mirroring how `.cb-dash` is structured, using the exact token values from `calboard-holdings-final.html` (the authoritative reference) plus the five shared control-spec tokens from Task 1, and a `--cell-line` token specific to Holdings' editable-cell underline (present in the authoritative mock, not in control-spec's own token table, but required to render the cell input border correctly — noted in the PR description as taken directly from the authoritative file).
 
@@ -1812,16 +1817,103 @@ Add at the end of `app/globals.css`:
 }
 ```
 
-- [ ] **Step 3: Run the full test suite**
+- [ ] **Step 3: Replace the obsolete `.holdings-chrome dark-mode regressions` describe block**
+
+In `app/globalsCss.test.ts`, replace this entire block:
+
+```ts
+describe("globals.css — .holdings-chrome dark-mode regressions", () => {
+  it("form controls explicitly reset color away from the dark ink value, not var(--color-text)", () => {
+    // The foundation's `button, input, select, textarea { color: inherit }`
+    // rule pulls whatever --color-text resolves to in scope — which
+    // .holdings-chrome[data-theme="dark"] redefines to a pale colour for
+    // static chrome text. Without an explicit reset here, every input,
+    // select and button inside dark Holdings would render pale text on
+    // their native white background: illegible. Must be a literal colour,
+    // not var(--color-text) — that variable is the dark value in this
+    // exact scope, so re-reading it here would silently reintroduce the bug.
+    const match = css.match(
+      /\.holdings-chrome\[data-theme="dark"\]\s+input,[\s\S]*?\.holdings-chrome\[data-theme="dark"\]\s+button\s*\{([^}]*)\}/
+    );
+    expect(match).not.toBeNull();
+    expect(match![1]).toMatch(/color:\s*#1a1a1a\s*;/);
+    expect(match![1]).not.toMatch(/var\(--color-text\)/);
+  });
+
+  it("redefines the shared --color-* custom properties rather than introducing a parallel token set", () => {
+    const body = ruleBody('.holdings-chrome[data-theme="dark"]');
+    expect(body).toMatch(/--color-text:/);
+    expect(body).toMatch(/--color-page-bg:/);
+    expect(body).toMatch(/--color-border:/);
+  });
+});
+```
+
+with:
+
+```ts
+describe("globals.css — .holdings-chrome control-direction regressions", () => {
+  it("defines its own parallel token set in dark mode, not the legacy --color-* tokens", () => {
+    // 2026-09-0X: .holdings-chrome moved from the earlier minimal dark-only
+    // patch (which redefined the legacy --color-* tokens so unstyled
+    // foundation rules picked them up automatically) to a full,
+    // self-contained system mirroring .cb-dash — HoldingsTopBar and the
+    // rewritten HoldingsEditor no longer render any legacy-foundation class
+    // (.site-nav, .page-shell, the button/input/select{color:inherit}
+    // fallback) inside this wrapper, so there is nothing left for
+    // --color-* to serve here. This replaces the assertion that used to
+    // require the opposite ("redefines the shared --color-* custom
+    // properties rather than introducing a parallel token set") — that
+    // mechanism existed only to keep form controls "deliberately left
+    // native/light," which is exactly the seam this milestone closes.
+    const body = ruleBody('.holdings-chrome[data-theme="dark"]');
+    expect(body).toMatch(/--ink:\s*#E9EAE7\s*;/);
+    expect(body).toMatch(/--field:\s*#1E2124\s*;/);
+    expect(body).toMatch(/--line-strong:\s*#3C4045\s*;/);
+    expect(body).not.toMatch(/--color-text:/);
+    expect(body).not.toMatch(/--color-page-bg:/);
+    expect(body).not.toMatch(/--color-border:/);
+  });
+
+  it("form controls theme via the scoped tokens, not a hardcoded light colour", () => {
+    // The old block forced every input/select/button back to a literal
+    // #1a1a1a in dark mode. That seam is closed: .inp and .cellinput read
+    // var(--ink)/var(--field), which the dark block above already
+    // redefines — no separate dark-mode override is needed, and no
+    // hardcoded colour literal survives on either class.
+    const inp = ruleBody(".holdings-chrome .inp");
+    expect(inp).toMatch(/color:\s*var\(--ink\)\s*;/);
+    expect(inp).toMatch(/background-color:\s*var\(--field\)\s*;/);
+    expect(inp).not.toMatch(/#1a1a1a/i);
+    const cellinput = ruleBody(".holdings-chrome .cellinput");
+    expect(cellinput).toMatch(/color:\s*var\(--ink\)\s*;/);
+    expect(cellinput).not.toMatch(/#1a1a1a/i);
+  });
+});
+```
+
+- [ ] **Step 4: Run the full test suite**
 
 Run: `npx vitest run`
-Expected: PASS. jsdom does not evaluate media queries, so this CSS-only step should not change any test outcome by itself — it exists to make Task 6's markup render correctly, which the browser check in Task 9 confirms visually.
+Expected: PASS. jsdom does not evaluate media queries, so the CSS-only parts of this task should not change any other test's outcome — it exists to make Task 6's markup render correctly, which the browser check in Task 9 confirms visually.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit — state the test rewrite plainly, not as routine churn**
 
 ```bash
-git add app/globals.css
-git commit -m "feat: full .holdings-chrome control-spec CSS, both themes, 720px breakpoint"
+git add app/globals.css app/globalsCss.test.ts
+git commit -m "$(cat <<'EOF'
+feat: full .holdings-chrome control-spec CSS, both themes, 720px breakpoint
+
+Replaces app/globalsCss.test.ts's ".holdings-chrome dark-mode regressions"
+assertions: they hard-coded the mechanism of the prior minimal dark-only
+patch (form controls forced to a literal light colour; the wrapper
+redefining the legacy --color-* tokens instead of its own set). This task
+gives Holdings a full, self-contained token system mirroring .cb-dash,
+closing the "form controls deliberately left native/light" seam that patch
+existed to protect — which is this milestone's job. Ruled and approved
+before implementation; see the plan's Task 7 for the full before/after.
+EOF
+)"
 ```
 
 ---
@@ -2019,7 +2111,7 @@ Expected: both clean, immediately before pushing.
 git push -u origin HEAD
 ```
 
-Open the PR with `gh pr create` (or, if `gh` is unavailable in this environment, prepare the branch and hand the compare link to Calvin — confirm which applies before this step, since `gh` has been unavailable in this environment in prior sessions). PR description should cover: the two approved behaviour changes, the four Dashboard-side corrections from Task 1, the three explicit deviations from the literal mock (icon-button border assignment, sort-order, responsive dual-markup) with their rationale, and the SGD diagnostic finding from earlier in this session (report only, no code change).
+Open the PR with `gh pr create` (or, if `gh` is unavailable in this environment, prepare the branch and hand the compare link to Calvin — confirm which applies before this step, since `gh` has been unavailable in this environment in prior sessions). PR description should cover, plainly and not buried: the two approved behaviour changes; the four Dashboard-side corrections from Task 1; the three explicit deviations from the literal mock (icon-button border assignment, sort-order, responsive dual-markup) with their rationale; **the `app/globalsCss.test.ts` test rewrite in Task 7 — state that assertions were replaced and why (the old block tested the prior minimal dark-only patch's mechanism, which this milestone supersedes) so it cannot read as silent test churn to a future reader of the diff**; the two spec errors logged for DESIGN (icon-button-border mock contradiction, §8.2 sort-order); and the SGD diagnostic finding from earlier in this session (report only, no code change).
 
 - [ ] **Step 4: Stop**
 
