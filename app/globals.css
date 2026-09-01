@@ -615,7 +615,12 @@ h6 {
 }
 
 .cb-dash .toggle {
-  display: flex;
+  /* inline-flex, not flex: a block-level flex container still stretches to
+     its parent's full width like any block box. This toggle sits as a
+     plain sibling of the section heading (not a flex item inside a row
+     that would size it via the mock's .sechead), so it must size to its
+     own content itself. */
+  display: inline-flex;
   border: 1px solid var(--hairline);
 }
 .cb-dash .toggle button {
