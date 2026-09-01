@@ -41,11 +41,12 @@ parallel visual system, scoped entirely under a `.cb-dash` wrapper
 `--ink`, `--muted`, `--hairline`, plus `--gain`/`--loss`/`--stale` and a six-value
 `--a1..--a6` allocation palette), and a manual light/dark toggle (`ThemeContext`,
 same session-only shape as `PrivacyContext`). The value figure is `.value`, not
-`.pv-amount`. `/holdings` and the setup wizard are deliberately untouched — they
-still render the foundation described above, unscoped, light-only. Both systems
-coexist in `app/globals.css`; nothing outside `.cb-dash` changed. This is a
-**Dashboard-only** milestone, not yet a site-wide restyle — update this note when
-`/holdings` gets its own pass.
+`.pv-amount`. **Holdings control-direction pass (2026-09-0X).** `/holdings` now runs the
+same class of parallel visual system, scoped under `.holdings-chrome`
+(`HoldingsShell` + the new `HoldingsTopBar`), covering both themes from the
+start. `/accounts/new` (`SetupWizard.tsx`, still on the shared `NavBar` and
+the original foundation) remains untouched — its own pass is a later,
+separately classified milestone.
 
 ## Hard Product Constraints
 
@@ -72,8 +73,9 @@ decision is reopened deliberately.
    displayed price changes because a scheduled job ran or the user refreshed.
    **On the Dashboard, per-row Retry is gone**, replaced by one global manual
    refresh control (`PriceRefreshControl` / `refreshAllPricesAction`) beside "Data
-   checked" — still pull-based, still manual-only, never a timer; `/holdings`
-   (`PriceCell`) is unchanged and still offers per-row Retry. **Unresolved, not
+   checked" — still pull-based, still manual-only, never a timer; `/holdings` (`PriceCell`) now matches: per-row Retry is gone there too, replaced
+   by the same `PriceRefreshControl` / `refreshAllPricesAction` pattern beside its
+   own "Data checked" line. **Unresolved, not
    foreclosed:** a *controlled* freshness policy — one refresh attempt when the
    Dashboard is opened, freshness-aware caching, transparent degraded states. The
    durable part is the honesty rule; the wider refresh mechanism is still
@@ -178,6 +180,14 @@ dark mode elsewhere opportunistically, that's a deliberate future decision. Inli
 pattern to expand. Prefer a
 token-backed class in `globals.css` for anything new or reused.
 
+**Number-presentation parity (found 2026-09-01, not fixed here).** `/holdings`'
+Market value and Unrealised P&L columns render as bare numbers — no `$`, no
+`+`/`-` sign — unlike `/`'s identical columns, which have both. Neither route
+uses thousands separators on monetary values (`/`'s portfolio value reads
+`US$74946.23`, not `US$74,946.23`). Both are pre-existing, not introduced by
+this pass; grouped here as one deliberate follow-up (a small, separate PR),
+not patched ad hoc as a side effect of unrelated work.
+
 ## Navigation, Controls and Forms
 
 **Current convention.**
@@ -254,6 +264,13 @@ client-side after fetching (Hard Constraint 2), but `/holdings`' pre-fill reads 
 same query directly and is still alphabetical; no user-facing sort control on either
 route. No sector/historical allocation; no per-broker view.
 
+The control-level spec (`calboard-control-spec.md` §8.2) states "holdings sort by
+weight, fixed" as if this already applied everywhere — it does not on
+`/holdings`, deliberately: weight is derived from quantity × price, and
+resorting an editor mid-edit as the user types would be actively hostile.
+This is a spec inaccuracy to correct at the source, not a behaviour this app
+should adopt.
+
 ## States
 
 Reuse these treatments; do not invent new visual language for them. `.status-msg`
@@ -266,8 +283,8 @@ body text even without colour.
 | **Empty** | A short line stating the situation plus one primary `.button-link` action. Deliberate, not an error. |
 | **Success** | `.status-msg .status-success`, `role="status"`, plain past-tense copy ("Holdings updated."). |
 | **Error** | `.status-msg .status-danger` (block) or `.status-danger` (inline in a cell), `role="alert"`; wording names the specific problem; field errors also mark the field. |
-| **Stale** | `/holdings` (`PriceCell`): value in `--color-text-muted` with an "(as of DATE)" suffix and a per-row Retry control. Dashboard (`DashboardHoldingsTable`): value in `--stale`, a small marker dot, and the reason named in a shared footnote — no per-row control, refreshed only via the Dashboard's one global `PriceRefreshControl`. Never shown as current, on either route. |
-| **Unavailable** | `/holdings`: literal "No price yet" plus a per-row Retry control. Dashboard: marker + `—` + the footnote naming the symbol; excluded from totals with disclosure on both. |
+| **Stale** | Value shown in muted colour with an "(as of DATE)" marker. Refresh via the shared `PriceRefreshControl` / `refreshAllPricesAction` pattern beside each route's "Data checked" line. Never shown as current. |
+| **Unavailable** | Marker + `—`; excluded from totals with disclosure on both routes. |
 | **Uncertain** | `.status-msg .status-warning`, honest "we couldn't confirm / couldn't reach the server" copy; persists until the next real attempt. |
 | **Staged (pending removal)** | The row dims, inputs disable, derived figures show `—`, the action flips Remove → **Undo**. Nothing is written until Save. |
 
@@ -294,6 +311,15 @@ generated from one data pass in `DashboardHoldingsTable` and toggled by CSS
 scoped, deliberate choice for the frozen mock direction, not a change to the shared
 convention `/holdings` and the wizard still use. The durable rule above (never a
 sideways scroll) still holds — verified at 375 / 719 / 721 / 1280 px.
+
+**Holdings control-direction deviation (2026-09-0X).** `/holdings` also moved to
+a single `@media (max-width: 720px)` breakpoint, but — unlike Dashboard —
+kept the single-markup `.editor-table`/`.cell-label` restack instead of adding
+a second `.stack` card markup: `HoldingsEditor.test.tsx`'s existing T30-3 test
+requires exactly one DOM copy of every editable control and the Remove action,
+which the authoritative mock's dual-markup approach would have duplicated.
+Same outcome (no sideways scroll, Remove always reachable), different
+mechanism, deliberately, because of that pre-existing test contract.
 
 ## Accessibility
 
@@ -352,6 +378,30 @@ still hold.
 - **`docs/superpowers/plans/2026-09-01-dashboard-visual-redesign.md`** — the
   Dashboard-only v2 redesign: frozen direction, file structure, and the
   `.cb-dash` scoping rationale summarised throughout this section.
+
+### Spec errors found during the 2026-09-0X control-direction build
+
+Two errors in the frozen references, found while implementing against them.
+Both were resolved by following the more authoritative source per the
+stated reference precedence, not by editing the mocks — flagged here for
+DESIGN to correct at the source:
+
+1. **Icon-button border assignment.** `calboard-holdings-final.html` renders
+   both the privacy and theme-toggle buttons bare (no border). 
+   `calboard-dashboard-final.html` renders both bordered. The two "final"
+   mocks contradict each other and neither matches `calboard-control-spec.md`
+   §6.1/§6.2, which is explicit that privacy is bordered (a product
+   guarantee) and theme is bare (a preference). Implemented per the written
+   spec on both routes; the mocks need a corrective re-export.
+2. **Holdings sort order.** `calboard-control-spec.md` §8.2 states "holdings
+   sort by weight, fixed" as an existing fact, and
+   `calboard-holdings-final.html` labels its Positions section "Sorted by
+   weight" to match. `/holdings` is an editor, not a reading surface — weight
+   is derived from quantity × price, so sorting by it would reorder rows out
+   from under the user mid-edit as they type. Implemented as: `/holdings`
+   keeps `getPortfolioView()`'s existing alphabetical order; the "Sorted by
+   weight" note is omitted rather than replaced with false or restated text.
+   §8.2 needs correcting to describe Dashboard only.
 
 > **Warning — older specs describe more than the current app.** `PRD §5/§9` and
 > `TDD §13` name routes, components (`ValueHeader`, `ConcentrationPanel`,
