@@ -339,179 +339,233 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
   // inline errors far up the editor.
   const hasFieldErrors = Object.keys(errors).length > 0;
 
+  // Page-level footnote for stale/unavailable holdings, matching
+  // DashboardHoldingsTable's footnoteFor pattern — scoped to non-removed
+  // rows only, since a removed row's price health is no longer relevant.
+  const footnote =
+    rows
+      .filter((r) => !r.removed)
+      .map((r) =>
+        r.priceStatus === "stale"
+          ? `${r.symbol} is priced at ${r.priceDate} close.`
+          : r.priceStatus === "unavailable"
+            ? `${r.symbol} has no price and is excluded from market value and P&L.`
+            : null
+      )
+      .filter((f): f is string => f !== null)
+      .join(" ") || null;
+
   return (
-    <div style={{ fontFamily: "system-ui" }}>
-      <p style={{ color: "#555" }}>
-        Edit the quantities and average costs to match what you hold now, then Save.
-      </p>
+    <>
+      <div className="section">
+        <div className="sechead">
+          <h2>Positions</h2>
+        </div>
 
-      <p>
-        <label htmlFor="holdings-as-of-date">Recording as of</label>
-        <br />
-        <input
-          id="holdings-as-of-date"
-          type="date"
-          aria-label="As-of date"
-          aria-invalid={errors.asOfDate ? true : undefined}
-          aria-describedby={errors.asOfDate ? "as-of-date-err" : undefined}
-          value={asOfDate}
-          max={localTodayIso()}
-          onChange={(e) => {
-            clearSaveState();
-            setAsOfDate(e.target.value);
-          }}
-        />
-      </p>
-      {errors.asOfDate && (
-        <p id="as-of-date-err" role="alert" className="status-msg status-danger">
-          {errors.asOfDate}
-        </p>
-      )}
-
-      <div className="editor-table">
-      <table border={1} cellPadding={6} style={{ borderCollapse: "collapse", marginTop: "0.5rem" }}>
-        <thead>
-          <tr>
-            <th>Symbol</th>
-            <th>Type</th>
-            <th>Quantity</th>
-            <th>Average cost</th>
-            <th>Price</th>
-            <th>Market value</th>
-            <th>Unrealised P&amp;L</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => {
-            const note = avgCostNote(r);
-            const d = r.removed ? { mv: "—", pl: "—" } : derived(r);
-            const qtyErr = errors[`holdings.${i}.quantity`];
-            const avgErr = errors[`holdings.${i}.avgCostUsd`];
-            const qtyErrId = `qty-${r.assetId}-err`;
-            const avgErrId = `avg-${r.assetId}-err`;
-            const noteId = `avg-${r.assetId}-note`;
-            const avgDescribedBy =
-              [avgErr ? avgErrId : null, note ? noteId : null].filter(Boolean).join(" ") || undefined;
-            return (
-              <tr key={r.assetId} style={r.removed ? { opacity: 0.5 } : undefined}>
-                <td>
-                  <span className="cell-label">Symbol</span>
-                  {r.symbol}
-                </td>
-                <td>
-                  <span className="cell-label">Type</span>
-                  {formatAssetClass(r.assetClass)}
-                </td>
-                <td>
-                  <span className="cell-label">Quantity</span>
-                  <input
-                    id={`qty-${r.assetId}`}
-                    type={hidden ? "password" : "text"}
-                    autoComplete="off"
-                    aria-label={`Quantity for ${r.symbol}`}
-                    aria-invalid={qtyErr ? true : undefined}
-                    aria-describedby={qtyErr ? qtyErrId : undefined}
-                    value={r.quantity}
-                    disabled={r.removed}
-                    onChange={(e) => patchRow(i, { quantity: e.target.value })}
-                  />
-                  {qtyErr && (
-                    <div id={qtyErrId} role="alert" className="status-danger">
-                      {qtyErr}
-                    </div>
-                  )}
-                </td>
-                <td>
-                  <span className="cell-label">Average cost</span>
-                  <input
-                    id={`avg-${r.assetId}`}
-                    type={hidden ? "password" : "text"}
-                    autoComplete="off"
-                    aria-label={`Average cost for ${r.symbol}`}
-                    aria-invalid={avgErr ? true : undefined}
-                    aria-describedby={avgDescribedBy}
-                    value={r.avgCostUsd}
-                    disabled={r.removed}
-                    onChange={(e) => patchRow(i, { avgCostUsd: e.target.value })}
-                  />
-                  {avgErr && (
-                    <div id={avgErrId} role="alert" className="status-danger">
-                      {avgErr}
-                    </div>
-                  )}
-                  {note && (
-                    <div id={noteId} role="status" className="status-warning" style={{ fontSize: "0.85em" }}>
-                      {note}
-                    </div>
-                  )}
-                </td>
-                <td>
-                  <span className="cell-label">Price</span>
-                  {r.removed ? (
-                    "—"
-                  ) : (
-                    <PriceCell
-                      assetId={r.assetId}
-                      symbol={r.symbol}
-                      assetClass={r.assetClass}
-                      priceStatus={r.priceStatus}
-                      priceUsd={r.priceUsd}
-                      priceDate={r.priceDate}
-                    />
-                  )}
-                </td>
-                <td>
-                  <span className="cell-label">Market value</span>
-                  {d.mv === "—" ? d.mv : <MaskableValue>{d.mv}</MaskableValue>}
-                </td>
-                <td>
-                  <span className="cell-label">Unrealised P&amp;L</span>
-                  {d.pl === "—" ? d.pl : <MaskableValue>{d.pl}</MaskableValue>}
-                </td>
-                <td>
-                  {r.removed ? (
-                    <button type="button" onClick={() => undoRemove(i)}>
-                      Undo
-                    </button>
-                  ) : (
-                    <button type="button" aria-label={`Remove ${r.symbol}`} onClick={() => removeRow(i)}>
-                      Remove
-                    </button>
-                  )}
-                </td>
+        <div className="editor-table">
+          <table className="holdings">
+            <colgroup>
+              <col className="c-sym" /><col className="c-type" /><col className="c-qty" /><col className="c-avg" />
+              <col className="c-price" /><col className="c-mv" /><col className="c-pl" /><col className="c-act" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th className="l">Symbol</th>
+                <th className="l">Type</th>
+                <th>Quantity</th>
+                <th>Average cost</th>
+                <th>Price</th>
+                <th>Market value</th>
+                <th>Unrealised P&amp;L</th>
+                <th />
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => {
+                const note = avgCostNote(r);
+                const d = r.removed ? { mv: "—", pl: "—" } : derived(r);
+                const qtyErr = errors[`holdings.${i}.quantity`];
+                const avgErr = errors[`holdings.${i}.avgCostUsd`];
+                const qtyErrId = `qty-${r.assetId}-err`;
+                const avgErrId = `avg-${r.assetId}-err`;
+                const noteId = `avg-${r.assetId}-note`;
+                const avgDescribedBy =
+                  [avgErr ? avgErrId : null, note ? noteId : null].filter(Boolean).join(" ") || undefined;
+                return (
+                  <tr key={r.assetId}>
+                    <td className="l sym">
+                      <span className="cell-label">Symbol</span>
+                      {r.symbol}
+                    </td>
+                    <td className="l dim">
+                      <span className="cell-label">Type</span>
+                      {formatAssetClass(r.assetClass)}
+                    </td>
+                    <td>
+                      <span className="cell-label">Quantity</span>
+                      <input
+                        id={`qty-${r.assetId}`}
+                        className={`cellinput num${qtyErr ? " err" : ""}`}
+                        type={hidden ? "password" : "text"}
+                        autoComplete="off"
+                        aria-label={`Quantity for ${r.symbol}`}
+                        aria-invalid={qtyErr ? true : undefined}
+                        aria-describedby={qtyErr ? qtyErrId : undefined}
+                        value={r.quantity}
+                        disabled={r.removed}
+                        onChange={(e) => patchRow(i, { quantity: e.target.value })}
+                      />
+                      {qtyErr && (
+                        <span id={qtyErrId} role="alert" className="rowerr">
+                          {qtyErr}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <span className="cell-label">Average cost</span>
+                      <input
+                        id={`avg-${r.assetId}`}
+                        className={`cellinput num${avgErr ? " err" : ""}`}
+                        type={hidden ? "password" : "text"}
+                        autoComplete="off"
+                        aria-label={`Average cost for ${r.symbol}`}
+                        aria-invalid={avgErr ? true : undefined}
+                        aria-describedby={avgDescribedBy}
+                        value={r.avgCostUsd}
+                        disabled={r.removed}
+                        onChange={(e) => patchRow(i, { avgCostUsd: e.target.value })}
+                      />
+                      {avgErr && (
+                        <span id={avgErrId} role="alert" className="rowerr">
+                          {avgErr}
+                        </span>
+                      )}
+                      {note && (
+                        <div id={noteId} role="status" className="status-warning" style={{ fontSize: "0.85em" }}>
+                          {note}
+                        </div>
+                      )}
+                    </td>
+                    <td className="num">
+                      <span className="cell-label">Price</span>
+                      {r.removed ? (
+                        "—"
+                      ) : (
+                        <PriceCell priceStatus={r.priceStatus} priceUsd={r.priceUsd} priceDate={r.priceDate} />
+                      )}
+                    </td>
+                    <td className="num strong">
+                      <span className="cell-label">Market value</span>
+                      {d.mv === "—" ? d.mv : <MaskableValue>{d.mv}</MaskableValue>}
+                    </td>
+                    <td className={`num strong${r.removed ? "" : d.pl.startsWith("-") ? " loss" : ""}`}>
+                      <span className="cell-label">Unrealised P&amp;L</span>
+                      {d.pl === "—" ? d.pl : <MaskableValue>{d.pl}</MaskableValue>}
+                    </td>
+                    <td>
+                      {r.removed ? (
+                        <button type="button" className="btn2" style={{ height: 30, fontSize: 13 }} onClick={() => undoRemove(i)}>
+                          Undo
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="iconbare rmv"
+                          aria-label={`Remove ${r.symbol}`}
+                          onClick={() => removeRow(i)}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M6 6l12 12M18 6L6 18" />
+                          </svg>
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {footnote && <div className="footnote">{footnote}</div>}
       </div>
 
-      <fieldset style={{ marginTop: "1rem", maxWidth: 380 }}>
-        <legend>Add a holding</legend>
-        <div style={{ display: "grid", gap: "0.5rem" }}>
-          <label>
-            Ticker symbol
-            <br />
-            <input
-              aria-label="Ticker symbol"
-              value={tickerInput}
-              onChange={(e) => {
-                setTickerInput(e.target.value);
-                setAddError(null);
-                clearSaveState();
-                // Invalidate any in-flight resolution for the old text; a
-                // blur re-resolves for the new one.
-                resolveSeq.current++;
-                clearResolution();
-              }}
-              onBlur={() => void resolveFor(tickerInput, assetType)}
-            />
-          </label>
-          {/* One polite live region for every ticker-resolution state, so a
-              screen reader hears the meaningful result without it being an
-              assertive interruption and without a second region announcing
-              the same thing. */}
+      <div className="section">
+        <div className="sechead">
+          <h2>Add a holding</h2>
+        </div>
+        <fieldset className="add-holding-fieldset">
+          <legend>Add a holding</legend>
+          <div className="formrow">
+            <div className="field">
+              <label htmlFor="add-ticker">Ticker symbol</label>
+              <input
+                id="add-ticker"
+                className="inp w150"
+                aria-label="Ticker symbol"
+                value={tickerInput}
+                onChange={(e) => {
+                  setTickerInput(e.target.value);
+                  setAddError(null);
+                  clearSaveState();
+                  resolveSeq.current++;
+                  clearResolution();
+                }}
+                onBlur={() => void resolveFor(tickerInput, assetType)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="add-type">Asset type</label>
+              <select
+                id="add-type"
+                className="inp w140"
+                aria-label="Asset type"
+                value={assetType}
+                onChange={(e) => {
+                  const next = e.target.value as AssetClass;
+                  setAssetType(next);
+                  setAddError(null);
+                  clearSaveState();
+                  if (tickerInput.trim()) {
+                    void resolveFor(tickerInput, next);
+                  } else {
+                    resolveSeq.current++;
+                    clearResolution();
+                  }
+                }}
+              >
+                <option value="equity">Equity</option>
+                <option value="etf">ETF</option>
+                <option value="crypto">Crypto</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="add-qty">Quantity</label>
+              <input
+                id="add-qty"
+                className="inp n w120"
+                type={hidden ? "password" : "text"}
+                autoComplete="off"
+                aria-label="New holding quantity"
+                value={addQty}
+                onChange={(e) => setAddQty(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="add-cost">Average cost (USD)</label>
+              <input
+                id="add-cost"
+                className="inp n w150"
+                type={hidden ? "password" : "text"}
+                autoComplete="off"
+                aria-label="New holding average cost"
+                value={addCost}
+                onChange={(e) => setAddCost(e.target.value)}
+              />
+            </div>
+            <button type="button" className="btn" onClick={addRow}>
+              + Add holding
+            </button>
+          </div>
           <div aria-live="polite" aria-atomic="true">
             {resolving && <span className="status-neutral">checking…</span>}
             {resolution && resolution.ok && (
@@ -519,101 +573,70 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                 ✓ Resolved — last price ${resolution.priceUsd} ({resolution.priceDate})
               </span>
             )}
-            {resolution && !resolution.ok && (
-              <span className="status-warning">{resolution.message}</span>
-            )}
+            {resolution && !resolution.ok && <span className="status-warning">{resolution.message}</span>}
           </div>
+          {addError && <div className="status-msg status-danger">{addError}</div>}
+        </fieldset>
 
-          <label>
-            Asset type
-            <br />
-            <select
-              aria-label="Asset type"
-              value={assetType}
+        {errors.asOfDate && (
+          <p id="as-of-date-err" role="alert" className="status-danger">
+            {errors.asOfDate}
+          </p>
+        )}
+
+        {save.kind === "saved" && (
+          <p className="status s-ok" role="status">
+            Holdings updated.
+          </p>
+        )}
+        {save.kind === "failed" && errors.form && (
+          <p className="status s-bad" role="alert">
+            {errors.form}
+          </p>
+        )}
+        {save.kind === "failed" && !errors.form && hasFieldErrors && (
+          <p className="status s-bad" role="alert">
+            Fix the highlighted errors before saving.
+          </p>
+        )}
+        {save.kind === "unknown" && (
+          <p className="status s-warn" role="alert">
+            {save.message}
+          </p>
+        )}
+        {save.kind === "unreachable" && (
+          <p className="status s-warn" role="alert">
+            We couldn&apos;t reach the server, so we don&apos;t know whether your changes saved. Check the
+            Dashboard before trying again.
+          </p>
+        )}
+
+        <div className="saverow">
+          <div className="field">
+            <label htmlFor="holdings-as-of-date">Recording as of</label>
+            <input
+              id="holdings-as-of-date"
+              className={`inp w170${errors.asOfDate ? " err" : ""}`}
+              type="date"
+              aria-label="As-of date"
+              aria-invalid={errors.asOfDate ? true : undefined}
+              aria-describedby={errors.asOfDate ? "as-of-date-err" : undefined}
+              value={asOfDate}
+              max={localTodayIso()}
               onChange={(e) => {
-                const next = e.target.value as AssetClass;
-                setAssetType(next);
-                setAddError(null);
                 clearSaveState();
-                if (tickerInput.trim()) {
-                  // Re-resolve against the NEW class rather than dead-ending
-                  // Add; pass it explicitly (state may be stale this tick).
-                  void resolveFor(tickerInput, next);
-                } else {
-                  resolveSeq.current++;
-                  clearResolution();
-                }
+                setAsOfDate(e.target.value);
               }}
-            >
-              <option value="equity">Equity</option>
-              <option value="etf">ETF</option>
-              <option value="crypto">Crypto</option>
-            </select>
-          </label>
-
-          <label>
-            Quantity
-            <br />
-            <input
-              type={hidden ? "password" : "text"}
-              autoComplete="off"
-              aria-label="New holding quantity"
-              value={addQty}
-              onChange={(e) => setAddQty(e.target.value)}
             />
-          </label>
-
-          <label>
-            Average cost (USD)
-            <br />
-            <input
-              type={hidden ? "password" : "text"}
-              autoComplete="off"
-              aria-label="New holding average cost"
-              value={addCost}
-              onChange={(e) => setAddCost(e.target.value)}
-            />
-          </label>
-
-          <button type="button" onClick={addRow}>
-            + Add holding
-          </button>
-          {addError && <span className="status-msg status-danger">{addError}</span>}
+          </div>
+          <div>
+            <button type="button" className="btn" onClick={handleSave} disabled={saving}>
+              <span style={{ visibility: saving ? "hidden" : "visible", display: "inline-block" }}>Save</span>
+              {saving && <span style={{ position: "absolute" }}>Saving…</span>}
+            </button>
+          </div>
         </div>
-      </fieldset>
-
-      {save.kind === "saved" && (
-        <p className="status-msg status-success" role="status">
-          Holdings updated.
-        </p>
-      )}
-      {save.kind === "failed" && errors.form && (
-        <p className="status-msg status-danger" role="alert">
-          {errors.form}
-        </p>
-      )}
-      {save.kind === "failed" && !errors.form && hasFieldErrors && (
-        <p className="status-msg status-danger" role="alert">
-          Fix the highlighted errors before saving.
-        </p>
-      )}
-      {save.kind === "unknown" && (
-        <p className="status-msg status-warning" role="alert">
-          {save.message}
-        </p>
-      )}
-      {save.kind === "unreachable" && (
-        <p className="status-msg status-warning" role="alert">
-          We couldn&apos;t reach the server, so we don&apos;t know whether your changes saved. Check the
-          Dashboard before trying again.
-        </p>
-      )}
-
-      <div style={{ marginTop: "1.5rem" }}>
-        <button type="button" onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : "Save"}
-        </button>
       </div>
-    </div>
+    </>
   );
 }
