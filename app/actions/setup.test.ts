@@ -22,6 +22,13 @@ function chartClose(close: number, date = "2026-08-28") {
   return { quotes: [{ date: new Date(`${date}T00:00:00Z`), close, adjclose: close }] };
 }
 
+// UTC calendar date matching Postgres's CURRENT_DATE (session timezone is
+// Etc/UTC) — used where a test needs a fetched quote to sort after a
+// CURRENT_DATE-relative row regardless of which real day the suite runs on.
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function equityQuote(symbol: string, name: string) {
   return { symbol, quoteType: "EQUITY", longName: name };
 }
@@ -144,7 +151,10 @@ describe("resolveTickerAction", () => {
       [asset.id, source.rows[0].id]
     );
 
-    mockChart.mockResolvedValue(chartClose(80123.45, "2026-08-29"));
+    // Dated to today (UTC, matching Postgres's CURRENT_DATE) rather than a
+    // fixed calendar date, so this always sorts after the CURRENT_DATE - 1
+    // residue row above regardless of which real day the suite runs on.
+    mockChart.mockResolvedValue(chartClose(80123.45, todayUtc()));
     const result = await resolveTickerAction("BTC", "crypto");
 
     expect(result.ok).toBe(true);
