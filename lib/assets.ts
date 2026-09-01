@@ -1,6 +1,8 @@
 import { getPool } from "./db";
 
-export type AssetClass = "equity" | "etf" | "crypto";
+export type { AssetClass } from "./assetClass";
+export { formatAssetClass } from "./assetClass";
+import type { AssetClass } from "./assetClass";
 
 export interface Asset {
   id: string; // BIGINT — node-postgres returns int8 as string, never Number

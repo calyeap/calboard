@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup, within } from "@testing-library/react";
+import { render, screen, cleanup, within, fireEvent } from "@testing-library/react";
 import { computeAllocation } from "@/lib/allocation";
 import Decimal from "decimal.js";
 import { AllocationDonut } from "./AllocationDonut";
+import { PrivacyProvider, usePrivacy } from "./PrivacyContext";
 
 afterEach(() => {
   cleanup();
@@ -133,5 +134,93 @@ describe("AllocationDonut", () => {
     }
     // The section has a heading so the legend is discoverable.
     expect(screen.getByRole("heading", { name: /allocation/i })).toBeInTheDocument();
+  });
+});
+
+describe("AllocationDonut — M1.5: view by asset class", () => {
+  const byHolding = computeAllocation(
+    [
+      { symbol: "AAPL", marketValueUsd: new Decimal("3000.00") },
+      { symbol: "VOO", marketValueUsd: new Decimal("1000.00") },
+    ],
+    new Decimal("4000.00")
+  );
+  const byAssetClass = computeAllocation(
+    [
+      { symbol: "Equity", marketValueUsd: new Decimal("3000.00") },
+      { symbol: "ETF", marketValueUsd: new Decimal("1000.00") },
+    ],
+    new Decimal("4000.00")
+  );
+
+  it("without allocationByAssetClass, no view toggle renders — unchanged single-view behaviour", () => {
+    render(<AllocationDonut allocation={byHolding} />);
+    expect(screen.queryByRole("button", { name: /by asset class/i })).toBeNull();
+  });
+
+  it("with allocationByAssetClass, a view toggle renders, defaulting to By holding", () => {
+    render(<AllocationDonut allocation={byHolding} allocationByAssetClass={byAssetClass} />);
+
+    expect(screen.getByRole("button", { name: /by holding/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /by asset class/i })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("table", { name: /allocation by holding/i })).toBeInTheDocument();
+  });
+
+  it("clicking By asset class swaps the legend and caption to the grouped data, without altering the calculation", () => {
+    render(<AllocationDonut allocation={byHolding} allocationByAssetClass={byAssetClass} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /by asset class/i }));
+
+    const table = screen.getByRole("table", { name: /allocation by asset class/i });
+    expect(table.textContent).toContain("Equity");
+    expect(table.textContent).toContain("75.00%");
+    expect(table.textContent).toContain("ETF");
+    expect(table.textContent).toContain("25.00%");
+    expect(screen.queryByRole("table", { name: /allocation by holding/i })).toBeNull();
+  });
+
+  it("clicking back to By holding restores the original view", () => {
+    render(<AllocationDonut allocation={byHolding} allocationByAssetClass={byAssetClass} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /by asset class/i }));
+    fireEvent.click(screen.getByRole("button", { name: /by holding/i }));
+
+    expect(screen.getByRole("table", { name: /allocation by holding/i }).textContent).toContain("AAPL");
+  });
+});
+
+describe("AllocationDonut — M1.5: privacy toggle", () => {
+  function ToggleButton() {
+    const { toggle } = usePrivacy();
+    return (
+      <button type="button" onClick={toggle}>
+        toggle
+      </button>
+    );
+  }
+
+  it("hides the centre total and legend market values while keeping every percentage visible", () => {
+    const allocation = computeAllocation(
+      [
+        { symbol: "AAPL", marketValueUsd: new Decimal("3000.00") },
+        { symbol: "MSFT", marketValueUsd: new Decimal("1000.00") },
+      ],
+      new Decimal("4000.00")
+    );
+    const { container } = render(
+      <PrivacyProvider>
+        <ToggleButton />
+        <AllocationDonut allocation={allocation} />
+      </PrivacyProvider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "toggle" }));
+
+    const table = screen.getByRole("table", { name: /allocation by holding/i });
+    expect(table.textContent).toContain("75.00%");
+    expect(table.textContent).toContain("25.00%");
+    expect(table.textContent).not.toContain("3000.00");
+    expect(table.textContent).not.toContain("1000.00");
+    expect(container.querySelector("svg")?.textContent).not.toContain("4000.00");
   });
 });

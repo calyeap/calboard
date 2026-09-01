@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, within } from "@testing-library/react";
+import { render, screen, cleanup, within, fireEvent } from "@testing-library/react";
 import Decimal from "decimal.js";
 import type { PortfolioView, PositionView } from "@/lib/portfolio";
 import { listAccounts } from "@/lib/accounts";
 import { getPortfolioView } from "@/lib/portfolio";
 import { getLastSnapshotConfirmation } from "@/lib/holdings";
+import { PrivacyProvider } from "@/app/components/PrivacyContext";
 
 vi.mock("@/lib/accounts", () => ({ listAccounts: vi.fn() }));
 vi.mock("@/lib/portfolio", () => ({ getPortfolioView: vi.fn() }));
@@ -47,7 +48,7 @@ function position(over: Partial<PositionView> & Pick<PositionView, "symbol">): P
     assetId: over.symbol,
     symbol: over.symbol,
     assetName: over.symbol,
-    assetClass: "equity",
+    assetClass: over.assetClass ?? "equity",
     quantity,
     avgCostUsd,
     costBasisUsd: avgCostUsd ? avgCostUsd.mul(quantity) : new Decimal("0"),
@@ -258,6 +259,7 @@ describe("Dashboard — Task 31: hierarchy & responsive Dashboard", () => {
     );
     expect(labels).toEqual([
       "Symbol",
+      "Type",
       "Qty",
       "Avg cost",
       "Price",
@@ -336,5 +338,113 @@ describe("Dashboard — empty state derives from holdings existence (Rev-3 §2.3
     expect(screen.getByRole("heading", { name: /portfolio value/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^holdings$/i })).toBeInTheDocument();
     expect(screen.queryByText(/no holdings yet/i)).toBeNull();
+  });
+});
+
+describe("Dashboard — M1.5: asset type display", () => {
+  function holdingsTableOf(): HTMLTableElement {
+    return within(
+      screen.getByRole("heading", { name: /^holdings$/i }).closest("section")!
+    ).getByRole("table") as HTMLTableElement;
+  }
+
+  it("each row shows its stored asset type — sourced from assetClass, not inferred from the ticker", async () => {
+    getPortfolioViewMock.mockResolvedValue(
+      portfolio([
+        position({ symbol: "NVDA", assetClass: "equity", quantity: new Decimal("1") }),
+        position({ symbol: "VOO", assetClass: "etf", quantity: new Decimal("1") }),
+        position({ symbol: "BTC", assetClass: "crypto", quantity: new Decimal("1") }),
+      ])
+    );
+    render(await DashboardPage());
+
+    const rows = within(holdingsTableOf()).getAllByRole("row").slice(1); // skip header
+    expect(rows[0].textContent).toContain("Equity");
+    expect(rows[1].textContent).toContain("ETF");
+    expect(rows[2].textContent).toContain("Crypto");
+  });
+});
+
+describe("Dashboard — M1.5: privacy toggle", () => {
+  function twoPricedDifferentClasses() {
+    return portfolio([
+      position({
+        symbol: "AAPL",
+        assetClass: "equity",
+        quantity: new Decimal("10"),
+        avgCostUsd: new Decimal("100"),
+        latestPriceUsd: new Decimal("300"),
+        marketValueUsd: new Decimal("3000"),
+        unrealisedPlUsd: new Decimal("2000"),
+      }),
+      position({
+        symbol: "VOO",
+        assetClass: "etf",
+        quantity: new Decimal("2"),
+        avgCostUsd: new Decimal("400"),
+        latestPriceUsd: new Decimal("500"),
+        marketValueUsd: new Decimal("1000"),
+        unrealisedPlUsd: new Decimal("200"),
+      }),
+    ]);
+  }
+
+  async function renderHidden() {
+    getPortfolioViewMock.mockResolvedValue(twoPricedDifferentClasses());
+    render(<PrivacyProvider>{await DashboardPage()}</PrivacyProvider>);
+    fireEvent.click(screen.getByRole("button", { name: /hide values/i }));
+  }
+
+  it("before toggling, values render normally", async () => {
+    getPortfolioViewMock.mockResolvedValue(twoPricedDifferentClasses());
+    render(<PrivacyProvider>{await DashboardPage()}</PrivacyProvider>);
+
+    const pvSection = screen.getByRole("heading", { name: "Portfolio Value" }).closest("section")!;
+    expect(pvSection.textContent).toContain("US$4000.00");
+    const holdingsSection = screen.getByRole("heading", { name: /^holdings$/i }).closest("section")!;
+    expect(holdingsSection.textContent).toContain("3000.00");
+  });
+
+  it("hides Portfolio Value and the Unrealised P&L dollar figure, but keeps the P&L percentage visible", async () => {
+    await renderHidden();
+
+    const pvSection = screen.getByRole("heading", { name: "Portfolio Value" }).closest("section")!;
+    expect(pvSection.textContent).not.toContain("4000.00");
+    expect(pvSection.textContent).not.toContain("200.00"); // total unrealised P&L dollar figure
+    expect(pvSection.textContent).toContain("10.00%"); // its percentage stays visible
+    expect(screen.getAllByText("••••••").length).toBeGreaterThan(0);
+  });
+
+  it("hides per-row Quantity, Avg cost and Market value in the Holdings table, but keeps Price visible", async () => {
+    await renderHidden();
+
+    const holdingsSection = screen.getByRole("heading", { name: /^holdings$/i }).closest("section")!;
+    expect(holdingsSection.textContent).not.toContain("3000.00");
+    expect(holdingsSection.textContent).not.toContain("100.00"); // AAPL avg cost
+    // Quantity "10" alone is too fragile to assert absence of, but the
+    // formatted 4dp quantity is not — "10.0000" would appear unmasked.
+    expect(holdingsSection.textContent).not.toContain("10.0000");
+    // Price is never masked — it's public market data, not derived from the
+    // user's position.
+    expect(within(holdingsSection).getByText("$300.00")).toBeInTheDocument();
+  });
+
+  it("keeps every Allocation percentage visible while hiding its dollar figures", async () => {
+    await renderHidden();
+
+    const allocSection = screen.getByRole("heading", { name: /^allocation$/i }).closest("section")!;
+    expect(allocSection.textContent).toContain("75.00%");
+    expect(allocSection.textContent).toContain("25.00%");
+    expect(allocSection.textContent).not.toContain("3000.00");
+    expect(allocSection.textContent).not.toContain("1000.00");
+  });
+
+  it("toggling back off restores every value", async () => {
+    await renderHidden();
+    fireEvent.click(screen.getByRole("button", { name: /show values/i }));
+
+    const pvSection = screen.getByRole("heading", { name: "Portfolio Value" }).closest("section")!;
+    expect(pvSection.textContent).toContain("US$4000.00");
+    expect(screen.queryByText("••••••")).toBeNull();
   });
 });

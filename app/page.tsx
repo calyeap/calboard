@@ -2,10 +2,12 @@ import Link from "next/link";
 import { NavBar } from "./components/NavBar";
 import { PriceCell } from "./components/PriceCell";
 import { AllocationDonut } from "./components/AllocationDonut";
+import { MaskableValue } from "./components/MaskableValue";
 import { listAccounts } from "@/lib/accounts";
 import { getPortfolioView } from "@/lib/portfolio";
 import { getLastSnapshotConfirmation } from "@/lib/holdings";
-import { computeAllocation } from "@/lib/allocation";
+import { computeAllocation, groupByAssetClass } from "@/lib/allocation";
+import { formatAssetClass } from "@/lib/assets";
 
 // Always render dynamically — this page reads live DB state (accounts,
 // portfolio positions) on every request and must never be frozen as a
@@ -51,6 +53,21 @@ export default async function DashboardPage() {
       )
     : null;
 
+  // Allocation by asset class — same computeAllocation calculation, just
+  // grouped differently first (spec: no change to the allocation math).
+  const allocationByAssetClass = portfolio
+    ? computeAllocation(
+        groupByAssetClass(
+          portfolio.positions.map((p) => ({
+            symbol: p.symbol,
+            assetClass: p.assetClass,
+            marketValueUsd: p.marketValueUsd,
+          }))
+        ),
+        portfolio.totalMarketValueUsd
+      )
+    : null;
+
   return (
     <>
       <NavBar />
@@ -66,9 +83,12 @@ export default async function DashboardPage() {
           <>
             <section className="dashboard-section">
               <h2>Portfolio Value</h2>
-              <p className="pv-amount">US${portfolio.totalMarketValueUsd.toFixed(2)}</p>
+              <p className="pv-amount">
+                US$<MaskableValue>{portfolio.totalMarketValueUsd.toFixed(2)}</MaskableValue>
+              </p>
               <p>
-                Unrealised gain/loss vs cost basis: US${portfolio.totalUnrealisedPlUsd.toFixed(2)}
+                Unrealised gain/loss vs cost basis: US$
+                <MaskableValue>{portfolio.totalUnrealisedPlUsd.toFixed(2)}</MaskableValue>
                 {portfolio.totalUnrealisedPlPct !== null && (
                   <> ({portfolio.totalUnrealisedPlPct.toFixed(2)}%)</>
                 )}
@@ -92,7 +112,9 @@ export default async function DashboardPage() {
               )}
             </section>
 
-            {allocation && <AllocationDonut allocation={allocation} />}
+            {allocation && (
+              <AllocationDonut allocation={allocation} allocationByAssetClass={allocationByAssetClass ?? undefined} />
+            )}
 
             <section className="dashboard-section">
               <h2>Holdings</h2>
@@ -106,7 +128,7 @@ export default async function DashboardPage() {
               <table border={1} cellPadding={6}>
                 <thead>
                   <tr>
-                    <th>Symbol</th><th>Qty</th><th>Avg cost</th>
+                    <th>Symbol</th><th>Type</th><th>Qty</th><th>Avg cost</th>
                     <th>Price</th><th>Market value</th><th>Unrealised P&amp;L</th>
                   </tr>
                 </thead>
@@ -124,8 +146,9 @@ export default async function DashboardPage() {
                     return (
                       <tr key={`${p.accountId}-${p.assetId}`}>
                         <td><span className="cell-label">Symbol</span>{p.symbol}</td>
-                        <td><span className="cell-label">Qty</span>{p.quantity.toFixed(4)}</td>
-                        <td><span className="cell-label">Avg cost</span>{p.avgCostUsd ? p.avgCostUsd.toFixed(2) : "—"}</td>
+                        <td><span className="cell-label">Type</span>{formatAssetClass(p.assetClass)}</td>
+                        <td><span className="cell-label">Qty</span><MaskableValue>{p.quantity.toFixed(4)}</MaskableValue></td>
+                        <td><span className="cell-label">Avg cost</span>{p.avgCostUsd ? <MaskableValue>{p.avgCostUsd.toFixed(2)}</MaskableValue> : "—"}</td>
                         <td>
                           <span className="cell-label">Price</span>
                           <PriceCell
@@ -137,12 +160,12 @@ export default async function DashboardPage() {
                             priceDate={p.priceDate}
                           />
                         </td>
-                        <td><span className="cell-label">Market value</span>{p.marketValueUsd ? p.marketValueUsd.toFixed(2) : "—"}</td>
+                        <td><span className="cell-label">Market value</span>{p.marketValueUsd ? <MaskableValue>{p.marketValueUsd.toFixed(2)}</MaskableValue> : "—"}</td>
                         <td>
                           <span className="cell-label">Unrealised P&amp;L</span>
                           {plUsd ? (
                             <>
-                              {plUsd.toFixed(2)}
+                              <MaskableValue>{plUsd.toFixed(2)}</MaskableValue>
                               {plPct !== null && <> ({plPct.toFixed(2)}%)</>}
                             </>
                           ) : (

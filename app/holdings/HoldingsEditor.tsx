@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import Decimal from "decimal.js";
 import { localTodayIso } from "@/lib/dateValidation";
-import type { AssetClass } from "@/lib/assets";
+import { formatAssetClass, type AssetClass } from "@/lib/assetClass";
 import type { PriceStatus } from "@/lib/portfolio";
 import { PriceCell } from "@/app/components/PriceCell";
+import { MaskableValue } from "@/app/components/MaskableValue";
+import { usePrivacy } from "@/app/components/PrivacyContext";
 import { resolveTickerAction, type TickerResolutionResult } from "@/app/actions/setup";
 import { updateHoldingsAction } from "@/app/actions/holdings";
 import { isDuplicateTickerInDraft } from "@/lib/wizard/draftHoldings";
@@ -80,6 +82,7 @@ type SaveState =
 // update through updateHoldingsAction (one ADJUSTMENT per changed holding +
 // one snapshot_confirm row); it never creates another account.
 export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
+  const { hidden } = usePrivacy();
   const [rows, setRows] = useState<Row[]>(() => initial.map(toRow));
   const [asOfDate, setAsOfDate] = useState(localTodayIso());
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -380,6 +383,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
         <thead>
           <tr>
             <th>Symbol</th>
+            <th>Type</th>
             <th>Quantity</th>
             <th>Average cost</th>
             <th>Price</th>
@@ -406,9 +410,15 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                   {r.symbol}
                 </td>
                 <td>
+                  <span className="cell-label">Type</span>
+                  {formatAssetClass(r.assetClass)}
+                </td>
+                <td>
                   <span className="cell-label">Quantity</span>
                   <input
                     id={`qty-${r.assetId}`}
+                    type={hidden ? "password" : "text"}
+                    autoComplete="off"
                     aria-label={`Quantity for ${r.symbol}`}
                     aria-invalid={qtyErr ? true : undefined}
                     aria-describedby={qtyErr ? qtyErrId : undefined}
@@ -426,6 +436,8 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                   <span className="cell-label">Average cost</span>
                   <input
                     id={`avg-${r.assetId}`}
+                    type={hidden ? "password" : "text"}
+                    autoComplete="off"
                     aria-label={`Average cost for ${r.symbol}`}
                     aria-invalid={avgErr ? true : undefined}
                     aria-describedby={avgDescribedBy}
@@ -461,11 +473,11 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                 </td>
                 <td>
                   <span className="cell-label">Market value</span>
-                  {d.mv}
+                  {d.mv === "—" ? d.mv : <MaskableValue>{d.mv}</MaskableValue>}
                 </td>
                 <td>
                   <span className="cell-label">Unrealised P&amp;L</span>
-                  {d.pl}
+                  {d.pl === "—" ? d.pl : <MaskableValue>{d.pl}</MaskableValue>}
                 </td>
                 <td>
                   {r.removed ? (
@@ -553,6 +565,8 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
             Quantity
             <br />
             <input
+              type={hidden ? "password" : "text"}
+              autoComplete="off"
               aria-label="New holding quantity"
               value={addQty}
               onChange={(e) => setAddQty(e.target.value)}
@@ -563,6 +577,8 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
             Average cost (USD)
             <br />
             <input
+              type={hidden ? "password" : "text"}
+              autoComplete="off"
               aria-label="New holding average cost"
               value={addCost}
               onChange={(e) => setAddCost(e.target.value)}
