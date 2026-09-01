@@ -610,13 +610,15 @@ async function HoldingsPageBody() {
   const checkedAt = formatCheckedAt(new Date());
 
   return (
-    <div className="pagehead">
-      <h2>Holdings</h2>
-      <div className="lede">Edit quantities and average costs to match what you hold, then save.</div>
-      {latestPriceDate && <div className="asof">Prices as of {formatAsOfDate(latestPriceDate)} close</div>}
-      <PriceRefreshControl checkedAt={checkedAt} />
+    <>
+      <div className="pagehead">
+        <h2>Holdings</h2>
+        <div className="lede">Edit quantities and average costs to match what you hold, then save.</div>
+        {latestPriceDate && <div className="asof">Prices as of {formatAsOfDate(latestPriceDate)} close</div>}
+        <PriceRefreshControl checkedAt={checkedAt} />
+      </div>
       <HoldingsEditor initial={initial} />
-    </div>
+    </>
   );
 }
 
@@ -837,13 +839,11 @@ Expected: FAIL only on test E (container query won't match yet) — N1b no longe
 
 - [ ] **Step 3: Rewrite `HoldingsEditor.tsx`'s render output**
 
-Keep every function above the `return (` statement (lines 1–341) byte-for-byte unchanged. Replace the entire JSX return block:
+Keep every function above the `return (` statement (lines 1–341) byte-for-byte unchanged. Replace the entire JSX return block. **Note the lede/subtitle line ("Edit quantities and average costs...") is NOT repeated here** — it already lives in `app/holdings/page.tsx`'s `.pagehead` (Task 4); `HoldingsEditor` itself starts directly with the Positions section, matching the mock's DOM (`.pagehead` and the `.section` blocks are siblings inside `<main>`, not nested):
 
 ```tsx
   return (
     <>
-      <div className="lede">Edit the quantities and average costs to match what you hold now, then Save.</div>
-
       <div className="section">
         <div className="sechead">
           <h2>Positions</h2>
