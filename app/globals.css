@@ -332,14 +332,23 @@ h6 {
   --a5: #2C7A87;
   --a6: #BDA9D6;
 
+  display: block;
   background: var(--ground);
   color: var(--ink);
   font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 15px;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
-  margin: calc(-1 * var(--space-lg));
-  padding: 0 32px 96px;
+  min-height: 100vh;
+}
+.cb-dash > .topbar,
+.cb-dash > main {
+  max-width: 1080px;
+  margin-inline: auto;
+  padding-inline: 32px;
+}
+.cb-dash > main {
+  padding-bottom: 96px;
 }
 .cb-dash[data-theme="dark"] {
   --ground: #16181A;
@@ -503,6 +512,21 @@ h6 {
   width: 100%;
   border-collapse: collapse;
   margin-top: 14px;
+  /* Fixed layout + explicit column widths below: column width must never
+     depend on cell content. "•" (the privacy mask) isn't a digit, so it
+     isn't covered by font-variant-numeric: tabular-nums and can render a
+     different glyph width than the digits it replaces — under the default
+     auto layout that visibly shifted every numeric column on toggle. */
+  table-layout: fixed;
+}
+.cb-dash table.holdings col.c-symbol { width: 12%; }
+.cb-dash table.holdings col.c-type { width: 10%; }
+.cb-dash table.holdings col.c-qty,
+.cb-dash table.holdings col.c-cost,
+.cb-dash table.holdings col.c-price,
+.cb-dash table.holdings col.c-mv,
+.cb-dash table.holdings col.c-pl {
+  width: 15.6%;
 }
 .cb-dash table.holdings thead th {
   font-size: 13px;
@@ -512,6 +536,8 @@ h6 {
   padding: 14px 0 12px;
   border-bottom: 1px solid var(--hairline);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cb-dash table.holdings thead th:first-child,
 .cb-dash table.holdings thead th:nth-child(2) {
@@ -524,6 +550,8 @@ h6 {
   border-bottom: 1px solid var(--hairline);
   vertical-align: middle;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cb-dash table.holdings tbody td:first-child,
 .cb-dash table.holdings tbody td:nth-child(2) {
@@ -622,8 +650,12 @@ h6 {
 }
 
 @media (max-width: 720px) {
-  .cb-dash {
-    padding: 0 20px 72px;
+  .cb-dash > .topbar,
+  .cb-dash > main {
+    padding-inline: 20px;
+  }
+  .cb-dash > main {
+    padding-bottom: 72px;
   }
   .cb-dash .value {
     font-size: 32px;

@@ -35,6 +35,15 @@ export function DashboardHoldingsTable({ positions }: { positions: PositionView[
     <>
       <div className="editor-table">
         <table className="holdings">
+          <colgroup>
+            <col className="c-symbol" />
+            <col className="c-type" />
+            <col className="c-qty" />
+            <col className="c-cost" />
+            <col className="c-price" />
+            <col className="c-mv" />
+            <col className="c-pl" />
+          </colgroup>
           <thead>
             <tr>
               <th>Symbol</th>

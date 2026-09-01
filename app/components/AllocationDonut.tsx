@@ -63,7 +63,7 @@ export function AllocationDonut({
     <section className="dashboard-section allocation">
       <h2>Allocation</h2>
       {allocationByAssetClass && (
-        <div role="group" aria-label="Allocation view" style={{ marginBottom: "0.5rem" }}>
+        <div role="group" aria-label="Allocation view" className="toggle" style={{ marginBottom: "0.5rem" }}>
           <button type="button" aria-pressed={view === "holding"} onClick={() => setView("holding")}>
             By holding
           </button>{" "}
