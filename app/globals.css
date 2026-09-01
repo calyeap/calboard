@@ -689,3 +689,49 @@ h6 {
     row-gap: 12px;
   }
 }
+
+/* --- Holdings dark-mode chrome (minimal, 2026-09-01) --------------------
+   Deliberately narrow scope: static chrome only — page background, body
+   text, headings, the shared NavBar, and table borders/header/static cell
+   text. Reuses the exact colour values already defined above for
+   Dashboard's dark palette (.cb-dash[data-theme="dark"]) — not a new
+   palette, and that rule itself is untouched. Scoped to .holdings-chrome
+   (HoldingsShell, /holdings only) so nothing else — the setup wizard also
+   uses the shared NavBar/.page-shell but is NOT wrapped in this, and stays
+   exactly as it was.
+
+   Redefining the foundation's own --color-* custom properties (rather than
+   introducing new ones) is deliberate: every existing rule that already
+   reads var(--color-text) / var(--color-border) / var(--color-page-bg) —
+   .site-nav a, .site-nav's border, :focus-visible — picks up the dark
+   values automatically, with no parallel rule set to keep in sync.
+
+   Form controls are the one deliberate exception. The foundation's
+   `button, input, select, textarea { color: inherit }` rule (line ~38)
+   would otherwise pull the new dark --color-text into every input, select
+   and button here — explicitly reset back to the ORIGINAL light value
+   (not var(--color-text), which now resolves dark in this scope) so they
+   stay native/light per the milestone brief. */
+.holdings-chrome[data-theme="dark"] {
+  --color-text: #E9EAE7;
+  --color-text-muted: #979CA1;
+  --color-border: #2C2F33;
+  --color-page-bg: #16181A;
+  background: var(--color-page-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+}
+.holdings-chrome[data-theme="dark"] .editor-table table,
+.holdings-chrome[data-theme="dark"] .editor-table th,
+.holdings-chrome[data-theme="dark"] .editor-table td {
+  border-color: var(--color-border);
+}
+.holdings-chrome[data-theme="dark"] .editor-table thead th {
+  background: #2C2F33;
+}
+.holdings-chrome[data-theme="dark"] input,
+.holdings-chrome[data-theme="dark"] select,
+.holdings-chrome[data-theme="dark"] textarea,
+.holdings-chrome[data-theme="dark"] button {
+  color: #1a1a1a;
+}

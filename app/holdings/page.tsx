@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { NavBar } from "../components/NavBar";
+import { HoldingsShell } from "../components/HoldingsShell";
 import { getAllHoldings } from "@/lib/holdings";
 import { getPortfolioView } from "@/lib/portfolio";
 import { HoldingsEditor, type EditorInitialRow } from "./HoldingsEditor";
@@ -13,7 +14,7 @@ export default async function HoldingsPage() {
   const holdings = await getAllHoldings();
 
   return (
-    <>
+    <HoldingsShell>
       <NavBar />
       <main className="page-shell">
         <h1>Holdings</h1>
@@ -29,7 +30,7 @@ export default async function HoldingsPage() {
           <HoldingsEditor initial={await buildInitialRows()} />
         )}
       </main>
-    </>
+    </HoldingsShell>
   );
 }
 

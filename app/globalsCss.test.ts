@@ -23,3 +23,29 @@ describe("globals.css — .cb-dash regressions", () => {
     expect(ruleBody(".cb-dash .toggle")).toMatch(/display:\s*inline-flex\s*;/);
   });
 });
+
+describe("globals.css — .holdings-chrome dark-mode regressions", () => {
+  it("form controls explicitly reset color away from the dark ink value, not var(--color-text)", () => {
+    // The foundation's `button, input, select, textarea { color: inherit }`
+    // rule pulls whatever --color-text resolves to in scope — which
+    // .holdings-chrome[data-theme="dark"] redefines to a pale colour for
+    // static chrome text. Without an explicit reset here, every input,
+    // select and button inside dark Holdings would render pale text on
+    // their native white background: illegible. Must be a literal colour,
+    // not var(--color-text) — that variable is the dark value in this
+    // exact scope, so re-reading it here would silently reintroduce the bug.
+    const match = css.match(
+      /\.holdings-chrome\[data-theme="dark"\]\s+input,[\s\S]*?\.holdings-chrome\[data-theme="dark"\]\s+button\s*\{([^}]*)\}/
+    );
+    expect(match).not.toBeNull();
+    expect(match![1]).toMatch(/color:\s*#1a1a1a\s*;/);
+    expect(match![1]).not.toMatch(/var\(--color-text\)/);
+  });
+
+  it("redefines the shared --color-* custom properties rather than introducing a parallel token set", () => {
+    const body = ruleBody('.holdings-chrome[data-theme="dark"]');
+    expect(body).toMatch(/--color-text:/);
+    expect(body).toMatch(/--color-page-bg:/);
+    expect(body).toMatch(/--color-border:/);
+  });
+});
