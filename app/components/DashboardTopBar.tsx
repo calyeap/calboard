@@ -41,7 +41,7 @@ export function DashboardTopBar() {
         </button>
         <button
           type="button"
-          className="ctl icononly"
+          className="iconbare"
           aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           onClick={toggleTheme}

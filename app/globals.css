@@ -331,6 +331,11 @@ h6 {
   --a4: #6FA8DC;
   --a5: #2C7A87;
   --a6: #BDA9D6;
+  --field: #F7F7F5;
+  --line-strong: #C6C6BE;
+  --ink-hover: #33373A;
+  --seg-fill: #1B1D1F;
+  --seg-text: #F0F0ED;
 
   display: block;
   background: var(--ground);
@@ -364,10 +369,18 @@ h6 {
   --a4: #3E7BA8;
   --a5: #4FC2C9;
   --a6: #D5C4EC;
+  --field: #1E2124;
+  --line-strong: #3C4045;
+  --ink-hover: #474E55;
+  --seg-fill: #33383D;
+  --seg-text: #E9EAE7;
 }
 .cb-dash .num {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
+}
+.cb-dash :focus-visible {
+  outline-color: var(--ink);
 }
 
 .cb-dash .topbar {
@@ -425,6 +438,32 @@ h6 {
 }
 .cb-dash .ctl.icononly {
   padding: 6px 8px;
+}
+.cb-dash .iconbare {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 0;
+  transition: color 0.12s ease-out;
+}
+.cb-dash .iconbare:hover {
+  color: var(--ink);
+}
+.cb-dash .iconbare svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .cb-dash .valueblock {
@@ -634,8 +673,8 @@ h6 {
   border-radius: 0;
 }
 .cb-dash .toggle button[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--ground);
+  background: var(--seg-fill);
+  color: var(--seg-text);
 }
 .cb-dash .allocation-layout {
   display: flex;
