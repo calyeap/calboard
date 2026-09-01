@@ -85,7 +85,6 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
   const { hidden } = usePrivacy();
   const [rows, setRows] = useState<Row[]>(() => initial.map(toRow));
   const [asOfDate, setAsOfDate] = useState(localTodayIso());
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   // `initial` is read once by the lazy initializer above, so a server
   // re-render (e.g. PriceCell's Retry -> router.refresh) would otherwise be
@@ -346,32 +345,23 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
         Edit the quantities and average costs to match what you hold now, then Save.
       </p>
 
-      <p style={{ color: "#555" }}>
-        As of {asOfDate}.{" "}
-        {!datePickerOpen && (
-          <button type="button" onClick={() => setDatePickerOpen(true)}>
-            Change date
-          </button>
-        )}
+      <p>
+        <label htmlFor="holdings-as-of-date">Recording as of</label>
+        <br />
+        <input
+          id="holdings-as-of-date"
+          type="date"
+          aria-label="As-of date"
+          aria-invalid={errors.asOfDate ? true : undefined}
+          aria-describedby={errors.asOfDate ? "as-of-date-err" : undefined}
+          value={asOfDate}
+          max={localTodayIso()}
+          onChange={(e) => {
+            clearSaveState();
+            setAsOfDate(e.target.value);
+          }}
+        />
       </p>
-      {datePickerOpen && (
-        <p>
-          <label htmlFor="holdings-as-of-date">As of </label>
-          <input
-            id="holdings-as-of-date"
-            type="date"
-            aria-label="As-of date"
-            aria-invalid={errors.asOfDate ? true : undefined}
-            aria-describedby={errors.asOfDate ? "as-of-date-err" : undefined}
-            value={asOfDate}
-            max={localTodayIso()}
-            onChange={(e) => {
-              clearSaveState();
-              setAsOfDate(e.target.value);
-            }}
-          />
-        </p>
-      )}
       {errors.asOfDate && (
         <p id="as-of-date-err" role="alert" className="status-msg status-danger">
           {errors.asOfDate}

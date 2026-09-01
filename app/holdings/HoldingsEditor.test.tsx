@@ -53,8 +53,7 @@ describe("HoldingsEditor", () => {
     expect((screen.getByLabelText("Quantity for AAPL") as HTMLInputElement).value).toBe("10");
     expect((screen.getByLabelText("Average cost for AAPL") as HTMLInputElement).value).toBe("150");
     expect((screen.getByLabelText("Quantity for MSFT") as HTMLInputElement).value).toBe("4");
-    expect(screen.getByText(new RegExp(`as of ${localTodayIso()}`, "i"))).toBeInTheDocument();
-    expect(screen.queryByLabelText("As-of date")).toBeNull();
+    expect((screen.getByLabelText("As-of date") as HTMLInputElement).value).toBe(localTodayIso());
   });
 
   it("shows a non-blocking note when a quantity is increased but its average cost is untouched", () => {
@@ -441,7 +440,6 @@ describe("HoldingsEditor", () => {
 
   it("N4: the as-of-date error is programmatically associated with the date input", () => {
     render(<HoldingsEditor initial={baseInitial()} />);
-    fireEvent.click(screen.getByRole("button", { name: /change date/i }));
     fireEvent.change(screen.getByLabelText("As-of date"), { target: { value: "2099-01-01" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
@@ -562,7 +560,6 @@ describe("HoldingsEditor", () => {
 
   it("T29-5: an as-of-date-only rejection (no row error, no form error) still shows the summary near Save", () => {
     render(<HoldingsEditor initial={baseInitial()} />);
-    fireEvent.click(screen.getByRole("button", { name: /change date/i }));
     fireEvent.change(screen.getByLabelText("As-of date"), { target: { value: "2099-01-01" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
