@@ -6,6 +6,7 @@ import { resolveTickerAction } from "@/app/actions/setup";
 import { updateHoldingsAction } from "@/app/actions/holdings";
 import { retryPriceFetchAction } from "@/app/actions/prices";
 import { HoldingsEditor, type EditorInitialRow } from "./HoldingsEditor";
+import { PrivacyProvider, usePrivacy } from "@/app/components/PrivacyContext";
 
 // The Server Actions are exercised through the component; their own DB-backed
 // behaviour lives in app/actions/*.test.ts.
@@ -588,6 +589,7 @@ describe("HoldingsEditor", () => {
     );
     expect(labels).toEqual([
       "Symbol",
+      "Type",
       "Quantity",
       "Average cost",
       "Price",
@@ -615,7 +617,7 @@ describe("HoldingsEditor", () => {
     const tds = Array.from(
       screen.getByLabelText("Quantity for AAPL").closest("tr")!.querySelectorAll("td")
     );
-    const [priceTd, mvTd, plTd] = [tds[3], tds[4], tds[5]];
+    const [priceTd, mvTd, plTd] = [tds[4], tds[5], tds[6]];
     expect(priceTd.querySelector(".cell-label")?.textContent).toBe("Price");
     expect(mvTd.querySelector(".cell-label")?.textContent).toBe("Market value");
     expect(plTd.querySelector(".cell-label")?.textContent).toBe("Unrealised P&L");
@@ -725,5 +727,91 @@ describe("HoldingsEditor", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(screen.queryByText(/last price \$80000\.00/i)).toBeNull();
+  });
+});
+
+describe("HoldingsEditor — M1.5: asset type display", () => {
+  it("each row shows its stored asset type — sourced from assetClass, not inferred from the ticker", () => {
+    render(
+      <HoldingsEditor
+        initial={[
+          row({ assetId: "1", symbol: "NVDA", assetClass: "equity" }),
+          row({ assetId: "2", symbol: "VOO", assetClass: "etf" }),
+          row({ assetId: "3", symbol: "BTC", assetClass: "crypto" }),
+        ]}
+      />
+    );
+
+    const rows = screen.getAllByRole("row").slice(1); // skip header
+    expect(rows[0].textContent).toContain("Equity");
+    expect(rows[1].textContent).toContain("ETF");
+    expect(rows[2].textContent).toContain("Crypto");
+  });
+});
+
+describe("HoldingsEditor — M1.5: privacy toggle", () => {
+  function ToggleButton() {
+    const { toggle } = usePrivacy();
+    return (
+      <button type="button" onClick={toggle}>
+        toggle
+      </button>
+    );
+  }
+
+  it("masks the editable Quantity and Average cost inputs (still editable) without hiding Price", () => {
+    render(
+      <PrivacyProvider>
+        <ToggleButton />
+        <HoldingsEditor initial={baseInitial()} />
+      </PrivacyProvider>
+    );
+
+    const qty = screen.getByLabelText("Quantity for AAPL") as HTMLInputElement;
+    const avg = screen.getByLabelText("Average cost for AAPL") as HTMLInputElement;
+    expect(qty.type).toBe("text");
+    expect(avg.type).toBe("text");
+
+    fireEvent.click(screen.getByRole("button", { name: "toggle" }));
+
+    expect(qty.type).toBe("password");
+    expect(avg.type).toBe("password");
+    expect(qty.value).toBe("10"); // value unchanged — still fully editable
+    fireEvent.change(qty, { target: { value: "25" } });
+    expect(qty.value).toBe("25");
+
+    // Price is never masked.
+    expect(screen.getByText(/\$200\.00/)).toBeInTheDocument();
+  });
+
+  it("masks the derived Market value and Unrealised P&L cells", () => {
+    render(
+      <PrivacyProvider>
+        <ToggleButton />
+        <HoldingsEditor initial={baseInitial()} />
+      </PrivacyProvider>
+    );
+
+    // Unhidden: AAPL market value = 10 * 200.00 = 2000.00
+    expect(screen.getByText("2000.00")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "toggle" }));
+
+    expect(screen.queryByText("2000.00")).toBeNull();
+    expect(screen.getAllByText("••••••").length).toBeGreaterThan(0);
+  });
+
+  it("masks the Add-a-holding draft Quantity and Average cost inputs too", () => {
+    render(
+      <PrivacyProvider>
+        <ToggleButton />
+        <HoldingsEditor initial={baseInitial()} />
+      </PrivacyProvider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "toggle" }));
+
+    expect((screen.getByLabelText("New holding quantity") as HTMLInputElement).type).toBe("password");
+    expect((screen.getByLabelText("New holding average cost") as HTMLInputElement).type).toBe("password");
   });
 });

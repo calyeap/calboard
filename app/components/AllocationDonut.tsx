@@ -1,4 +1,9 @@
+"use client";
+
+import { useState } from "react";
 import type { AllocationResult } from "@/lib/allocation";
+import { MaskableValue } from "./MaskableValue";
+import { usePrivacy } from "./PrivacyContext";
 
 // Decorative only — allocation is never communicated through colour alone
 // (every value is text in the legend). Swatches are aria-hidden.
@@ -25,8 +30,22 @@ const C = SIZE / 2;
 //   - the SVG is hidden from assistive tech: the <table> legend carries the
 //     complete equivalent information (symbol, allocation %, USD market
 //     value) for every included holding, plus the priced total.
-export function AllocationDonut({ allocation }: { allocation: AllocationResult }) {
-  if (!allocation.hasAllocation) {
+export function AllocationDonut({
+  allocation,
+  allocationByAssetClass,
+}: {
+  allocation: AllocationResult;
+  // Optional: when given, a By holding / By asset class toggle appears.
+  // Both results come from the SAME computeAllocation calculation
+  // (lib/allocation.ts) — only how positions were grouped before calling it
+  // differs, so no allocation math lives in this component.
+  allocationByAssetClass?: AllocationResult;
+}) {
+  const [view, setView] = useState<"holding" | "class">("holding");
+  const active = view === "class" && allocationByAssetClass ? allocationByAssetClass : allocation;
+  const { hidden } = usePrivacy();
+
+  if (!active.hasAllocation) {
     return (
       <section className="dashboard-section allocation">
         <h2>Allocation</h2>
@@ -37,7 +56,7 @@ export function AllocationDonut({ allocation }: { allocation: AllocationResult }
     );
   }
 
-  const { entries, totalUsd } = allocation;
+  const { entries, totalUsd } = active;
 
   // Cumulative offset (in percent units) for each segment. On a
   // pathLength=100 circle the stroke starts at 3 o'clock going clockwise;
@@ -49,6 +68,16 @@ export function AllocationDonut({ allocation }: { allocation: AllocationResult }
   return (
     <section className="dashboard-section allocation">
       <h2>Allocation</h2>
+      {allocationByAssetClass && (
+        <div role="group" aria-label="Allocation view" style={{ marginBottom: "0.5rem" }}>
+          <button type="button" aria-pressed={view === "holding"} onClick={() => setView("holding")}>
+            By holding
+          </button>{" "}
+          <button type="button" aria-pressed={view === "class"} onClick={() => setView("class")}>
+            By asset class
+          </button>
+        </div>
+      )}
       <div className="allocation-layout">
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden="true">
           <circle cx={C} cy={C} r={R} fill="none" stroke="#eee" strokeWidth={STROKE} />
@@ -72,7 +101,7 @@ export function AllocationDonut({ allocation }: { allocation: AllocationResult }
             );
           })}
           <text x={C} y={C - 3} textAnchor="middle" fontSize="13" fontWeight="600" fill="#333">
-            US${totalUsd}
+            US${hidden ? "••••" : totalUsd}
           </text>
           <text x={C} y={C + 14} textAnchor="middle" fontSize="9" fill="#666">
             priced total
@@ -81,7 +110,7 @@ export function AllocationDonut({ allocation }: { allocation: AllocationResult }
 
         <table style={{ borderCollapse: "collapse" }}>
           <caption style={{ textAlign: "left", fontWeight: 600, marginBottom: "0.25rem" }}>
-            Allocation by holding
+            Allocation by {view === "class" ? "asset class" : "holding"}
           </caption>
           <thead>
             <tr>
@@ -110,7 +139,7 @@ export function AllocationDonut({ allocation }: { allocation: AllocationResult }
                 </td>
                 <td style={{ textAlign: "right", padding: "0.15rem 0.75rem" }}>{e.percent}%</td>
                 <td style={{ textAlign: "right", padding: "0.15rem 0 0.15rem 0.75rem" }}>
-                  US${e.marketValueUsd}
+                  US$<MaskableValue>{e.marketValueUsd}</MaskableValue>
                 </td>
               </tr>
             ))}
@@ -119,7 +148,9 @@ export function AllocationDonut({ allocation }: { allocation: AllocationResult }
             <tr>
               <th style={{ textAlign: "left", padding: "0.15rem 0.75rem 0.15rem 0" }}>Total (priced)</th>
               <td style={{ textAlign: "right", padding: "0.15rem 0.75rem" }}>100.00%</td>
-              <td style={{ textAlign: "right", padding: "0.15rem 0 0.15rem 0.75rem" }}>US${totalUsd}</td>
+              <td style={{ textAlign: "right", padding: "0.15rem 0 0.15rem 0.75rem" }}>
+                US$<MaskableValue>{totalUsd}</MaskableValue>
+              </td>
             </tr>
           </tfoot>
         </table>

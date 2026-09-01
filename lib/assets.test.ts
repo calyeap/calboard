@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { getPool } from "./db";
-import { resolveOrCreateAsset, findAssetBySymbol } from "./assets";
+import { resolveOrCreateAsset, findAssetBySymbol, formatAssetClass } from "./assets";
 
 beforeEach(async () => {
   const pool = getPool();
@@ -52,5 +52,13 @@ describe("findAssetBySymbol", () => {
     expect(found).not.toBeNull();
     expect(found?.id).toBe(created.id);
     expect(found?.primarySymbol).toBe("NVDA");
+  });
+});
+
+describe("formatAssetClass", () => {
+  it("formats each stored asset class as its display label", () => {
+    expect(formatAssetClass("equity")).toBe("Equity");
+    expect(formatAssetClass("etf")).toBe("ETF");
+    expect(formatAssetClass("crypto")).toBe("Crypto");
   });
 });

@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { formatAssetClass, type AssetClass } from "./assets";
 
 // Minimal input the allocation view needs from a PositionView — kept
 // decoupled from lib/portfolio.ts so this stays a pure, framework-free
@@ -58,4 +59,28 @@ export function computeAllocation(
   });
 
   return { hasAllocation: true, entries, totalUsd };
+}
+
+export interface AssetClassGroupingInput {
+  symbol: string;
+  assetClass: AssetClass;
+  marketValueUsd: Decimal | null;
+}
+
+// Aggregates priced holdings by asset class into the same AllocationInput
+// shape computeAllocation already accepts, so the allocation-by-class view
+// reuses that one calculation unchanged — only the grouping is new. A class
+// with no priced holding at all is omitted rather than passed through as a
+// null entry, matching computeAllocation's own exclusion of the unpriced.
+export function groupByAssetClass(positions: AssetClassGroupingInput[]): AllocationInput[] {
+  const sums = new Map<AssetClass, Decimal>();
+  for (const p of positions) {
+    if (p.marketValueUsd === null) continue;
+    const running = sums.get(p.assetClass) ?? new Decimal(0);
+    sums.set(p.assetClass, running.add(p.marketValueUsd));
+  }
+  return Array.from(sums.entries()).map(([assetClass, marketValueUsd]) => ({
+    symbol: formatAssetClass(assetClass),
+    marketValueUsd,
+  }));
 }

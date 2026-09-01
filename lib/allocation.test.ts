@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
-import { computeAllocation, type AllocationInput } from "./allocation";
+import { computeAllocation, groupByAssetClass, type AllocationInput } from "./allocation";
 
 const priced = (symbol: string, marketValueUsd: string): AllocationInput => ({
   symbol,
@@ -78,5 +78,49 @@ describe("computeAllocation", () => {
     expect(result.entries[0].percent).toBe("33.33");
     expect(typeof result.entries[0].percentNumber).toBe("number");
     expect(Number.isFinite(result.entries[0].percentNumber)).toBe(true);
+  });
+});
+
+describe("groupByAssetClass", () => {
+  it("sums priced holdings of the same class into one entry labelled by class", () => {
+    const grouped = groupByAssetClass([
+      { symbol: "AAPL", assetClass: "equity", marketValueUsd: new Decimal("300") },
+      { symbol: "NOW", assetClass: "equity", marketValueUsd: new Decimal("200") },
+      { symbol: "VOO", assetClass: "etf", marketValueUsd: new Decimal("400") },
+    ]);
+
+    expect(grouped).toEqual([
+      { symbol: "Equity", marketValueUsd: new Decimal("500") },
+      { symbol: "ETF", marketValueUsd: new Decimal("400") },
+    ]);
+  });
+
+  it("a class with one priced and one unpriced holding sums only the priced one", () => {
+    const grouped = groupByAssetClass([
+      { symbol: "AAPL", assetClass: "equity", marketValueUsd: new Decimal("300") },
+      { symbol: "NOPX", assetClass: "equity", marketValueUsd: null },
+    ]);
+
+    expect(grouped).toEqual([{ symbol: "Equity", marketValueUsd: new Decimal("300") }]);
+  });
+
+  it("a class whose every holding is unpriced is omitted entirely, not passed through as null", () => {
+    const grouped = groupByAssetClass([
+      { symbol: "NOPX", assetClass: "crypto", marketValueUsd: null },
+      { symbol: "AAPL", assetClass: "equity", marketValueUsd: new Decimal("100") },
+    ]);
+
+    expect(grouped.map((g) => g.symbol)).toEqual(["Equity"]);
+  });
+
+  it("preserves first-encounter order of asset classes", () => {
+    const grouped = groupByAssetClass([
+      { symbol: "BTC", assetClass: "crypto", marketValueUsd: new Decimal("1") },
+      { symbol: "AAPL", assetClass: "equity", marketValueUsd: new Decimal("1") },
+      { symbol: "VOO", assetClass: "etf", marketValueUsd: new Decimal("1") },
+      { symbol: "ETH", assetClass: "crypto", marketValueUsd: new Decimal("1") },
+    ]);
+
+    expect(grouped.map((g) => g.symbol)).toEqual(["Crypto", "Equity", "ETF"]);
   });
 });
