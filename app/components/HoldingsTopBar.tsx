@@ -5,10 +5,12 @@ import { usePrivacy } from "./PrivacyContext";
 import { useTheme } from "./ThemeContext";
 
 // Holdings-only nav — replaces <NavBar/> on /holdings, mirroring
-// DashboardTopBar exactly. /accounts/new keeps the shared NavBar unchanged
-// (its redesign is a later, DO-NOT-TOUCH milestone). Privacy and theme
-// controls read/write the same root-mounted contexts DashboardTopBar uses,
-// so state stays in sync across routes.
+// DashboardTopBar exactly. /accounts/new (SetupWizard) suppresses nav
+// entirely rather than rendering NavBar (see app/accounts/new/page.tsx) —
+// with this route's move off it, NavBar.tsx is now unreferenced by any
+// route; kept only because deleting it wasn't asked for this milestone.
+// Privacy and theme controls read/write the same root-mounted contexts
+// DashboardTopBar uses, so state stays in sync across routes.
 export function HoldingsTopBar() {
   const { hidden, toggle: togglePrivacy } = usePrivacy();
   const { theme, toggle: toggleTheme } = useTheme();

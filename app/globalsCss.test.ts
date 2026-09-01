@@ -26,7 +26,7 @@ describe("globals.css — .cb-dash regressions", () => {
 
 describe("globals.css — .holdings-chrome control-direction regressions", () => {
   it("defines its own parallel token set in dark mode, not the legacy --color-* tokens", () => {
-    // 2026-09-0X: .holdings-chrome moved from the earlier minimal dark-only
+    // 2026-09-01: .holdings-chrome moved from the earlier minimal dark-only
     // patch (which redefined the legacy --color-* tokens so unstyled
     // foundation rules picked them up automatically) to a full,
     // self-contained system mirroring .cb-dash — HoldingsTopBar and the

@@ -41,12 +41,15 @@ parallel visual system, scoped entirely under a `.cb-dash` wrapper
 `--ink`, `--muted`, `--hairline`, plus `--gain`/`--loss`/`--stale` and a six-value
 `--a1..--a6` allocation palette), and a manual light/dark toggle (`ThemeContext`,
 same session-only shape as `PrivacyContext`). The value figure is `.value`, not
-`.pv-amount`. **Holdings control-direction pass (2026-09-0X).** `/holdings` now runs the
+`.pv-amount`. **Holdings control-direction pass (2026-09-01).** `/holdings` now runs the
 same class of parallel visual system, scoped under `.holdings-chrome`
 (`HoldingsShell` + the new `HoldingsTopBar`), covering both themes from the
-start. `/accounts/new` (`SetupWizard.tsx`, still on the shared `NavBar` and
-the original foundation) remains untouched — its own pass is a later,
-separately classified milestone.
+start. `/accounts/new` (`SetupWizard.tsx`, still on the original foundation
+and suppressing nav entirely rather than rendering `NavBar` — see
+`app/accounts/new/page.tsx`) remains untouched — its own pass is a later,
+separately classified milestone. With `/holdings`' move off it, `NavBar.tsx`
+is now unreferenced by any route (see the note near "Number-presentation
+parity" below).
 
 ## Hard Product Constraints
 
@@ -80,6 +83,15 @@ decision is reopened deliberately.
    Dashboard is opened, freshness-aware caching, transparent degraded states. The
    durable part is the honesty rule; the wider refresh mechanism is still
    undefined. (`CRITICAL §0.2`; `TRD §3.3`: no real-time data, no websockets.)
+
+   **Approved behaviour change #2 — `/holdings`' as-of-date field is now
+   permanently visible.** The old "Change date" disclosure button — which,
+   once clicked, could never be dismissed again — is gone. The as-of-date
+   field, relabelled "Recording as of," is now always shown in
+   `HoldingsEditor.tsx`'s save row. The underlying `asOfDate` state, its
+   default to today (`localTodayIso()`), its max-today cap, and how it
+   becomes `tradeDate` on Save are all unchanged — this was a UI-only
+   change.
 4. **No portfolio performance chart or return time series — outside M1 and M1.1, not
    forbidden forever.** V1 shows current market value, current unrealised gain/loss
    vs. cost basis, and day movement where available — nothing else. Snapshot data
@@ -116,7 +128,8 @@ decision is reopened deliberately.
   destroy trust faster than one missing total. (The donut centre reuses the exact
   Portfolio Value.)
 - **Provenance and freshness are honest; degraded is never confusable with clear.**
-  Stale data renders visibly degraded (muted, with an as-of date), never as fresh;
+  Stale data renders visibly degraded (a marker dot plus muted `--stale` colour, the
+  as-of date in a tooltip and named in a page-level footnote), never as fresh;
   unavailable data says so; failure is a named state, not a blank. "We couldn't get
   this" must read as distinct from "there is nothing to report". (`PRD §14 D4`.)
 - **Dates are labelled by what they mean** — never conflated, never a bare timestamp:
@@ -187,6 +200,19 @@ uses thousands separators on monetary values (`/`'s portfolio value reads
 `US$74946.23`, not `US$74,946.23`). Both are pre-existing, not introduced by
 this pass; grouped here as one deliberate follow-up (a small, separate PR),
 not patched ad hoc as a side effect of unrelated work.
+
+**`NavBar.tsx` is currently unreferenced by any route (2026-09-01).** The
+Dashboard uses `DashboardTopBar`, `/holdings` uses `HoldingsTopBar`, and
+`/accounts/new` (`SetupWizard.tsx`) suppresses nav entirely rather than
+rendering `NavBar` — see `app/accounts/new/page.tsx`. Only `NavBar.test.tsx`
+still renders it directly. It is kept only because deleting it wasn't asked
+for; do not cite it as still in use by `/accounts/new` or anywhere else.
+
+**`retryPriceFetchAction` is unreachable from any UI (2026-09-01, not fixed
+here).** `app/actions/prices.ts`'s `retryPriceFetchAction` was `PriceCell`'s
+per-row Retry handler before Approved Behaviour Change #1 removed that
+button; nothing calls it now except its own test (`prices.test.ts`). Not
+deleted — logged here for a future cleanup pass.
 
 ## Navigation, Controls and Forms
 
@@ -283,8 +309,8 @@ body text even without colour.
 | **Empty** | A short line stating the situation plus one primary `.button-link` action. Deliberate, not an error. |
 | **Success** | `.status-msg .status-success`, `role="status"`, plain past-tense copy ("Holdings updated."). |
 | **Error** | `.status-msg .status-danger` (block) or `.status-danger` (inline in a cell), `role="alert"`; wording names the specific problem; field errors also mark the field. |
-| **Stale** | Value shown in muted colour with an "(as of DATE)" marker. Refresh via the shared `PriceRefreshControl` / `refreshAllPricesAction` pattern beside each route's "Data checked" line. Never shown as current. |
-| **Unavailable** | Marker + `—`; excluded from totals with disclosure on both routes. |
+| **Stale** | Value gets a small `.marker` dot plus `--stale` colour; the reason ("Priced at DATE close") is in a `title` tooltip, never visible "(as of DATE)" text. A page-level footnote also names every affected symbol, on both routes. Refresh via the shared `PriceRefreshControl` / `refreshAllPricesAction` pattern beside each route's "Data checked" line. Never shown as current. |
+| **Unavailable** | Same `.marker` + `--stale` treatment, value shown as `—`; reason ("No price available") in a `title` tooltip; excluded from totals, named in the same page-level footnote on both routes. |
 | **Uncertain** | `.status-msg .status-warning`, honest "we couldn't confirm / couldn't reach the server" copy; persists until the next real attempt. |
 | **Staged (pending removal)** | The row dims, inputs disable, derived figures show `—`, the action flips Remove → **Undo**. Nothing is written until Save. |
 
@@ -312,7 +338,7 @@ scoped, deliberate choice for the frozen mock direction, not a change to the sha
 convention `/holdings` and the wizard still use. The durable rule above (never a
 sideways scroll) still holds — verified at 375 / 719 / 721 / 1280 px.
 
-**Holdings control-direction deviation (2026-09-0X).** `/holdings` also moved to
+**Holdings control-direction deviation (2026-09-01).** `/holdings` also moved to
 a single `@media (max-width: 720px)` breakpoint, but — unlike Dashboard —
 kept the single-markup `.editor-table`/`.cell-label` restack instead of adding
 a second `.stack` card markup: `HoldingsEditor.test.tsx`'s existing T30-3 test
@@ -379,7 +405,7 @@ still hold.
   Dashboard-only v2 redesign: frozen direction, file structure, and the
   `.cb-dash` scoping rationale summarised throughout this section.
 
-### Spec errors found during the 2026-09-0X control-direction build
+### Spec errors found during the 2026-09-01 control-direction build
 
 Two errors in the frozen references, found while implementing against them.
 Both were resolved by following the more authoritative source per the

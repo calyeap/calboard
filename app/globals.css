@@ -729,7 +729,7 @@ h6 {
   }
 }
 
-/* --- Holdings control-direction chrome (2026-09-0X) ---------------------
+/* --- Holdings control-direction chrome (2026-09-01) ---------------------
    Full parallel visual system for /holdings, mirroring .cb-dash's structure
    but covering both themes from the start (the prior milestone's dark-only
    patch is fully superseded). Scoped to .holdings-chrome (HoldingsShell,
@@ -905,10 +905,7 @@ h6 {
 .holdings-chrome .checked {
   font-size: 13px;
   color: var(--muted);
-  margin-top: 10px;
-  display: flex;
-  align-items: center;
-  gap: 2px;
+  margin-top: 6px;
 }
 .holdings-chrome .refresh {
   background: none;
@@ -1304,6 +1301,7 @@ h6 {
   }
   .holdings-chrome .editor-table tr {
     border: 1px solid var(--hairline);
+    border-radius: 0;
     margin-block: 12px;
     padding: 12px;
     position: relative;

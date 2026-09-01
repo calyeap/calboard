@@ -87,9 +87,10 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
   const [asOfDate, setAsOfDate] = useState(localTodayIso());
 
   // `initial` is read once by the lazy initializer above, so a server
-  // re-render (e.g. PriceCell's Retry -> router.refresh) would otherwise be
-  // ignored by the mounted editor. Sync ONLY the refreshed price metadata
-  // (priceUsd / priceStatus / priceDate) into matching existing rows, keyed
+  // re-render (e.g. PriceRefreshControl's global refresh -> router.refresh)
+  // would otherwise be ignored by the mounted editor. Sync ONLY the
+  // refreshed price metadata (priceUsd / priceStatus / priceDate) into
+  // matching existing rows, keyed
   // by assetId — never touching quantity, average cost, baselines, removed
   // state, row order, or rows added in this session (absent from `initial`).
   // Returns the current array unchanged when nothing moved, so this causes
@@ -631,8 +632,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
           </div>
           <div>
             <button type="button" className="btn" onClick={handleSave} disabled={saving}>
-              <span style={{ visibility: saving ? "hidden" : "visible", display: "inline-block" }}>Save</span>
-              {saving && <span style={{ position: "absolute" }}>Saving…</span>}
+              {saving ? "Saving…" : "Save"}
             </button>
           </div>
         </div>

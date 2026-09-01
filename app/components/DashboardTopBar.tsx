@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePrivacy } from "./PrivacyContext";
 import { useTheme } from "./ThemeContext";
 
-// Dashboard-only nav — replaces <NavBar/> on `/`. /holdings and the setup
-// wizard keep the shared NavBar unchanged (their redesign is a later
-// milestone). Privacy and theme controls read/write the same root-mounted
-// contexts NavBar uses, so state stays in sync across routes.
+// Dashboard-only nav — replaces <NavBar/> on `/`. /holdings has since moved
+// to its own HoldingsTopBar too; /accounts/new (the setup wizard) suppresses
+// nav entirely rather than rendering NavBar. NavBar.tsx is now unreferenced
+// by any route. Privacy and theme controls read/write the same root-mounted
+// contexts HoldingsTopBar uses, so state stays in sync across routes.
 export function DashboardTopBar() {
   const { hidden, toggle: togglePrivacy } = usePrivacy();
   const { theme, toggle: toggleTheme } = useTheme();
