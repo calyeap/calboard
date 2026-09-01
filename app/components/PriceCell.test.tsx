@@ -1,73 +1,49 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { retryPriceFetchAction } from "@/app/actions/prices";
+import { describe, it, expect, afterEach } from "vitest";
+import { render, screen, cleanup } from "@testing-library/react";
 import { PriceCell } from "./PriceCell";
 
-// The Server Action's own behaviour is covered in app/actions/prices.test.ts;
-// here it is exercised only to drive the cell's retry / retry-error states.
-vi.mock("@/app/actions/prices", () => ({ retryPriceFetchAction: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
-
-const retryMock = vi.mocked(retryPriceFetchAction);
-
-// Vitest isn't run with globals:true, so Testing Library's automatic
-// afterEach(cleanup) isn't registered — unmount between tests explicitly.
 afterEach(() => {
   cleanup();
 });
-beforeEach(() => {
-  retryMock.mockReset();
-});
 
 describe("PriceCell", () => {
-  it("a stale price stays legible — it shows the price, its date and a Retry control", () => {
-    render(
-      <PriceCell
-        assetId="1"
-        symbol="AAPL"
-        assetClass="equity"
-        priceStatus="stale"
-        priceUsd="199.99"
-        priceDate="2026-07-01"
-      />
+  it("a current price renders plainly, with no marker and no title", () => {
+    const { container } = render(
+      <PriceCell priceStatus="current" priceUsd="199.99" priceDate="2026-08-26" />
     );
-    expect(screen.getByText(/\$199\.99/)).toBeInTheDocument();
-    expect(screen.getByText(/as of 2026-07-01/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+    expect(screen.getByText("$199.99")).toBeInTheDocument();
+    expect(container.querySelector(".marker")).toBeNull();
+    expect(container.querySelector("[title]")).toBeNull();
   });
 
-  it("an unavailable price reads 'No price yet' with a Retry control", () => {
-    render(
-      <PriceCell
-        assetId="1"
-        symbol="AAPL"
-        assetClass="equity"
-        priceStatus="unavailable"
-        priceUsd={null}
-        priceDate={null}
-      />
+  it("a stale price shows the marker, the price, and the date only in the title tooltip", () => {
+    const { container } = render(
+      <PriceCell priceStatus="stale" priceUsd="199.99" priceDate="2026-07-01" />
     );
-    expect(screen.getByText(/no price yet/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+    expect(screen.getByText("$199.99")).toBeInTheDocument();
+    expect(container.querySelector(".marker")).not.toBeNull();
+    expect(container.querySelector('[title="Priced at 2026-07-01 close"]')).not.toBeNull();
+    expect(screen.queryByText(/as of/i)).toBeNull();
   });
 
-  it("a failed Retry announces the reason as an alert", async () => {
-    retryMock.mockResolvedValue({ ok: false, message: "Price fetch failed." });
-    render(
-      <PriceCell
-        assetId="1"
-        symbol="AAPL"
-        assetClass="equity"
-        priceStatus="stale"
-        priceUsd="199.99"
-        priceDate="2026-07-01"
-      />
+  it("an unavailable price shows the marker, an em dash, and 'No price available' in the title", () => {
+    const { container } = render(
+      <PriceCell priceStatus="unavailable" priceUsd={null} priceDate={null} />
     );
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(container.querySelector(".marker")).not.toBeNull();
+    expect(container.querySelector('[title="No price available"]')).not.toBeNull();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
-
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent(/price fetch failed/i);
+  it("renders no Retry control in any state", () => {
+    const { rerender } = render(
+      <PriceCell priceStatus="current" priceUsd="199.99" priceDate="2026-08-26" />
+    );
+    expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
+    rerender(<PriceCell priceStatus="stale" priceUsd="199.99" priceDate="2026-07-01" />);
+    expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
+    rerender(<PriceCell priceStatus="unavailable" priceUsd={null} priceDate={null} />);
+    expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
   });
 });
