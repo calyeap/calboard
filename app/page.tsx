@@ -153,9 +153,14 @@ export default async function DashboardPage() {
                 </div>
                 <PriceRefreshControl checkedAt={checkedAt} />
                 <div className="dashboard-note">
-                  {lastConfirmation
-                    ? `Holdings last updated: ${formatConfirmedAt(lastConfirmation.confirmedAt)}`
-                    : "Holdings last updated: —"}
+                  {lastConfirmation ? (
+                    <>
+                      Holdings last updated: {formatConfirmedAt(lastConfirmation.confirmedAt)}
+                      {lastConfirmation.asOfDate && ` (snapshot as of ${lastConfirmation.asOfDate})`}
+                    </>
+                  ) : (
+                    "Holdings last updated: —"
+                  )}
                 </div>
                 {portfolio!.excludedFromTotalSymbols.length > 0 && (
                   <p className="status-msg status-warning">

@@ -30,11 +30,22 @@ true and stop. (`CRITICAL §0.2`.)
 **Current visual direction.** Backed by `app/globals.css` (*"a foundation, not a
 design system"*) and the Task 28–32 UI pass. Restrained and utilitarian: plain
 background, near-black text, hairline borders, generous vertical rhythm; native
-tables, short labelled sections; the one key number (Portfolio Value, `.pv-amount`) is
-the largest element, everything else visibly secondary; one accent, the solid dark
-`.button-link`. System-native throughout — `system-ui` fonts, native controls, native
-`<table>` semantics, **no component library and no CSS framework**. The restraint is
-the design, not an unfinished state.
+tables, short labelled sections; one accent, the solid dark `.button-link`.
+System-native throughout — `system-ui` fonts, native controls, native `<table>`
+semantics, **no component library and no CSS framework**. The restraint is the
+design, not an unfinished state.
+
+**Dashboard-only v2 (2026-09-01).** The Dashboard route (`/`) now runs a second,
+parallel visual system, scoped entirely under a `.cb-dash` wrapper
+(`DashboardShell`): IBM Plex Sans, a structural light/dark palette (`--ground`,
+`--ink`, `--muted`, `--hairline`, plus `--gain`/`--loss`/`--stale` and a six-value
+`--a1..--a6` allocation palette), and a manual light/dark toggle (`ThemeContext`,
+same session-only shape as `PrivacyContext`). The value figure is `.value`, not
+`.pv-amount`. `/holdings` and the setup wizard are deliberately untouched — they
+still render the foundation described above, unscoped, light-only. Both systems
+coexist in `app/globals.css`; nothing outside `.cb-dash` changed. This is a
+**Dashboard-only** milestone, not yet a site-wide restyle — update this note when
+`/holdings` gets its own pass.
 
 ## Hard Product Constraints
 
@@ -49,17 +60,24 @@ decision is reopened deliberately.
 2. **Price movement is never the anchor.** A day-move figure may exist as a *column*;
    never the default sort, never the largest element, never what the eye lands on
    first. The specified default position sort is **portfolio weight**, never
-   percentage change. (`PRD §9`, `TDD §6.3`: "enforced, not stylistic".)
+   percentage change. (`PRD §9`, `TDD §6.3`: "enforced, not stylistic".) The
+   Dashboard now implements this: `app/page.tsx` sorts `getPortfolioView()`'s
+   positions by descending market value before rendering the Holdings table and
+   the allocation legend — `lib/portfolio.ts`'s own SQL order stays alphabetical
+   (`/holdings`' pre-fill still reads it directly and must not reorder).
 3. **Prices are pull-based, end-of-day / delayed, and freshness is shown truthfully.**
    Prohibited unless separately authorised: live streaming, tick-by-tick values,
    continuous background polling, uncontrolled repeated provider requests, and ever
    presenting a delayed price as live. Current implementation is pull-based — a
-   displayed price changes because a scheduled job ran or the user pressed Retry.
-   **Unresolved, not foreclosed:** a *controlled* freshness policy — one refresh
-   attempt when the Dashboard is opened or explicitly refreshed, freshness-aware
-   caching, manual Retry, transparent degraded states. The durable part is the
-   honesty rule; the refresh mechanism is undefined. (`CRITICAL §0.2`; `TRD §3.3`: no
-   real-time data, no websockets.)
+   displayed price changes because a scheduled job ran or the user refreshed.
+   **On the Dashboard, per-row Retry is gone**, replaced by one global manual
+   refresh control (`PriceRefreshControl` / `refreshAllPricesAction`) beside "Data
+   checked" — still pull-based, still manual-only, never a timer; `/holdings`
+   (`PriceCell`) is unchanged and still offers per-row Retry. **Unresolved, not
+   foreclosed:** a *controlled* freshness policy — one refresh attempt when the
+   Dashboard is opened, freshness-aware caching, transparent degraded states. The
+   durable part is the honesty rule; the wider refresh mechanism is still
+   undefined. (`CRITICAL §0.2`; `TRD §3.3`: no real-time data, no websockets.)
 4. **No portfolio performance chart or return time series — outside M1 and M1.1, not
    forbidden forever.** V1 shows current market value, current unrealised gain/loss
    vs. cost basis, and day movement where available — nothing else. Snapshot data
@@ -127,7 +145,10 @@ decision is reopened deliberately.
 - **Dashboard order** (also the narrow-screen reading order): portfolio summary +
   freshness/health → allocation → holdings detail. Change only as a deliberate
   hierarchy decision.
-- **Rhythm hooks:** `.dashboard-section`, `.pv-amount`, `.dashboard-note`. **Wizard:**
+- **Rhythm hooks:** `.dashboard-section`, `.dashboard-note` (both still used, restyled
+  under `.cb-dash` on the Dashboard; unchanged on `/holdings`). The Dashboard's value
+  figure hook is now `.value` inside `.valueblock`, not `.pv-amount` (still defined in
+  `globals.css` but no longer referenced — nothing currently reuses it). **Wizard:**
   `.wizard-section`, a plain-text `Step N of 2` (`.wizard-step`), `.wizard-actions`.
 - **One dominant primary action per screen** — add a competing primary only where the
   workflow requires it.
@@ -143,13 +164,18 @@ Data-health; a 3-zone Dashboard) is **M2+ and not yet built**.
 `--space-sm/md/lg`, `--radius`); do not hard-code values in components. Body
 line-height `1.5`; headings `1.25`.
 
-**Unresolved — do not invent a system to close these.** No named type scale (sizes are
-ad-hoc per component — match nearby usage). Two deliberate hard-coded colour sets
-remain, neither tokenised nor contrast-audited: `.button-link`'s `#111111`/`#ffffff`
-pair and the decorative `SWATCHES` array in `AllocationDonut.tsx`. Dark mode is not
-addressed — the palette is light-background only; do not add it opportunistically.
-Inline `style={{…}}` and ad-hoc greys survive in `AllocationDonut`, `HoldingsEditor`,
-`PriceCell` and one span in `app/page.tsx` — not a pattern to expand. Prefer a
+**Unresolved — do not invent a system to close these.** No named type scale outside
+`.cb-dash` (sizes are ad-hoc per component — match nearby usage). One deliberate
+hard-coded colour pair remains, neither tokenised nor contrast-audited:
+`.button-link`'s `#111111`/`#ffffff`. `AllocationDonut.tsx`'s `SWATCHES` now
+reference the `.cb-dash` `--a1..--a6` tokens instead of hardcoded hex — inert outside
+`.cb-dash` (the custom properties don't resolve there), so `/holdings` never renders
+this component today; if it ever does, it needs its own swatch source. **Dark mode
+now exists, but only inside `.cb-dash`** (`ThemeContext`, Dashboard route only) — the
+rest of the app (`/holdings`, the wizard, `NavBar`) is still light-only; do not extend
+dark mode elsewhere opportunistically, that's a deliberate future decision. Inline
+`style={{…}}` and ad-hoc greys survive in `HoldingsEditor` and `PriceCell` — not a
+pattern to expand. Prefer a
 token-backed class in `globals.css` for anything new or reused.
 
 ## Navigation, Controls and Forms
@@ -222,10 +248,11 @@ comparison. Worth fixing as **one deliberate formatting decision**, not patched 
 
 **M1-specific.** No day-price-movement column — the provider interface exposes no
 prior close, so there is nothing honest to render; when one arrives, Hard Constraint 2
-governs. Holdings and the allocation legend are ordered **alphabetically by symbol**
-(`ORDER BY primary_symbol`), no user-facing sort control — a neutral placeholder, not
-the specified portfolio-weight default. No sector/historical allocation; no per-broker
-view.
+governs. `getPortfolioView()`'s underlying SQL order is still **alphabetical by
+symbol** (`ORDER BY primary_symbol`) — the Dashboard now sorts by portfolio weight
+client-side after fetching (Hard Constraint 2), but `/holdings`' pre-fill reads the
+same query directly and is still alphabetical; no user-facing sort control on either
+route. No sector/historical allocation; no per-broker view.
 
 ## States
 
@@ -239,8 +266,8 @@ body text even without colour.
 | **Empty** | A short line stating the situation plus one primary `.button-link` action. Deliberate, not an error. |
 | **Success** | `.status-msg .status-success`, `role="status"`, plain past-tense copy ("Holdings updated."). |
 | **Error** | `.status-msg .status-danger` (block) or `.status-danger` (inline in a cell), `role="alert"`; wording names the specific problem; field errors also mark the field. |
-| **Stale** | Value in `--color-text-muted` with an "(as of DATE)" suffix and a Retry control. Never shown as current. |
-| **Unavailable** | Literal "No price yet" plus a Retry control; excluded from totals with disclosure. |
+| **Stale** | `/holdings` (`PriceCell`): value in `--color-text-muted` with an "(as of DATE)" suffix and a per-row Retry control. Dashboard (`DashboardHoldingsTable`): value in `--stale`, a small marker dot, and the reason named in a shared footnote — no per-row control, refreshed only via the Dashboard's one global `PriceRefreshControl`. Never shown as current, on either route. |
+| **Unavailable** | `/holdings`: literal "No price yet" plus a per-row Retry control. Dashboard: marker + `—` + the footnote naming the symbol; excluded from totals with disclosure on both. |
 | **Uncertain** | `.status-msg .status-warning`, honest "we couldn't confirm / couldn't reach the server" copy; persists until the next real attempt. |
 | **Staged (pending removal)** | The row dims, inputs disable, derived figures show `—`, the action flips Remove → **Undo**. Nothing is written until Save. |
 
@@ -258,6 +285,15 @@ breakpoint today, `@media (max-width: 640px)`, with the `.editor-table` /
 implementation choices; add one when a layout needs it, deliberately, and update this
 file. Durable: read paths usable on mobile, one DOM not a duplicated mobile tree,
 never a sideways scroll.
+
+**Dashboard-only deviation (2026-09-01).** The Dashboard route deliberately uses its
+own single `@media (max-width: 720px)` breakpoint and a dual-markup responsive
+technique — a desktop `table.holdings` and a mobile `.stack` of `.hrow` cards, both
+generated from one data pass in `DashboardHoldingsTable` and toggled by CSS
+`display`, not the shared `.editor-table`/`.cell-label` single-DOM restack. This is a
+scoped, deliberate choice for the frozen mock direction, not a change to the shared
+convention `/holdings` and the wizard still use. The durable rule above (never a
+sideways scroll) still holds — verified at 375 / 719 / 721 / 1280 px.
 
 ## Accessibility
 
@@ -311,7 +347,11 @@ still hold.
   presentation, §13 components) · **`02-TRD-v1.2.md`** (§3.3 EOD-only / no websockets,
   §3.4 SGD decoration) · **`04-BUILD-PLAN-v1.2.md`** (M1 completion-boundary note:
   pull-based prices, manual Retry).
-- **`app/globals.css`** — source of truth for token values and shared CSS.
+- **`app/globals.css`** — source of truth for token values and shared CSS (the
+  original foundation, plus the `.cb-dash` Dashboard-v2 tokens appended below it).
+- **`docs/superpowers/plans/2026-09-01-dashboard-visual-redesign.md`** — the
+  Dashboard-only v2 redesign: frozen direction, file structure, and the
+  `.cb-dash` scoping rationale summarised throughout this section.
 
 > **Warning — older specs describe more than the current app.** `PRD §5/§9` and
 > `TDD §13` name routes, components (`ValueHeader`, `ConcentrationPanel`,
