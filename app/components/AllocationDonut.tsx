@@ -6,17 +6,11 @@ import { MaskableValue } from "./MaskableValue";
 import { usePrivacy } from "./PrivacyContext";
 
 // Decorative only — allocation is never communicated through colour alone
-// (every value is text in the legend). Swatches are aria-hidden.
-const SWATCHES = [
-  "#4e79a7",
-  "#f28e2b",
-  "#59a14f",
-  "#e15759",
-  "#b07aa1",
-  "#76b7b2",
-  "#edc948",
-  "#9c755f",
-];
+// (every value is text in the legend). Swatches are aria-hidden. The frozen
+// six-value palette, via CSS custom properties so dark mode (.cb-dash
+// [data-theme="dark"]) swaps them automatically — deliberately excludes
+// green/red/amber, reserved for gain/loss/stale.
+const SWATCHES = ["var(--a1)", "var(--a2)", "var(--a3)", "var(--a4)", "var(--a5)", "var(--a6)"];
 
 const SIZE = 160;
 const STROKE = 22;
@@ -80,7 +74,7 @@ export function AllocationDonut({
       )}
       <div className="allocation-layout">
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden="true">
-          <circle cx={C} cy={C} r={R} fill="none" stroke="#eee" strokeWidth={STROKE} />
+          <circle cx={C} cy={C} r={R} fill="none" stroke="var(--hairline)" strokeWidth={STROKE} />
           {entries.map((e, i) => {
             const seg = e.percentNumber;
             const dashoffset = 25 - offset;
@@ -100,10 +94,10 @@ export function AllocationDonut({
               />
             );
           })}
-          <text x={C} y={C - 3} textAnchor="middle" fontSize="13" fontWeight="600" fill="#333">
+          <text x={C} y={C - 3} textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--ink)">
             US${hidden ? "••••" : totalUsd}
           </text>
-          <text x={C} y={C + 14} textAnchor="middle" fontSize="9" fill="#666">
+          <text x={C} y={C + 14} textAnchor="middle" fontSize="9" fill="var(--muted)">
             priced total
           </text>
         </svg>
