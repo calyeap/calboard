@@ -185,10 +185,11 @@ hard-coded colour pair remains, neither tokenised nor contrast-audited:
 `.button-link`'s `#111111`/`#ffffff`. `AllocationDonut.tsx`'s `SWATCHES` now
 reference the `.cb-dash` `--a1..--a6` tokens instead of hardcoded hex — inert outside
 `.cb-dash` (the custom properties don't resolve there), so `/holdings` never renders
-this component today; if it ever does, it needs its own swatch source. **Dark mode
-now exists, but only inside `.cb-dash`** (`ThemeContext`, Dashboard route only) — the
-rest of the app (`/holdings`, the wizard, `NavBar`) is still light-only; do not extend
-dark mode elsewhere opportunistically, that's a deliberate future decision. Inline
+this component today; if it ever does, it needs its own swatch source. **Dark mode now exists in two scoped systems: `.cb-dash` (Dashboard) and
+`.holdings-chrome` (Holdings)** — both full token systems covering every control in
+both themes, sharing the same `ThemeContext`. Only the setup wizard (`/accounts/new`)
+and the shared, now-unreferenced `NavBar` remain light-only/untouched. Do not extend
+dark mode elsewhere opportunistically; that's a deliberate future decision. Inline
 `style={{…}}` and ad-hoc greys survive in `HoldingsEditor` and `PriceCell` — not a
 pattern to expand. Prefer a
 token-backed class in `globals.css` for anything new or reused.
