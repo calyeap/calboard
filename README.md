@@ -12,7 +12,13 @@ Local-only, single-user, never publicly deployed. Not financial advice.
 
 ## Screenshots
 
-Screenshots are coming in a follow-up PR.
+![Calboard dashboard showing portfolio value, allocation, and holdings summary](docs/images/dashboard.webp)
+
+*Dashboard — demonstration data, not real holdings.*
+
+![Calboard holdings editor showing a form for adding and editing a position](docs/images/holdings-editor.webp)
+
+*Holdings editor — demonstration data, not real holdings.*
 
 ## Setup
 
