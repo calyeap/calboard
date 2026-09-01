@@ -20,3 +20,21 @@ if (!/_test$/.test(dbName)) {
 process.env.DATABASE_URL = url;
 
 import "@testing-library/jest-dom/vitest";
+
+// jsdom doesn't implement matchMedia. ThemeContext reads it on mount in
+// every jsdom test that renders anything under ThemeProvider, not just
+// ThemeContext's own tests, so this needs to be a global default (light,
+// i.e. "not dark") rather than a per-test mock. Node-environment (DB
+// integration) tests never touch `window`, hence the guard.
+if (typeof window !== "undefined" && !window.matchMedia) {
+  window.matchMedia = (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }) as MediaQueryList;
+}
