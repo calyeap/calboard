@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import Decimal from "decimal.js";
 import type { PositionView } from "@/lib/portfolio";
+import { PrivacyProvider, usePrivacy } from "./PrivacyContext";
 import { DashboardHoldingsTable } from "./DashboardHoldingsTable";
 
 afterEach(cleanup);
@@ -86,5 +87,42 @@ describe("DashboardHoldingsTable", () => {
     const table = screen.getAllByRole("table")[0];
     expect(table.textContent).toContain("+$50.00");
     expect(table.textContent).toContain("−$50.00");
+  });
+
+  it("masks Quantity, Avg cost, Market value and P&L in BOTH the desktop table and the mobile stack, keeping Price visible in both", () => {
+    function ToggleButton() {
+      const { toggle } = usePrivacy();
+      return (
+        <button type="button" onClick={toggle}>
+          toggle
+        </button>
+      );
+    }
+    const positions = [
+      position({
+        symbol: "AAPL",
+        quantity: new Decimal("10"),
+        avgCostUsd: new Decimal("100"),
+        latestPriceUsd: new Decimal("300"),
+        marketValueUsd: new Decimal("3000"),
+      }),
+    ];
+    const { container } = render(
+      <PrivacyProvider>
+        <ToggleButton />
+        <DashboardHoldingsTable positions={positions} />
+      </PrivacyProvider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "toggle" }));
+
+    expect(container.textContent).not.toContain("10.0000");
+    expect(container.textContent).not.toContain("100.00");
+    expect(container.textContent).not.toContain("3000.00");
+    // Price is public market data — never masked. It only appears in the
+    // desktop table.holdings cell; the mobile .hrow card (mirroring the
+    // mock) doesn't repeat price standalone, only market value/qty/P&L.
+    const desktopTable = container.querySelector("table.holdings")!;
+    expect(desktopTable.textContent).toContain("$300.00");
   });
 });

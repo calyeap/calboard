@@ -102,7 +102,12 @@ export function DashboardHoldingsTable({ positions }: { positions: PositionView[
               </div>
               <div className="meta num">
                 <MaskableValue>{p.quantity.toFixed(4)}</MaskableValue> &times;{" "}
-                {p.avgCostUsd ? `$${p.avgCostUsd.toFixed(2)}` : "—"} avg &middot; {formatAssetClass(p.assetClass)}
+                {p.avgCostUsd ? (
+                  <MaskableValue>{`$${p.avgCostUsd.toFixed(2)}`}</MaskableValue>
+                ) : (
+                  "—"
+                )}{" "}
+                avg &middot; {formatAssetClass(p.assetClass)}
               </div>
               {note && (
                 <div className="meta stale">
