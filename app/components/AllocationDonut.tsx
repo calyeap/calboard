@@ -42,7 +42,9 @@ export function AllocationDonut({
   if (!active.hasAllocation) {
     return (
       <section className="dashboard-section allocation">
-        <h2>Allocation</h2>
+        <div className="sechead">
+          <h2>Allocation</h2>
+        </div>
         <p className="dashboard-note">
           Allocation isn&apos;t available yet — no holding has a usable market price.
         </p>

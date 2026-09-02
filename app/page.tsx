@@ -120,7 +120,7 @@ export default async function DashboardPage() {
             <>
               <div className="valueblock">
                 <div className="asof">
-                  Portfolio value
+                  <span className="asof-label">Portfolio value</span>
                   {latestPriceDate && ` · Prices as of ${formatAsOfDate(latestPriceDate)} close`}
                 </div>
                 <div className="value num">
@@ -160,7 +160,7 @@ export default async function DashboardPage() {
               {/* Hierarchy is value block -> holdings (dominant) -> allocation
                   (recedes) — holdings comes first, not allocation. */}
               <section className="dashboard-section">
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                <div className="sechead">
                   <h2>Holdings</h2>
                   <div className="dashboard-note">Sorted by weight</div>
                 </div>

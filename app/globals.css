@@ -391,7 +391,7 @@ h6 {
   padding-top: 24px;
 }
 .cb-dash .brand {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 500;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -475,6 +475,9 @@ h6 {
   color: var(--ink);
   margin-bottom: 10px;
 }
+.cb-dash .asof-label {
+  font-weight: 500;
+}
 .cb-dash .value {
   font-size: 40px;
   font-weight: 500;
@@ -535,12 +538,10 @@ h6 {
 .cb-dash .dashboard-section + .dashboard-section {
   padding-top: 64px;
 }
-.cb-dash .dashboard-section > h2 {
+.cb-dash .sechead h2 {
   font-size: 20px;
   font-weight: 500;
   letter-spacing: -0.01em;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--hairline);
   margin: 0;
 }
 .cb-dash .dashboard-note {
@@ -700,10 +701,10 @@ h6 {
 }
 .cb-dash .sechead {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 14px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -768,6 +769,10 @@ h6 {
   --line-strong: #C6C6BE;
   --ink-hover: #33373A;
   --cell-line: #B0B0A6;
+  --pri-fill: #1B1D1F;
+  --pri-text: #F0F0ED;
+  --pri-hover: #33373A;
+  --pri-off: #DCDCD6;
 
   display: block;
   background: var(--ground);
@@ -790,6 +795,10 @@ h6 {
   --line-strong: #3C4045;
   --ink-hover: #474E55;
   --cell-line: #4E545B;
+  --pri-fill: #3A4046;
+  --pri-text: #E9EAE7;
+  --pri-hover: #474E55;
+  --pri-off: #24272A;
 }
 .holdings-chrome :focus-visible {
   outline: 2px solid var(--ink);
@@ -806,7 +815,7 @@ h6 {
   padding-inline: 32px;
 }
 .holdings-chrome > main {
-  padding-bottom: 20px;
+  padding-bottom: 96px;
 }
 
 /* --- top bar (§8.1: inside the content column, no border, no fill) --- */
@@ -818,7 +827,7 @@ h6 {
   padding-top: 24px;
 }
 .holdings-chrome .brand {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 500;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -956,7 +965,7 @@ h6 {
 
 /* --- page head --- */
 .holdings-chrome .pagehead {
-  padding: 14px 0 0;
+  padding: 56px 0 0;
 }
 .holdings-chrome h2 {
   font-size: 20px;
@@ -973,17 +982,17 @@ h6 {
   font-size: 15px;
 }
 .holdings-chrome .section {
-  padding-top: 22px;
+  padding-top: 24px;
 }
 .holdings-chrome .section + .section {
   padding-top: 64px;
 }
 .holdings-chrome .sechead {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 9px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--hairline);
 }
 .holdings-chrome .footnote {
@@ -1001,18 +1010,23 @@ h6 {
   font-weight: 500;
   border: 0;
   border-radius: 0;
-  background-color: var(--ink);
-  color: var(--ground);
+  background-color: var(--pri-fill);
+  color: var(--pri-text);
   cursor: pointer;
   position: relative;
   transition: background-color 0.12s ease-out, color 0.12s ease-out;
 }
 .holdings-chrome .btn:hover {
-  background-color: var(--ink-hover);
+  background-color: var(--pri-hover);
 }
 .holdings-chrome .btn:disabled {
-  background-color: var(--hairline);
+  background-color: var(--pri-off);
   color: var(--muted);
+  cursor: default;
+}
+.holdings-chrome .btn.pending {
+  background-color: var(--pri-fill);
+  color: var(--pri-text);
   cursor: default;
 }
 .holdings-chrome .btn2 {
@@ -1300,7 +1314,7 @@ h6 {
     padding-inline: 20px;
   }
   .holdings-chrome > main {
-    padding-bottom: 56px;
+    padding-bottom: 72px;
   }
   .holdings-chrome .nav {
     gap: 14px;
