@@ -668,7 +668,8 @@ h6 {
 .cb-dash .toggle button {
   font: inherit;
   font-size: 13px;
-  padding: 5px 12px;
+  height: 28px;
+  padding: 0 12px;
   cursor: pointer;
   border: 0;
   background: none;
