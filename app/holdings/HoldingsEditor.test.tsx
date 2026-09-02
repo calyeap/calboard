@@ -199,8 +199,8 @@ describe("HoldingsEditor", () => {
     expect(screen.queryByLabelText("Quantity for MSFT")).toBeNull();
     expect(screen.queryByLabelText("Quantity for CCC")).toBeNull();
     // AAPL derived: MV = 20 * 200 = 4000.00 ; P&L = (200 - 150) * 20 = 1000.00
-    expect(screen.getByText("4000.00")).toBeInTheDocument();
-    expect(screen.getByText("1000.00")).toBeInTheDocument();
+    expect(screen.getByText("$4,000.00")).toBeInTheDocument();
+    expect(screen.getByText("+$1,000.00")).toBeInTheDocument();
 
     updateHoldingsActionMock.mockClear();
     updateHoldingsActionMock.mockResolvedValue({ ok: true });
@@ -385,8 +385,8 @@ describe("HoldingsEditor", () => {
     // use the LIVE edited quantity/avg cost: MV = 30 * 205 = 6150.00,
     // P&L = (205 - 160) * 30 = 1350.00
     await waitFor(() => expect(screen.getByText("$205.00")).toBeInTheDocument());
-    expect(screen.getByText("6150.00")).toBeInTheDocument();
-    expect(screen.getByText("1350.00")).toBeInTheDocument();
+    expect(screen.getByText("$6,150.00")).toBeInTheDocument();
+    expect(screen.getByText("+$1,350.00")).toBeInTheDocument();
 
     // every piece of unsaved client state survived
     expect((screen.getByLabelText("Quantity for AAPL") as HTMLInputElement).value).toBe("30");
@@ -772,11 +772,11 @@ describe("HoldingsEditor — M1.5: privacy toggle", () => {
     );
 
     // Unhidden: AAPL market value = 10 * 200.00 = 2000.00
-    expect(screen.getByText("2000.00")).toBeInTheDocument();
+    expect(screen.getByText("$2,000.00")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "toggle" }));
 
-    expect(screen.queryByText("2000.00")).toBeNull();
+    expect(screen.queryByText("$2,000.00")).toBeNull();
     expect(screen.getAllByText(/•/).length).toBeGreaterThan(0);
   });
 
@@ -792,5 +792,41 @@ describe("HoldingsEditor — M1.5: privacy toggle", () => {
 
     expect((screen.getByLabelText("New holding quantity") as HTMLInputElement).type).toBe("password");
     expect((screen.getByLabelText("New holding average cost") as HTMLInputElement).type).toBe("password");
+  });
+
+  it("an unpriced row's Market value and Unrealised P&L cells show the em-dash sentinel with no gain/loss colour class (the derived() early-return branch — previously unexercised: unreachable in the browser with seed data, and no prior test asserted on its rendered output or class)", () => {
+    const unpriced: EditorInitialRow[] = [
+      row({ assetId: "1", symbol: "AAPL", quantity: "10", avgCostUsd: "150", priceUsd: null, priceStatus: "unavailable", priceDate: null }),
+    ];
+    render(<HoldingsEditor initial={unpriced} />);
+
+    const tds = Array.from(
+      screen.getByLabelText("Quantity for AAPL").closest("tr")!.querySelectorAll("td")
+    );
+    const [mvTd, plTd] = [tds[5], tds[6]];
+
+    expect(mvTd.textContent).toContain("—");
+    expect(plTd.textContent).toContain("—");
+    // The guard this exercises: an unpriced em-dash must not be painted
+    // green (or red) — only a signed, priced P&L gets a colour class.
+    expect(plTd.className).not.toMatch(/\bgain\b/);
+    expect(plTd.className).not.toMatch(/\bloss\b/);
+  });
+
+  it("a negative Unrealised P&L renders with the U+2212 minus sign and the loss colour class (guards the sign-character switch from a hyphen to U+2212 that the class check now depends on)", () => {
+    const losing: EditorInitialRow[] = [
+      row({ assetId: "1", symbol: "AAPL", quantity: "10", avgCostUsd: "250", priceUsd: "200.00" }),
+    ];
+    render(<HoldingsEditor initial={losing} />);
+
+    const tds = Array.from(
+      screen.getByLabelText("Quantity for AAPL").closest("tr")!.querySelectorAll("td")
+    );
+    const plTd = tds[6];
+
+    // P&L = (200 - 250) * 10 = -500.00
+    expect(plTd.textContent).toContain("−$500.00");
+    expect(plTd.className).toMatch(/\bloss\b/);
+    expect(plTd.className).not.toMatch(/\bgain\b/);
   });
 });

@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import type { PositionView } from "@/lib/portfolio";
 import { formatAssetClass } from "@/lib/assets";
+import { formatUsd, formatSignedUsd } from "@/lib/formatUsd";
 import { MaskableValue } from "./MaskableValue";
 
 function plOf(p: PositionView): { usd: Decimal; pct: Decimal | null } | null {
@@ -9,10 +10,6 @@ function plOf(p: PositionView): { usd: Decimal; pct: Decimal | null } | null {
   const basis = p.avgCostUsd.mul(p.quantity);
   const pct = basis.isZero() ? null : usd.div(basis).mul(100);
   return { usd, pct };
-}
-
-function signed(d: Decimal): string {
-  return d.isNegative() ? `−$${d.abs().toFixed(2)}` : `+$${d.toFixed(2)}`;
 }
 
 function footnoteFor(p: PositionView): string | null {
@@ -67,21 +64,21 @@ export function DashboardHoldingsTable({ positions }: { positions: PositionView[
                     <MaskableValue>{p.quantity.toFixed(4)}</MaskableValue>
                   </td>
                   <td className="num dim">
-                    {p.avgCostUsd ? <MaskableValue>{`$${p.avgCostUsd.toFixed(2)}`}</MaskableValue> : "—"}
+                    {p.avgCostUsd ? <MaskableValue>{`$${formatUsd(p.avgCostUsd)}`}</MaskableValue> : "—"}
                   </td>
                   <td className={degraded ? "num stale" : "num"} title={footnoteFor(p) ?? undefined}>
                     {degraded && <span className="marker" aria-hidden="true" />}
-                    {p.latestPriceUsd ? `$${p.latestPriceUsd.toFixed(2)}` : "—"}
+                    {p.latestPriceUsd ? `$${formatUsd(p.latestPriceUsd)}` : "—"}
                   </td>
                   <td className="num strong">
                     {p.marketValueUsd ? (
-                      <MaskableValue>{`$${p.marketValueUsd.toFixed(2)}`}</MaskableValue>
+                      <MaskableValue>{`$${formatUsd(p.marketValueUsd)}`}</MaskableValue>
                     ) : (
                       "—"
                     )}
                   </td>
                   <td className={`num strong${pl ? (pl.usd.isNegative() ? " loss" : " gain") : ""}`}>
-                    {pl ? <MaskableValue>{signed(pl.usd)}</MaskableValue> : "—"}
+                    {pl ? <MaskableValue>{formatSignedUsd(pl.usd)}</MaskableValue> : "—"}
                   </td>
                 </tr>
               );
@@ -107,12 +104,12 @@ export function DashboardHoldingsTable({ positions }: { positions: PositionView[
                 <span className="sym">{p.symbol}</span>
               </div>
               <div className="mv num">
-                {p.marketValueUsd ? <MaskableValue>{`$${p.marketValueUsd.toFixed(2)}`}</MaskableValue> : "No price"}
+                {p.marketValueUsd ? <MaskableValue>{`$${formatUsd(p.marketValueUsd)}`}</MaskableValue> : "No price"}
               </div>
               <div className="meta num">
                 <MaskableValue>{p.quantity.toFixed(4)}</MaskableValue> &times;{" "}
                 {p.avgCostUsd ? (
-                  <MaskableValue>{`$${p.avgCostUsd.toFixed(2)}`}</MaskableValue>
+                  <MaskableValue>{`$${formatUsd(p.avgCostUsd)}`}</MaskableValue>
                 ) : (
                   "—"
                 )}{" "}
@@ -126,7 +123,7 @@ export function DashboardHoldingsTable({ positions }: { positions: PositionView[
               )}
               {pl && (
                 <div className={`pl num${pl.usd.isNegative() ? " loss" : " gain"}`}>
-                  <MaskableValue>{signed(pl.usd)}</MaskableValue>
+                  <MaskableValue>{formatSignedUsd(pl.usd)}</MaskableValue>
                 </div>
               )}
             </div>

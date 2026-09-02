@@ -65,7 +65,7 @@ describe("computeAllocation", () => {
     const result = computeAllocation([priced("ONLY", "1234.56")], total);
     expect(result.hasAllocation).toBe(true);
     expect(result.entries).toHaveLength(1);
-    expect(result.entries[0]).toMatchObject({ symbol: "ONLY", percent: "100.00", marketValueUsd: "1234.56" });
+    expect(result.entries[0]).toMatchObject({ symbol: "ONLY", percent: "100.00", marketValueUsd: "1,234.56" });
     expect(result.entries[0].percentNumber).toBe(100);
   });
 

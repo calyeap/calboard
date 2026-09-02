@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Decimal from "decimal.js";
 import { localTodayIso } from "@/lib/dateValidation";
 import { formatAssetClass, type AssetClass } from "@/lib/assetClass";
+import { formatUsd, formatSignedUsd } from "@/lib/formatUsd";
 import type { PriceStatus } from "@/lib/portfolio";
 import { PriceCell } from "@/app/components/PriceCell";
 import { MaskableValue } from "@/app/components/MaskableValue";
@@ -66,7 +67,7 @@ function derived(r: Row): { mv: string; pl: string } {
   const avg = tryDecimal(r.avgCostUsd);
   if (!price || !qty) return { mv: "—", pl: "—" };
   const pl = avg ? price.sub(avg).mul(qty) : null;
-  return { mv: qty.mul(price).toFixed(2), pl: pl ? pl.toFixed(2) : "—" };
+  return { mv: `$${formatUsd(qty.mul(price))}`, pl: pl ? formatSignedUsd(pl) : "—" };
 }
 
 type SaveState =
@@ -269,7 +270,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
     const before = tryDecimal(r.initialQuantity);
     if (!now || !before || now.lte(before)) return null;
     const avg = tryDecimal(r.initialAvgCostUsd);
-    const shown = avg ? avg.toFixed(2) : r.initialAvgCostUsd;
+    const shown = avg ? formatUsd(avg) : r.initialAvgCostUsd;
     return `Your existing average cost is $${shown}. Update it if your real average cost changed.`;
   }
 
@@ -461,7 +462,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                       {d.mv === "—" ? d.mv : <MaskableValue>{d.mv}</MaskableValue>}
                     </td>
                     <td className={`num strong${
-                      r.removed || d.pl === "—" ? "" : d.pl.startsWith("-") ? " loss" : " gain"
+                      r.removed || d.pl === "—" ? "" : d.pl.startsWith("−") ? " loss" : " gain"
                     }`}>
                       <span className="cell-label">Unrealised P&amp;L</span>
                       {d.pl === "—" ? d.pl : <MaskableValue>{d.pl}</MaskableValue>}
