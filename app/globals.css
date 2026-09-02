@@ -542,6 +542,7 @@ h6 {
   font-size: 20px;
   font-weight: 500;
   letter-spacing: -0.01em;
+  line-height: 1.5;
   margin: 0;
 }
 .cb-dash .dashboard-note {
@@ -971,6 +972,7 @@ h6 {
   font-size: 20px;
   font-weight: 500;
   letter-spacing: -0.01em;
+  line-height: 1.5;
   margin: 0;
 }
 .holdings-chrome .lede {
