@@ -388,12 +388,13 @@ h6 {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 24px 0 0;
+  padding-top: 24px;
 }
 .cb-dash .brand {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 .cb-dash .nav {
   display: flex;
@@ -404,6 +405,9 @@ h6 {
   color: var(--muted);
   text-decoration: none;
   font-size: 15px;
+}
+.cb-dash .nav a:hover {
+  color: var(--ink);
 }
 .cb-dash .nav a.on {
   color: var(--ink);
@@ -419,13 +423,10 @@ h6 {
   font-size: 13px;
   color: var(--ink);
   background: none;
-  border: 1px solid var(--hairline);
+  border: 0;
   padding: 6px 11px;
   cursor: pointer;
   border-radius: 0;
-}
-.cb-dash .ctl:hover {
-  border-color: var(--muted);
 }
 .cb-dash .ctl svg {
   width: 16px;
@@ -692,6 +693,19 @@ h6 {
   border-bottom: 1px solid var(--hairline);
   font-size: 15px;
 }
+.cb-dash .allocation-layout tfoot th {
+  height: 36px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 15px;
+}
+.cb-dash .sechead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--hairline);
+}
 
 @media (max-width: 720px) {
   .cb-dash > .topbar,
@@ -801,20 +815,23 @@ h6 {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 16px 0 0;
+  padding-top: 24px;
 }
 .holdings-chrome .brand {
   font-size: 16px;
   font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 .holdings-chrome .nav {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 20px;
 }
 .holdings-chrome .nav a {
   color: var(--muted);
   text-decoration: none;
+  font-size: 15px;
 }
 .holdings-chrome .nav a:hover {
   color: var(--ink);
@@ -829,23 +846,20 @@ h6 {
   outline-offset: 3px;
 }
 
-/* --- icon buttons (§6): bordered = privacy guarantee, bare = preference --- */
+/* --- icon buttons (§6): every icon control is bare, privacy included --- */
 .holdings-chrome .iconbtn {
   width: 30px;
   height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--line-strong);
+  border: 0;
   background: none;
   color: var(--ink);
   cursor: pointer;
   padding: 0;
   border-radius: 0;
-  transition: border-color 0.12s ease-out, color 0.12s ease-out;
-}
-.holdings-chrome .iconbtn:hover {
-  border-color: var(--muted);
+  transition: color 0.12s ease-out;
 }
 .holdings-chrome .iconbtn svg {
   width: 16px;
@@ -1287,6 +1301,13 @@ h6 {
   }
   .holdings-chrome > main {
     padding-bottom: 56px;
+  }
+  .holdings-chrome .nav {
+    gap: 14px;
+  }
+  .holdings-chrome .topbar {
+    flex-wrap: wrap;
+    row-gap: 12px;
   }
   .holdings-chrome .editor-table > table,
   .holdings-chrome .editor-table thead,

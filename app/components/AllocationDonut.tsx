@@ -61,17 +61,19 @@ export function AllocationDonut({
 
   return (
     <section className="dashboard-section allocation">
-      <h2>Allocation</h2>
-      {allocationByAssetClass && (
-        <div role="group" aria-label="Allocation view" className="toggle" style={{ marginBottom: "0.5rem" }}>
-          <button type="button" aria-pressed={view === "holding"} onClick={() => setView("holding")}>
-            By holding
-          </button>{" "}
-          <button type="button" aria-pressed={view === "class"} onClick={() => setView("class")}>
-            By asset class
-          </button>
-        </div>
-      )}
+      <div className="sechead">
+        <h2>Allocation</h2>
+        {allocationByAssetClass && (
+          <div role="group" aria-label="Allocation view" className="toggle">
+            <button type="button" aria-pressed={view === "holding"} onClick={() => setView("holding")}>
+              By holding
+            </button>{" "}
+            <button type="button" aria-pressed={view === "class"} onClick={() => setView("class")}>
+              By asset class
+            </button>
+          </div>
+        )}
+      </div>
       <div className="allocation-layout">
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden="true">
           <circle cx={C} cy={C} r={R} fill="none" stroke="var(--hairline)" strokeWidth={STROKE} />
