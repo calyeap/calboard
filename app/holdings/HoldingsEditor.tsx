@@ -460,7 +460,9 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                       <span className="cell-label">Market value</span>
                       {d.mv === "—" ? d.mv : <MaskableValue>{d.mv}</MaskableValue>}
                     </td>
-                    <td className={`num strong${r.removed ? "" : d.pl.startsWith("-") ? " loss" : ""}`}>
+                    <td className={`num strong${
+                      r.removed || d.pl === "—" ? "" : d.pl.startsWith("-") ? " loss" : " gain"
+                    }`}>
                       <span className="cell-label">Unrealised P&amp;L</span>
                       {d.pl === "—" ? d.pl : <MaskableValue>{d.pl}</MaskableValue>}
                     </td>
