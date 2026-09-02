@@ -361,6 +361,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
       <div className="section">
         <div className="sechead">
           <h2>Positions</h2>
+          <div className="note">Alphabetical</div>
         </div>
 
         <div className="editor-table">
