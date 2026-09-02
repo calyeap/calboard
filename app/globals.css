@@ -663,7 +663,7 @@ h6 {
      that would size it via the mock's .sechead), so it must size to its
      own content itself. */
   display: inline-flex;
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--line-strong);
 }
 .cb-dash .toggle button {
   font: inherit;
