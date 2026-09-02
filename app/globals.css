@@ -243,7 +243,6 @@ h6 {
 .dashboard-note {
   color: var(--color-text-muted);
   font-size: 0.9em;
-  margin: 0.25rem 0;
 }
 .allocation-layout {
   display: flex;
@@ -657,11 +656,6 @@ h6 {
 }
 
 .cb-dash .toggle {
-  /* inline-flex, not flex: a block-level flex container still stretches to
-     its parent's full width like any block box. This toggle sits as a
-     plain sibling of the section heading (not a flex item inside a row
-     that would size it via the mock's .sechead), so it must size to its
-     own content itself. */
   display: inline-flex;
   border: 1px solid var(--line-strong);
 }

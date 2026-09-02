@@ -27,14 +27,14 @@ describe("AllocationDonut", () => {
     const text = table.textContent ?? "";
     expect(text).toContain("AAPL");
     expect(text).toContain("75.00%");
-    expect(text).toContain("US$3000.00");
+    expect(text).toContain("US$3,000.00");
     expect(text).toContain("MSFT");
     expect(text).toContain("25.00%");
-    expect(text).toContain("US$1000.00");
+    expect(text).toContain("US$1,000.00");
     // centre total = the exact priced aggregate
-    expect(container.querySelector("svg")?.textContent).toContain("US$4000.00");
+    expect(container.querySelector("svg")?.textContent).toContain("US$4,000.00");
     // legend also carries the priced total (understandable without the SVG)
-    expect(text).toContain("US$4000.00");
+    expect(text).toContain("US$4,000.00");
     expect(rows.length).toBe(4);
   });
 

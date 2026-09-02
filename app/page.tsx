@@ -4,6 +4,7 @@ import { getPortfolioView } from "@/lib/portfolio";
 import { getLastSnapshotConfirmation } from "@/lib/holdings";
 import { computeAllocation, groupByAssetClass } from "@/lib/allocation";
 import { formatCheckedAt } from "@/lib/formatCheckedAt";
+import { formatUsd } from "@/lib/formatUsd";
 import { DashboardShell } from "./components/DashboardShell";
 import { DashboardTopBar } from "./components/DashboardTopBar";
 import { DashboardHoldingsTable } from "./components/DashboardHoldingsTable";
@@ -125,13 +126,13 @@ export default async function DashboardPage() {
                 </div>
                 <div className="value num">
                   US$
-                  <MaskableValue>{portfolio!.totalMarketValueUsd.toFixed(2)}</MaskableValue>
+                  <MaskableValue>{formatUsd(portfolio!.totalMarketValueUsd)}</MaskableValue>
                 </div>
                 <div
                   className={`delta num${portfolio!.totalUnrealisedPlUsd.isNegative() ? " loss" : " gain"}`}
                 >
                   {portfolio!.totalUnrealisedPlUsd.isNegative() ? "−" : "+"}US$
-                  <MaskableValue>{portfolio!.totalUnrealisedPlUsd.abs().toFixed(2)}</MaskableValue> since
+                  <MaskableValue>{formatUsd(portfolio!.totalUnrealisedPlUsd.abs())}</MaskableValue> since
                   cost
                   {portfolio!.totalUnrealisedPlPct !== null && (
                     <> ({portfolio!.totalUnrealisedPlPct.toFixed(2)}%)</>

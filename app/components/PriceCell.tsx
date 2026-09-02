@@ -1,4 +1,5 @@
 import type { PriceStatus } from "@/lib/portfolio";
+import { formatUsd } from "@/lib/formatUsd";
 
 // Presentational only — no Retry (APPROVED BEHAVIOUR CHANGE #1: Holdings uses
 // the page-level global refresh instead, same as the Dashboard). Mirrors
@@ -25,7 +26,7 @@ export function PriceCell({
   return (
     <span className={degraded ? "stale" : undefined} title={title}>
       {degraded && <span className="marker" aria-hidden="true" />}
-      {priceUsd ? `$${priceUsd}` : "—"}
+      {priceUsd ? `$${formatUsd(priceUsd)}` : "—"}
     </span>
   );
 }

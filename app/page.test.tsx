@@ -102,21 +102,21 @@ describe("Dashboard — Allocation section", () => {
 
     // Value block
     const valueBlock = container.querySelector(".valueblock")!;
-    expect(valueBlock.textContent).toContain("US$4000.00");
+    expect(valueBlock.textContent).toContain("US$4,000.00");
 
     // Allocation legend
     const table = screen.getByRole("table", { name: /allocation by holding/i });
     const text = table.textContent ?? "";
     expect(text).toContain("AAPL");
     expect(text).toContain("75.00%");
-    expect(text).toContain("US$3000.00");
+    expect(text).toContain("US$3,000.00");
     expect(text).toContain("MSFT");
     expect(text).toContain("25.00%");
-    expect(text).toContain("US$1000.00");
+    expect(text).toContain("US$1,000.00");
 
     // Same total in the donut centre — one aggregate, not a competing one
     const alloc = screen.getByRole("heading", { name: /^allocation$/i }).closest("section")!;
-    expect(alloc.querySelector("svg")?.textContent).toContain("US$4000.00");
+    expect(alloc.querySelector("svg")?.textContent).toContain("US$4,000.00");
     expect(container.querySelectorAll("svg circle[stroke-dasharray]").length).toBe(2);
   });
 
@@ -167,11 +167,11 @@ describe("Dashboard — Allocation section", () => {
 
     // Donut centre = the exact priced portfolio total.
     const allocSection = screen.getByRole("heading", { name: /^allocation$/i }).closest("section")!;
-    expect(allocSection.querySelector("svg")?.textContent).toContain("US$3500.00");
+    expect(allocSection.querySelector("svg")?.textContent).toContain("US$3,500.00");
 
     // Value block total = the same total, from the same aggregate.
     const valueBlock = container.querySelector(".valueblock")!;
-    expect(valueBlock.textContent).toContain("US$3500.00");
+    expect(valueBlock.textContent).toContain("US$3,500.00");
 
     // The existing NOPX excluded-price disclosure is retained.
     expect(
@@ -301,7 +301,7 @@ describe("Dashboard — hierarchy, weight sort & responsive Dashboard", () => {
 
     const valueEl = container.querySelector(".valueblock .value");
     expect(valueEl).not.toBeNull();
-    expect(valueEl!.textContent).toContain("US$4000.00");
+    expect(valueEl!.textContent).toContain("US$4,000.00");
 
     const freshness = screen.getByText(/holdings last updated:/i);
     expect(freshness).toHaveClass("dashboard-note");
@@ -422,9 +422,9 @@ describe("Dashboard — M1.5: privacy toggle", () => {
     const { container } = render(<PrivacyProvider>{await DashboardPage()}</PrivacyProvider>);
 
     const valueBlock = container.querySelector(".valueblock")!;
-    expect(valueBlock.textContent).toContain("US$4000.00");
+    expect(valueBlock.textContent).toContain("US$4,000.00");
     const holdingsSection = screen.getByRole("heading", { name: /^holdings$/i }).closest("section")!;
-    expect(holdingsSection.textContent).toContain("3000.00");
+    expect(holdingsSection.textContent).toContain("3,000.00");
   });
 
   it("hides the value figure and the Unrealised P&L dollar figure, but keeps the P&L percentage visible", async () => {
@@ -468,7 +468,7 @@ describe("Dashboard — M1.5: privacy toggle", () => {
     fireEvent.click(screen.getByRole("button", { name: /show values/i }));
 
     const valueBlock = container.querySelector(".valueblock")!;
-    expect(valueBlock.textContent).toContain("US$4000.00");
+    expect(valueBlock.textContent).toContain("US$4,000.00");
     expect(screen.queryByText(/•/)).toBeNull();
   });
 });

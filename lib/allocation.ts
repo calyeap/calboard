@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { formatAssetClass, type AssetClass } from "./assets";
+import { formatUsd } from "./formatUsd";
 
 // Minimal input the allocation view needs from a PositionView — kept
 // decoupled from lib/portfolio.ts so this stays a pure, framework-free
@@ -13,7 +14,7 @@ export interface AllocationInput {
 
 export interface AllocationEntry {
   symbol: string;
-  marketValueUsd: string; // formatted "1234.56"
+  marketValueUsd: string; // formatted "1,234.56" — thousands-separated
   percent: string; // formatted "42.50" — of the priced portfolio total
   percentNumber: number; // the same percentage as a plain Number, for SVG geometry only
 }
@@ -21,7 +22,7 @@ export interface AllocationEntry {
 export interface AllocationResult {
   hasAllocation: boolean; // false ⇒ no holding has a usable market value
   entries: AllocationEntry[]; // one per priced holding, in the given order
-  totalUsd: string; // === totalMarketValueUsd.toFixed(2) — the Dashboard "Portfolio Value"
+  totalUsd: string; // === formatUsd(totalMarketValueUsd) — the Dashboard "Portfolio Value"
 }
 
 // Allocation by holding, priced market value only.
@@ -38,7 +39,7 @@ export function computeAllocation(
   positions: AllocationInput[],
   totalMarketValueUsd: Decimal
 ): AllocationResult {
-  const totalUsd = totalMarketValueUsd.toFixed(2);
+  const totalUsd = formatUsd(totalMarketValueUsd);
 
   const priced = positions.filter(
     (p): p is { symbol: string; marketValueUsd: Decimal } => p.marketValueUsd !== null
@@ -52,7 +53,7 @@ export function computeAllocation(
     const pct = p.marketValueUsd.div(totalMarketValueUsd).mul(100);
     return {
       symbol: p.symbol,
-      marketValueUsd: p.marketValueUsd.toFixed(2),
+      marketValueUsd: formatUsd(p.marketValueUsd),
       percent: pct.toFixed(2),
       percentNumber: pct.toNumber(),
     };
