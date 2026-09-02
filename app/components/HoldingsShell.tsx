@@ -3,14 +3,13 @@
 import type { ReactNode } from "react";
 import { useTheme } from "./ThemeContext";
 
-// Minimal dark-mode chrome for Holdings (2026-09-0X): reads the SAME shared
-// ThemeContext Dashboard's toggle drives — not a second theme mechanism —
-// and scopes the new dark CSS (app/globals.css, ".holdings-chrome" section)
-// to exactly this wrapper. Form controls (inputs, the asset-type select,
-// buttons) are deliberately left native/light inside it; only static chrome
-// (background, text, nav, table borders/header) responds. Full Holdings
-// dark-mode support (including form controls) is a separate future
-// milestone — this is intentionally a visual seam, not an oversight.
+// The scoping boundary for Holdings' dark-mode support (2026-09-01): reads
+// the SAME shared ThemeContext Dashboard's toggle drives — not a second
+// theme mechanism — and scopes ".holdings-chrome" (app/globals.css) to
+// exactly this wrapper. ".holdings-chrome" is a full, self-contained token
+// system covering both themes for every control (inputs, the asset-type
+// select, buttons included), mirroring ".cb-dash"'s approach in
+// DashboardShell.tsx above.
 export function HoldingsShell({ children }: { children: ReactNode }) {
   const { theme } = useTheme();
   return (

@@ -4,12 +4,14 @@ import Link from "next/link";
 import { usePrivacy } from "./PrivacyContext";
 import { useTheme } from "./ThemeContext";
 
-// Dashboard-only nav — replaces <NavBar/> on `/`. /holdings has since moved
-// to its own HoldingsTopBar too; /accounts/new (the setup wizard) suppresses
-// nav entirely rather than rendering NavBar. NavBar.tsx is now unreferenced
-// by any route. Privacy and theme controls read/write the same root-mounted
-// contexts HoldingsTopBar uses, so state stays in sync across routes.
-export function DashboardTopBar() {
+// Holdings-only nav — replaces <NavBar/> on /holdings, mirroring
+// DashboardTopBar exactly. /accounts/new (SetupWizard) suppresses nav
+// entirely rather than rendering NavBar (see app/accounts/new/page.tsx) —
+// with this route's move off it, NavBar.tsx is now unreferenced by any
+// route; kept only because deleting it wasn't asked for this milestone.
+// Privacy and theme controls read/write the same root-mounted contexts
+// DashboardTopBar uses, so state stays in sync across routes.
+export function HoldingsTopBar() {
   const { hidden, toggle: togglePrivacy } = usePrivacy();
   const { theme, toggle: toggleTheme } = useTheme();
 
@@ -17,13 +19,13 @@ export function DashboardTopBar() {
     <div className="topbar">
       <div className="brand">Calboard</div>
       <div className="nav">
-        <Link href="/" className="on">
-          Dashboard
+        <Link href="/">Dashboard</Link>
+        <Link href="/holdings" className="on">
+          Holdings
         </Link>
-        <Link href="/holdings">Holdings</Link>
         <button
           type="button"
-          className="ctl icononly"
+          className="iconbtn"
           aria-pressed={hidden}
           aria-label={hidden ? "Show values" : "Hide values"}
           title={hidden ? "Show values" : "Hide values"}

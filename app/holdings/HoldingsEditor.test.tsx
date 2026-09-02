@@ -4,7 +4,6 @@ import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/re
 import { localTodayIso } from "@/lib/dateValidation";
 import { resolveTickerAction } from "@/app/actions/setup";
 import { updateHoldingsAction } from "@/app/actions/holdings";
-import { retryPriceFetchAction } from "@/app/actions/prices";
 import { HoldingsEditor, type EditorInitialRow } from "./HoldingsEditor";
 import { PrivacyProvider, usePrivacy } from "@/app/components/PrivacyContext";
 
@@ -12,13 +11,10 @@ import { PrivacyProvider, usePrivacy } from "@/app/components/PrivacyContext";
 // behaviour lives in app/actions/*.test.ts.
 vi.mock("@/app/actions/setup", () => ({ resolveTickerAction: vi.fn() }));
 vi.mock("@/app/actions/holdings", () => ({ updateHoldingsAction: vi.fn() }));
-// PriceCell (reused for price-health display) pulls in these.
-vi.mock("@/app/actions/prices", () => ({ retryPriceFetchAction: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 
 const resolveTickerActionMock = vi.mocked(resolveTickerAction);
 const updateHoldingsActionMock = vi.mocked(updateHoldingsAction);
-const retryPriceFetchActionMock = vi.mocked(retryPriceFetchAction);
 
 // Vitest isn't run with globals:true, so Testing Library's automatic
 // afterEach(cleanup) isn't registered — unmount between tests explicitly.
@@ -29,7 +25,6 @@ afterEach(() => {
 beforeEach(() => {
   resolveTickerActionMock.mockReset();
   updateHoldingsActionMock.mockReset();
-  retryPriceFetchActionMock.mockReset();
 });
 
 const row = (over: Partial<EditorInitialRow> & Pick<EditorInitialRow, "assetId" | "symbol">): EditorInitialRow => ({
@@ -53,8 +48,7 @@ describe("HoldingsEditor", () => {
     expect((screen.getByLabelText("Quantity for AAPL") as HTMLInputElement).value).toBe("10");
     expect((screen.getByLabelText("Average cost for AAPL") as HTMLInputElement).value).toBe("150");
     expect((screen.getByLabelText("Quantity for MSFT") as HTMLInputElement).value).toBe("4");
-    expect(screen.getByText(new RegExp(`as of ${localTodayIso()}`, "i"))).toBeInTheDocument();
-    expect(screen.queryByLabelText("As-of date")).toBeNull();
+    expect((screen.getByLabelText("As-of date") as HTMLInputElement).value).toBe(localTodayIso());
   });
 
   it("shows a non-blocking note when a quantity is increased but its average cost is untouched", () => {
@@ -259,10 +253,10 @@ describe("HoldingsEditor", () => {
       row({ assetId: "1", symbol: "AAPL", priceUsd: "199.99", priceStatus: "stale", priceDate: "2026-07-01" }),
       row({ assetId: "2", symbol: "MSFT", priceUsd: "310.00", priceStatus: "current", priceDate: "2026-08-26" }),
     ];
-    render(<HoldingsEditor initial={initial} />);
+    const { container } = render(<HoldingsEditor initial={initial} />);
 
-    expect(screen.getByText(/as of 2026-07-01/i)).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /retry/i }).length).toBeGreaterThanOrEqual(1);
+    expect(container.querySelector('[title="Priced at 2026-07-01 close"]')).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
     expect(screen.getByText("$310.00")).toBeInTheDocument();
   });
 
@@ -411,19 +405,6 @@ describe("HoldingsEditor", () => {
     expect(symbolCells).toEqual(["AAPL", "MSFT", "NEW"]);
   });
 
-  it("N1b: PriceCell Retry calls retryPriceFetchAction with the row's assetId, symbol and assetClass", async () => {
-    retryPriceFetchActionMock.mockResolvedValue({ ok: true });
-    const initial: EditorInitialRow[] = [
-      row({ assetId: "42", symbol: "TSLA", assetClass: "equity", priceUsd: "100.00", priceStatus: "stale", priceDate: "2026-07-01" }),
-    ];
-    render(<HoldingsEditor initial={initial} />);
-
-    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
-
-    await waitFor(() => expect(retryPriceFetchActionMock).toHaveBeenCalledTimes(1));
-    expect(retryPriceFetchActionMock).toHaveBeenCalledWith("42", "TSLA", "equity");
-  });
-
   it("N2: the 'checking…' status clears when a pending resolution is invalidated by editing the ticker", async () => {
     resolveTickerActionMock.mockImplementation(() => new Promise(() => {})); // never resolves
     render(<HoldingsEditor initial={baseInitial()} />);
@@ -441,7 +422,6 @@ describe("HoldingsEditor", () => {
 
   it("N4: the as-of-date error is programmatically associated with the date input", () => {
     render(<HoldingsEditor initial={baseInitial()} />);
-    fireEvent.click(screen.getByRole("button", { name: /change date/i }));
     fireEvent.change(screen.getByLabelText("As-of date"), { target: { value: "2099-01-01" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
@@ -562,7 +542,6 @@ describe("HoldingsEditor", () => {
 
   it("T29-5: an as-of-date-only rejection (no row error, no form error) still shows the summary near Save", () => {
     render(<HoldingsEditor initial={baseInitial()} />);
-    fireEvent.click(screen.getByRole("button", { name: /change date/i }));
     fireEvent.change(screen.getByLabelText("As-of date"), { target: { value: "2099-01-01" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 

@@ -331,6 +331,11 @@ h6 {
   --a4: #6FA8DC;
   --a5: #2C7A87;
   --a6: #BDA9D6;
+  --field: #F7F7F5;
+  --line-strong: #C6C6BE;
+  --ink-hover: #33373A;
+  --seg-fill: #1B1D1F;
+  --seg-text: #F0F0ED;
 
   display: block;
   background: var(--ground);
@@ -364,10 +369,18 @@ h6 {
   --a4: #3E7BA8;
   --a5: #4FC2C9;
   --a6: #D5C4EC;
+  --field: #1E2124;
+  --line-strong: #3C4045;
+  --ink-hover: #474E55;
+  --seg-fill: #33383D;
+  --seg-text: #E9EAE7;
 }
 .cb-dash .num {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
+}
+.cb-dash :focus-visible {
+  outline-color: var(--ink);
 }
 
 .cb-dash .topbar {
@@ -375,12 +388,13 @@ h6 {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 24px 0 0;
+  padding-top: 24px;
 }
 .cb-dash .brand {
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 500;
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 .cb-dash .nav {
   display: flex;
@@ -391,6 +405,9 @@ h6 {
   color: var(--muted);
   text-decoration: none;
   font-size: 15px;
+}
+.cb-dash .nav a:hover {
+  color: var(--ink);
 }
 .cb-dash .nav a.on {
   color: var(--ink);
@@ -406,13 +423,10 @@ h6 {
   font-size: 13px;
   color: var(--ink);
   background: none;
-  border: 1px solid var(--hairline);
+  border: 0;
   padding: 6px 11px;
   cursor: pointer;
   border-radius: 0;
-}
-.cb-dash .ctl:hover {
-  border-color: var(--muted);
 }
 .cb-dash .ctl svg {
   width: 16px;
@@ -426,6 +440,32 @@ h6 {
 .cb-dash .ctl.icononly {
   padding: 6px 8px;
 }
+.cb-dash .iconbare {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 0;
+  transition: color 0.12s ease-out;
+}
+.cb-dash .iconbare:hover {
+  color: var(--ink);
+}
+.cb-dash .iconbare svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 .cb-dash .valueblock {
   padding: 56px 0 40px;
@@ -434,6 +474,9 @@ h6 {
   font-size: 15px;
   color: var(--ink);
   margin-bottom: 10px;
+}
+.cb-dash .asof-label {
+  font-weight: 500;
 }
 .cb-dash .value {
   font-size: 40px;
@@ -495,12 +538,11 @@ h6 {
 .cb-dash .dashboard-section + .dashboard-section {
   padding-top: 64px;
 }
-.cb-dash .dashboard-section > h2 {
+.cb-dash .sechead h2 {
   font-size: 20px;
   font-weight: 500;
   letter-spacing: -0.01em;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--hairline);
+  line-height: 1.5;
   margin: 0;
 }
 .cb-dash .dashboard-note {
@@ -621,12 +663,13 @@ h6 {
      that would size it via the mock's .sechead), so it must size to its
      own content itself. */
   display: inline-flex;
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--line-strong);
 }
 .cb-dash .toggle button {
   font: inherit;
   font-size: 13px;
-  padding: 5px 12px;
+  height: 28px;
+  padding: 0 12px;
   cursor: pointer;
   border: 0;
   background: none;
@@ -634,8 +677,8 @@ h6 {
   border-radius: 0;
 }
 .cb-dash .toggle button[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--ground);
+  background: var(--seg-fill);
+  color: var(--seg-text);
 }
 .cb-dash .allocation-layout {
   display: flex;
@@ -652,6 +695,25 @@ h6 {
   height: 36px;
   border-bottom: 1px solid var(--hairline);
   font-size: 15px;
+}
+.cb-dash .allocation-layout tfoot th {
+  height: 36px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 15px;
+}
+.cb-dash .allocation-layout table thead th {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  border-bottom: 1px solid var(--hairline);
+}
+.cb-dash .sechead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--hairline);
 }
 
 @media (max-width: 720px) {
@@ -690,48 +752,653 @@ h6 {
   }
 }
 
-/* --- Holdings dark-mode chrome (minimal, 2026-09-01) --------------------
-   Deliberately narrow scope: static chrome only — page background, body
-   text, headings, the shared NavBar, and table borders/header/static cell
-   text. Reuses the exact colour values already defined above for
-   Dashboard's dark palette (.cb-dash[data-theme="dark"]) — not a new
-   palette, and that rule itself is untouched. Scoped to .holdings-chrome
-   (HoldingsShell, /holdings only) so nothing else — the setup wizard also
-   uses the shared NavBar/.page-shell but is NOT wrapped in this, and stays
-   exactly as it was.
+/* --- Holdings control-direction chrome (2026-09-01) ---------------------
+   Full parallel visual system for /holdings, mirroring .cb-dash's structure
+   but covering both themes from the start (the prior milestone's dark-only
+   patch is fully superseded). Scoped to .holdings-chrome (HoldingsShell,
+   /holdings only) — nothing outside it changes; /accounts/new keeps NavBar
+   and the original foundation untouched.
 
-   Redefining the foundation's own --color-* custom properties (rather than
-   introducing new ones) is deliberate: every existing rule that already
-   reads var(--color-text) / var(--color-border) / var(--color-page-bg) —
-   .site-nav a, .site-nav's border, :focus-visible — picks up the dark
-   values automatically, with no parallel rule set to keep in sync.
+   Responsive note: unlike .cb-dash, there is no dual .stack markup here —
+   HoldingsEditor.test.tsx's T30-3 requires exactly one DOM copy of every
+   editable control, so the 720px breakpoint below restacks the SAME
+   table cells (the existing .editor-table/.cell-label mechanism), restyled
+   to this control language, instead of hiding the table for a second card
+   markup the way Dashboard's read-only table does. */
+.holdings-chrome {
+  --ground: #F0F0ED;
+  --ink: #1B1D1F;
+  --muted: #5A6067;
+  --hairline: #DCDCD6;
+  --gain: #1B6B4A;
+  --loss: #A3352A;
+  --stale: #856713;
+  --field: #F7F7F5;
+  --line-strong: #C6C6BE;
+  --ink-hover: #33373A;
+  --cell-line: #B0B0A6;
+  --pri-fill: #1B1D1F;
+  --pri-text: #F0F0ED;
+  --pri-hover: #33373A;
+  --pri-off: #DCDCD6;
 
-   Form controls are the one deliberate exception. The foundation's
-   `button, input, select, textarea { color: inherit }` rule (line ~38)
-   would otherwise pull the new dark --color-text into every input, select
-   and button here — explicitly reset back to the ORIGINAL light value
-   (not var(--color-text), which now resolves dark in this scope) so they
-   stay native/light per the milestone brief. */
-.holdings-chrome[data-theme="dark"] {
-  --color-text: #E9EAE7;
-  --color-text-muted: #979CA1;
-  --color-border: #2C2F33;
-  --color-page-bg: #16181A;
-  background: var(--color-page-bg);
-  color: var(--color-text);
+  display: block;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
   min-height: 100vh;
 }
-.holdings-chrome[data-theme="dark"] .editor-table table,
-.holdings-chrome[data-theme="dark"] .editor-table th,
-.holdings-chrome[data-theme="dark"] .editor-table td {
-  border-color: var(--color-border);
+.holdings-chrome[data-theme="dark"] {
+  --ground: #16181A;
+  --ink: #E9EAE7;
+  --muted: #979CA1;
+  --hairline: #2C2F33;
+  --gain: #56B98C;
+  --loss: #E27A66;
+  --stale: #D9AB45;
+  --field: #1E2124;
+  --line-strong: #3C4045;
+  --ink-hover: #474E55;
+  --cell-line: #4E545B;
+  --pri-fill: #3A4046;
+  --pri-text: #E9EAE7;
+  --pri-hover: #474E55;
+  --pri-off: #24272A;
 }
-.holdings-chrome[data-theme="dark"] .editor-table thead th {
-  background: #2C2F33;
+.holdings-chrome :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
-.holdings-chrome[data-theme="dark"] input,
-.holdings-chrome[data-theme="dark"] select,
-.holdings-chrome[data-theme="dark"] textarea,
-.holdings-chrome[data-theme="dark"] button {
-  color: #1a1a1a;
+.holdings-chrome .num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+.holdings-chrome > .topbar,
+.holdings-chrome > main {
+  max-width: 1080px;
+  margin-inline: auto;
+  padding-inline: 32px;
+}
+.holdings-chrome > main {
+  padding-bottom: 96px;
+}
+
+/* --- top bar (§8.1: inside the content column, no border, no fill) --- */
+.holdings-chrome .topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding-top: 24px;
+}
+.holdings-chrome .brand {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.holdings-chrome .nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.holdings-chrome .nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 15px;
+}
+.holdings-chrome .nav a:hover {
+  color: var(--ink);
+}
+.holdings-chrome .nav a.on {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 5px;
+  text-decoration-thickness: 1px;
+}
+.holdings-chrome .nav a:focus-visible {
+  outline-offset: 3px;
+}
+
+/* --- icon buttons (§6): every icon control is bare, privacy included --- */
+.holdings-chrome .iconbtn {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 0;
+  transition: color 0.12s ease-out;
+}
+.holdings-chrome .iconbtn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.holdings-chrome .iconbare {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 0;
+  transition: color 0.12s ease-out;
+}
+.holdings-chrome .iconbare:hover {
+  color: var(--ink);
+}
+.holdings-chrome .iconbare svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.holdings-chrome .iconbare.sm {
+  width: 22px;
+  height: 22px;
+}
+.holdings-chrome .iconbare.sm svg {
+  width: 14px;
+  height: 14px;
+}
+.holdings-chrome .iconbare:disabled {
+  color: var(--hairline);
+  cursor: default;
+}
+.holdings-chrome .iconbare.rmv {
+  color: var(--muted);
+}
+.holdings-chrome .iconbare.rmv:hover {
+  color: var(--loss);
+}
+
+/* --- refresh control ("Data checked …") --- */
+.holdings-chrome .checked {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.holdings-chrome .refresh {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-left: 8px;
+  cursor: pointer;
+  color: var(--muted);
+  vertical-align: -2px;
+  line-height: 0;
+  transition: color 0.12s ease-out;
+}
+.holdings-chrome .refresh:hover {
+  color: var(--ink);
+}
+.holdings-chrome .refresh svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.holdings-chrome .refresh-status {
+  font-size: 13px;
+}
+.holdings-chrome .refresh-status.status-warning {
+  color: var(--stale);
+}
+.holdings-chrome .refresh-status.status-danger {
+  color: var(--loss);
+}
+
+/* --- page head --- */
+.holdings-chrome .pagehead {
+  padding: 56px 0 0;
+}
+.holdings-chrome h2 {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.5;
+  margin: 0;
+}
+.holdings-chrome .lede {
+  color: var(--muted);
+  margin-top: 4px;
+}
+.holdings-chrome .asof {
+  margin-top: 10px;
+  font-size: 15px;
+}
+.holdings-chrome .section {
+  padding-top: 24px;
+}
+.holdings-chrome .section + .section {
+  padding-top: 64px;
+}
+.holdings-chrome .sechead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--hairline);
+}
+.holdings-chrome .sechead .note {
+  font-size: 13px;
+  color: var(--muted);
+}
+.holdings-chrome .footnote {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 9px;
+}
+
+/* --- buttons (§2) --- */
+.holdings-chrome .btn {
+  height: 34px;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  border: 0;
+  border-radius: 0;
+  background-color: var(--pri-fill);
+  color: var(--pri-text);
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.12s ease-out, color 0.12s ease-out;
+}
+.holdings-chrome .btn:hover {
+  background-color: var(--pri-hover);
+}
+.holdings-chrome .btn:disabled {
+  background-color: var(--pri-off);
+  color: var(--muted);
+  cursor: default;
+}
+.holdings-chrome .btn.pending {
+  background-color: var(--pri-fill);
+  color: var(--pri-text);
+  cursor: default;
+}
+.holdings-chrome .btn2 {
+  height: 34px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 400;
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.12s ease-out, color 0.12s ease-out;
+}
+.holdings-chrome .btn2:hover {
+  border-color: var(--muted);
+}
+.holdings-chrome .btn2:disabled {
+  border-color: var(--hairline);
+  color: var(--muted);
+  cursor: default;
+}
+
+/* --- table (§8.2 header, §3 cell inputs) --- */
+.holdings-chrome .editor-table {
+  overflow-x: visible;
+}
+.holdings-chrome table.holdings {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin-top: 14px;
+}
+.holdings-chrome table.holdings col.c-sym { width: 9%; }
+.holdings-chrome table.holdings col.c-type { width: 9%; }
+.holdings-chrome table.holdings col.c-qty { width: 13%; }
+.holdings-chrome table.holdings col.c-avg { width: 15%; }
+.holdings-chrome table.holdings col.c-price { width: 14%; }
+.holdings-chrome table.holdings col.c-mv { width: 16%; }
+.holdings-chrome table.holdings col.c-pl { width: 16%; }
+.holdings-chrome table.holdings col.c-act { width: 40px; }
+.holdings-chrome table.holdings thead th {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  text-align: right;
+  padding: 9px 0 8px;
+  border-bottom: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+.holdings-chrome table.holdings thead th.l {
+  text-align: left;
+}
+.holdings-chrome table.holdings tbody td {
+  height: 48px;
+  text-align: right;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: middle;
+  white-space: nowrap;
+  position: relative;
+}
+.holdings-chrome table.holdings tbody td.l {
+  text-align: left;
+}
+.holdings-chrome .sym {
+  font-weight: 500;
+}
+.holdings-chrome .strong {
+  font-weight: 500;
+}
+.holdings-chrome .dim {
+  color: var(--muted);
+}
+.holdings-chrome .gain {
+  color: var(--gain);
+}
+.holdings-chrome .loss {
+  color: var(--loss);
+}
+.holdings-chrome .stale {
+  color: var(--stale);
+}
+.holdings-chrome .marker {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  background: var(--stale);
+  vertical-align: 2px;
+  margin-right: 6px;
+}
+.holdings-chrome .editor-table .cell-label {
+  display: none;
+}
+
+.holdings-chrome .cellinput {
+  width: calc(100% - 20px);
+  margin-left: 20px;
+  display: block;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--cell-line);
+  border-radius: 0;
+  padding: 0 0 1px;
+  line-height: 1.1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.12s ease-out;
+}
+.holdings-chrome .cellinput:hover {
+  border-bottom-color: var(--muted);
+}
+.holdings-chrome .cellinput:focus {
+  border-bottom-color: var(--ink);
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.holdings-chrome .cellinput:disabled {
+  color: var(--muted);
+  border-bottom-color: var(--hairline);
+  cursor: default;
+}
+.holdings-chrome .cellinput.err {
+  border-bottom-color: var(--loss);
+}
+.holdings-chrome .cellinput::-webkit-outer-spin-button,
+.holdings-chrome .cellinput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.holdings-chrome .cellinput {
+  -moz-appearance: textfield;
+}
+.holdings-chrome .rowerr {
+  position: absolute;
+  right: 0;
+  bottom: 1px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--loss);
+  pointer-events: none;
+}
+
+/* --- Add-a-holding fieldset (§10): default fieldset/legend chrome removed --- */
+.holdings-chrome .add-holding-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-inline-size: 0;
+}
+.holdings-chrome .add-holding-fieldset > legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.holdings-chrome .add-holding-fieldset:disabled .inp,
+.holdings-chrome .add-holding-fieldset:disabled .btn {
+  color: var(--muted);
+}
+.holdings-chrome .formrow {
+  display: flex;
+  gap: 18px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding-top: 14px;
+}
+.holdings-chrome .field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.holdings-chrome .field label {
+  font-size: 13px;
+  color: var(--muted);
+}
+.holdings-chrome .inp {
+  height: 34px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  background-color: var(--field);
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  transition: border-color 0.12s ease-out;
+}
+.holdings-chrome .inp::placeholder {
+  color: var(--muted);
+}
+.holdings-chrome .inp:hover {
+  border-color: var(--muted);
+}
+.holdings-chrome .inp:disabled {
+  background-color: var(--ground);
+  border-color: var(--hairline);
+  color: var(--muted);
+  cursor: default;
+}
+.holdings-chrome .inp.err {
+  border-color: var(--loss);
+}
+.holdings-chrome .inp.n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.holdings-chrome .inp::-webkit-outer-spin-button,
+.holdings-chrome .inp::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.holdings-chrome .w150 { width: 150px; }
+.holdings-chrome .w140 { width: 140px; }
+.holdings-chrome .w120 { width: 120px; }
+.holdings-chrome .w170 { width: 170px; }
+.holdings-chrome select.inp {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235A6067' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  background-size: 12px;
+}
+.holdings-chrome[data-theme="dark"] select.inp {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23979CA1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+}
+
+/* --- date input (§9): calendar indicator retained, tabular-nums text --- */
+.holdings-chrome input[type="date"].inp {
+  font-variant-numeric: tabular-nums;
+}
+.holdings-chrome input[type="date"].inp::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 0.6;
+}
+.holdings-chrome input[type="date"].inp:hover::-webkit-calendar-picker-indicator {
+  opacity: 1;
+}
+
+/* --- save row + status (§11, §12) --- */
+.holdings-chrome .saverow {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  padding-top: 14px;
+  flex-wrap: wrap;
+}
+.holdings-chrome .status {
+  font-size: 13px;
+  margin-top: 6px;
+}
+.holdings-chrome .s-ok { color: var(--gain); }
+.holdings-chrome .s-bad { color: var(--loss); }
+.holdings-chrome .s-warn { color: var(--stale); }
+.holdings-chrome .status-neutral { color: var(--muted); font-size: 13px; }
+.holdings-chrome .status-warning { color: var(--stale); font-size: 13px; }
+.holdings-chrome .status-success { color: var(--gain); font-size: 13px; }
+.holdings-chrome .status-danger { color: var(--loss); font-size: 13px; }
+.holdings-chrome .status-msg {
+  display: block;
+  font-size: 13px;
+  margin-top: 6px;
+}
+/* Pending Save (§12): reserve "Saving…"'s width via min-width so the button
+   never resizes between its two labels; keeps default fill/text (not the
+   disabled treatment) while `disabled` blocks a second submit. */
+.holdings-chrome .btn {
+  min-width: 74px;
+}
+
+/* --- 720px breakpoint: restack the SAME table cells (see file-header note) --- */
+@media (max-width: 720px) {
+  .holdings-chrome > .topbar,
+  .holdings-chrome > main {
+    padding-inline: 20px;
+  }
+  .holdings-chrome > main {
+    padding-bottom: 72px;
+  }
+  .holdings-chrome .nav {
+    gap: 14px;
+  }
+  .holdings-chrome .topbar {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+  .holdings-chrome .editor-table > table,
+  .holdings-chrome .editor-table thead,
+  .holdings-chrome .editor-table tbody,
+  .holdings-chrome .editor-table tr,
+  .holdings-chrome .editor-table td {
+    display: block;
+    width: 100%;
+  }
+  .holdings-chrome .editor-table thead {
+    display: none;
+  }
+  .holdings-chrome .editor-table tr {
+    border: 1px solid var(--hairline);
+    border-radius: 0;
+    margin-block: 12px;
+    padding: 12px;
+    position: relative;
+  }
+  .holdings-chrome .editor-table td {
+    border: 0;
+    height: auto;
+    padding: 6px 0;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+  .holdings-chrome .editor-table .cell-label {
+    display: block;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  .holdings-chrome .cellinput {
+    width: 100%;
+    margin-left: 0;
+    text-align: left;
+  }
+  .holdings-chrome .rowerr {
+    position: static;
+    display: block;
+    margin-top: 2px;
+  }
+  /* Quantity + Avg cost grouped side-by-side on the restacked card, matching
+     the mock's .edits row — everything else (Symbol, Type, Price, MV, P&L,
+     Action) stays one-per-line. Column order in HoldingsEditor's <tr> is
+     fixed (Symbol, Type, Quantity, Avg cost, Price, MV, P&L, Action), so
+     nth-child(3)/(4) reliably target these two cells. */
+  .holdings-chrome .editor-table td:nth-child(3),
+  .holdings-chrome .editor-table td:nth-child(4) {
+    display: inline-block;
+    width: calc(50% - 9px);
+    vertical-align: top;
+  }
+  .holdings-chrome .editor-table td:nth-child(3) {
+    margin-right: 18px;
+  }
+  .holdings-chrome .formrow .field,
+  .holdings-chrome .formrow .inp,
+  .holdings-chrome .saverow .field,
+  .holdings-chrome .saverow .inp,
+  .holdings-chrome .w150,
+  .holdings-chrome .w140,
+  .holdings-chrome .w120,
+  .holdings-chrome .w170 {
+    width: 100%;
+  }
 }
