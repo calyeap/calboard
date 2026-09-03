@@ -552,7 +552,10 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                 autoComplete="off"
                 aria-label="New holding quantity"
                 value={addQty}
-                onChange={(e) => setAddQty(e.target.value)}
+                onChange={(e) => {
+                  setAddQty(e.target.value);
+                  setAddError(null);
+                }}
               />
             </div>
             <div className="field">
@@ -564,7 +567,10 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                 autoComplete="off"
                 aria-label="New holding average cost"
                 value={addCost}
-                onChange={(e) => setAddCost(e.target.value)}
+                onChange={(e) => {
+                  setAddCost(e.target.value);
+                  setAddError(null);
+                }}
               />
             </div>
             <button type="button" className="btn" onClick={addRow}>

@@ -120,6 +120,64 @@ describe("HoldingsEditor", () => {
     expect(screen.queryByLabelText("Quantity for NVDA")).toBeNull();
   });
 
+  it("a stale 'Average cost must be greater than zero' error clears the instant the user edits the field, not just once it re-settles on a valid value", async () => {
+    resolveTickerActionMock.mockResolvedValue({
+      ok: true,
+      assetId: "9",
+      assetClass: "equity",
+      priceUsd: "12.00",
+      priceDate: "2026-08-25",
+    });
+    render(<HoldingsEditor initial={baseInitial()} />);
+
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "TSLA" } });
+    fireEvent.blur(ticker);
+    await waitFor(() => expect(screen.getByText(/resolved/i)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("New holding quantity"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("New holding average cost"), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: /add holding/i }));
+    expect(screen.getByText(/average cost must be greater than zero/i)).toBeInTheDocument();
+
+    // The user now retypes a genuinely valid value one keystroke at a time.
+    // The stale error from the earlier rejected attempt must not still be
+    // showing mid-entry — it must clear on the very next edit, not linger
+    // until Add is clicked again.
+    fireEvent.change(screen.getByLabelText("New holding average cost"), { target: { value: "1" } });
+    expect(screen.queryByText(/average cost must be greater than zero/i)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("New holding average cost"), { target: { value: "15" } });
+    expect(screen.queryByText(/average cost must be greater than zero/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /add holding/i }));
+    expect(screen.getByLabelText("Quantity for TSLA")).toBeInTheDocument();
+  });
+
+  it("a stale 'Quantity must be greater than zero' error clears the instant the user edits the field", async () => {
+    resolveTickerActionMock.mockResolvedValue({
+      ok: true,
+      assetId: "9",
+      assetClass: "equity",
+      priceUsd: "12.00",
+      priceDate: "2026-08-25",
+    });
+    render(<HoldingsEditor initial={baseInitial()} />);
+
+    const ticker = screen.getByLabelText("Ticker symbol");
+    fireEvent.change(ticker, { target: { value: "TSLA" } });
+    fireEvent.blur(ticker);
+    await waitFor(() => expect(screen.getByText(/resolved/i)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("New holding quantity"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("New holding average cost"), { target: { value: "100" } });
+    fireEvent.click(screen.getByRole("button", { name: /add holding/i }));
+    expect(screen.getByText(/quantity must be greater than zero/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("New holding quantity"), { target: { value: "5" } });
+    expect(screen.queryByText(/quantity must be greater than zero/i)).toBeNull();
+  });
+
   it("a rejected action call surfaces the 'couldn't reach the server' copy and re-enables Save", async () => {
     updateHoldingsActionMock.mockRejectedValue(new Error("network down"));
     render(<HoldingsEditor initial={baseInitial()} />);
