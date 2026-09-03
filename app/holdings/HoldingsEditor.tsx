@@ -260,20 +260,6 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
     );
   }
 
-  // Spec: when a row's quantity is raised but its average cost is left as it
-  // was, remind the user — without blocking Save — that the stored average
-  // still stands.
-  function avgCostNote(r: Row): string | null {
-    if (r.removed || r.isNew) return null;
-    if (r.avgCostUsd.trim() !== r.initialAvgCostUsd.trim()) return null;
-    const now = tryDecimal(r.quantity);
-    const before = tryDecimal(r.initialQuantity);
-    if (!now || !before || now.lte(before)) return null;
-    const avg = tryDecimal(r.initialAvgCostUsd);
-    const shown = avg ? formatUsd(avg) : r.initialAvgCostUsd;
-    return `Your existing average cost is $${shown}. Update it if your real average cost changed.`;
-  }
-
   const futureDate = asOfDate > localTodayIso();
 
   async function handleSave() {
@@ -385,15 +371,11 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
             </thead>
             <tbody>
               {rows.map((r, i) => {
-                const note = avgCostNote(r);
                 const d = r.removed ? { mv: "—", pl: "—" } : derived(r);
                 const qtyErr = errors[`holdings.${i}.quantity`];
                 const avgErr = errors[`holdings.${i}.avgCostUsd`];
                 const qtyErrId = `qty-${r.assetId}-err`;
                 const avgErrId = `avg-${r.assetId}-err`;
-                const noteId = `avg-${r.assetId}-note`;
-                const avgDescribedBy =
-                  [avgErr ? avgErrId : null, note ? noteId : null].filter(Boolean).join(" ") || undefined;
                 return (
                   <tr key={r.assetId}>
                     <td className="l sym">
@@ -433,7 +415,7 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                         autoComplete="off"
                         aria-label={`Average cost for ${r.symbol}`}
                         aria-invalid={avgErr ? true : undefined}
-                        aria-describedby={avgDescribedBy}
+                        aria-describedby={avgErr ? avgErrId : undefined}
                         value={r.avgCostUsd}
                         disabled={r.removed}
                         onChange={(e) => patchRow(i, { avgCostUsd: e.target.value })}
@@ -442,11 +424,6 @@ export function HoldingsEditor({ initial }: { initial: EditorInitialRow[] }) {
                         <span id={avgErrId} role="alert" className="rowerr">
                           {avgErr}
                         </span>
-                      )}
-                      {note && (
-                        <div id={noteId} role="status" className="status-warning" style={{ fontSize: "0.85em" }}>
-                          {note}
-                        </div>
                       )}
                     </td>
                     <td className="num">

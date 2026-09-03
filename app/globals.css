@@ -420,12 +420,16 @@ h6 {
   gap: 7px;
   font: inherit;
   font-size: 13px;
-  color: var(--ink);
+  color: var(--muted);
   background: none;
   border: 0;
   padding: 6px 11px;
   cursor: pointer;
   border-radius: 0;
+  transition: color 0.12s ease-out;
+}
+.cb-dash .ctl:hover {
+  color: var(--ink);
 }
 .cb-dash .ctl svg {
   width: 16px;
@@ -866,11 +870,14 @@ h6 {
   justify-content: center;
   border: 0;
   background: none;
-  color: var(--ink);
+  color: var(--muted);
   cursor: pointer;
   padding: 0;
   border-radius: 0;
   transition: color 0.12s ease-out;
+}
+.holdings-chrome .iconbtn:hover {
+  color: var(--ink);
 }
 .holdings-chrome .iconbtn svg {
   width: 16px;
@@ -926,20 +933,21 @@ h6 {
   color: var(--loss);
 }
 
-/* --- refresh control ("Data checked …") --- */
+/* --- refresh control ("Prices as of … · checked …") --- */
 .holdings-chrome .checked {
   font-size: 13px;
   color: var(--muted);
-  margin-top: 6px;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 .holdings-chrome .refresh {
   background: none;
   border: 0;
   padding: 0;
-  margin-left: 8px;
   cursor: pointer;
   color: var(--muted);
-  vertical-align: -2px;
   line-height: 0;
   transition: color 0.12s ease-out;
 }
@@ -975,14 +983,6 @@ h6 {
   letter-spacing: -0.01em;
   line-height: 1.5;
   margin: 0;
-}
-.holdings-chrome .lede {
-  color: var(--muted);
-  margin-top: 4px;
-}
-.holdings-chrome .asof {
-  margin-top: 10px;
-  font-size: 15px;
 }
 .holdings-chrome .section {
   padding-top: 24px;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { refreshAllPricesAction } from "@/app/actions/prices";
 
@@ -8,7 +8,16 @@ import { refreshAllPricesAction } from "@/app/actions/prices";
 // interval-based). Most clicks change nothing — EOD data updates once a day
 // — so an explicit "Up to date" / "Updated" state is required: silence
 // after a click reads as broken, not as "nothing to do".
-export function PriceRefreshControl({ checkedAt }: { checkedAt: string }) {
+export function PriceRefreshControl({
+  checkedAt,
+  label,
+}: {
+  checkedAt?: string;
+  // Overrides the default "Data checked {checkedAt}" text — /holdings uses
+  // this to merge its own price-date line into the same checked row instead
+  // of stacking two freshness lines.
+  label?: ReactNode;
+}) {
   const router = useRouter();
   const [state, setState] = useState<
     | { kind: "idle" }
@@ -30,7 +39,7 @@ export function PriceRefreshControl({ checkedAt }: { checkedAt: string }) {
 
   return (
     <div className="checked">
-      Data checked {checkedAt}
+      {label ?? `Data checked ${checkedAt}`}
       <button
         type="button"
         className="refresh"
