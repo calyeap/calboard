@@ -19,6 +19,13 @@
   --radius: 4px;
 }
 
+/* Reserves the vertical scrollbar's width permanently, so the content column
+   doesn't shift when a shorter route (e.g. Holdings) loses its scrollbar and
+   the viewport re-centres. */
+html {
+  scrollbar-gutter: stable;
+}
+
 *,
 *::before,
 *::after {
@@ -232,9 +239,6 @@ h6 {
    Presentation only: Portfolio Value stays the strongest element, health /
    freshness read as secondary, and the sections get consistent vertical
    rhythm. No new information, no new components. */
-.dashboard-section + .dashboard-section {
-  margin-top: var(--space-lg);
-}
 .pv-amount {
   font-size: 2rem;
   font-weight: 700;
