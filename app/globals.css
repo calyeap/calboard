@@ -947,7 +947,6 @@ h6 {
 .holdings-chrome .checked {
   font-size: 13px;
   color: var(--muted);
-  margin-top: 10px;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -986,6 +985,9 @@ h6 {
 /* --- page head --- */
 .holdings-chrome .pagehead {
   padding: 56px 0 0;
+}
+.holdings-chrome .pagehead h2 {
+  margin-bottom: 10px;
 }
 .holdings-chrome h2 {
   font-size: 20px;
