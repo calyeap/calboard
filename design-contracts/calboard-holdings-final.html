@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calboard — /holdings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root[data-theme="light"]{
+  --ground:#F0F0ED; --ink:#1B1D1F; --muted:#5A6067; --hairline:#DCDCD6;
+  --gain:#1B6B4A; --loss:#A3352A; --stale:#856713;
+  --field:#F7F7F5; --line-strong:#C6C6BE; --cell-line:#B0B0A6;
+  --pri-fill:#1B1D1F; --pri-text:#F0F0ED; --pri-hover:#33373A; --pri-off:#DCDCD6;
+  --seg-fill:#1B1D1F; --seg-text:#F0F0ED;
+}
+:root[data-theme="dark"]{
+  --ground:#16181A; --ink:#E9EAE7; --muted:#979CA1; --hairline:#2C2F33;
+  --gain:#56B98C; --loss:#E27A66; --stale:#D9AB45;
+  --field:#1E2124; --line-strong:#3C4045; --cell-line:#4E545B;
+  --pri-fill:#3A4046; --pri-text:#E9EAE7; --pri-hover:#474E55; --pri-off:#24272A;
+  --seg-fill:#33383D; --seg-text:#E9EAE7;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--ground);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:15px;line-height:1.5;
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+.wrap{max-width:1080px;margin:0 auto;padding:0 32px 96px}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+/* top bar — both icons bare */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:24px 0 0}
+.brand{font-size:18px;font-weight:500;letter-spacing:-0.01em;white-space:nowrap}
+.nav{display:flex;align-items:center;gap:20px}
+.nav a{color:var(--muted);text-decoration:none;font-size:15px}
+.nav a:hover{color:var(--ink)}
+.nav a.on{color:var(--ink);text-decoration:underline;text-underline-offset:5px;text-decoration-thickness:1px}
+.iconbare{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;
+  border:0;background:none;color:var(--muted);cursor:pointer;padding:0;transition:color .12s ease-out}
+.iconbare:hover{color:var(--ink)}
+.iconbare svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.iconbare.sm{width:22px;height:22px}
+.iconbare.sm svg{width:14px;height:14px}
+
+/* buttons */
+.btn{height:34px;padding:0 16px;font:inherit;font-size:15px;font-weight:500;border:0;border-radius:0;
+  background-color:var(--pri-fill);color:var(--pri-text);cursor:pointer;
+  transition:background-color .12s ease-out,color .12s ease-out}
+.btn:hover{background-color:var(--pri-hover)}
+.btn[disabled]{background-color:var(--pri-off);color:var(--muted);cursor:default}
+.btn.pending{background-color:var(--pri-fill);color:var(--pri-text);cursor:default}
+.btn2{height:34px;padding:0 14px;font:inherit;font-size:15px;font-weight:400;border:1px solid var(--line-strong);
+  border-radius:0;background:none;color:var(--ink);cursor:pointer;transition:border-color .12s ease-out,color .12s ease-out}
+.btn2:hover{border-color:var(--muted)}
+.btn2[disabled]{border-color:var(--hairline);color:var(--muted);cursor:default}
+
+/* head */
+.pagehead{padding:56px 0 0}
+h2{font-size:20px;font-weight:500;letter-spacing:-.01em}
+.checked{font-size:13px;color:var(--muted);margin-top:10px;display:flex;align-items:center;gap:2px}
+.section{padding-top:24px}
+.section + .section{padding-top:64px}
+.sechead{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--hairline)}
+.note{font-size:13px;color:var(--muted)}
+
+/* table */
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead th{font-size:13px;font-weight:400;color:var(--muted);text-align:right;padding:9px 0 8px;
+  border-bottom:1px solid var(--hairline);white-space:nowrap}
+thead th.l{text-align:left}
+tbody td{height:48px;text-align:right;border-bottom:1px solid var(--hairline);vertical-align:middle;white-space:nowrap;position:relative}
+tbody td.l{text-align:left}
+.sym{font-weight:500}.strong{font-weight:500}.dim{color:var(--muted)}
+.gain{color:var(--gain)}.loss{color:var(--loss)}.stale{color:var(--stale)}
+.marker{display:inline-block;width:5px;height:5px;background:var(--stale);vertical-align:2px;margin-right:6px}
+col.c-sym{width:9%}col.c-type{width:9%}col.c-qty{width:13%}col.c-avg{width:15%}
+col.c-price{width:14%}col.c-mv{width:16%}col.c-pl{width:16%}col.c-act{width:40px}
+
+/* editable cell — inset underline, never a box */
+.cellinput{width:calc(100% - 20px);margin-left:20px;display:block;
+  font:inherit;font-size:15px;color:var(--ink);background:none;
+  border:0;border-bottom:1px solid var(--cell-line);border-radius:0;
+  padding:0 0 1px;line-height:1.1;text-align:right;font-variant-numeric:tabular-nums;
+  transition:border-color .12s ease-out}
+.cellinput:hover{border-bottom-color:var(--muted)}
+.cellinput:focus{border-bottom-color:var(--ink);outline:2px solid var(--ink);outline-offset:3px}
+.cellinput[readonly]{color:var(--muted);border-bottom-color:var(--hairline);cursor:default}
+.cellinput.err{border-bottom-color:var(--loss)}
+.cellinput::-webkit-outer-spin-button,.cellinput::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.cellinput{-moz-appearance:textfield;appearance:textfield}
+/* error sits inside the cell without changing row height */
+.rowerr{position:absolute;right:0;bottom:1px;font-size:11px;line-height:1;color:var(--loss);pointer-events:none}
+.rmv{color:var(--muted)}
+.rmv:hover{color:var(--loss)}
+.footnote{font-size:13px;color:var(--muted);margin-top:9px}
+
+/* form */
+.formrow{display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap;padding-top:14px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:13px;color:var(--muted)}
+.inp{height:34px;padding:0 10px;font:inherit;font-size:15px;color:var(--ink);
+  background-color:var(--field);background-image:none;
+  border:1px solid var(--line-strong);border-radius:0;transition:border-color .12s ease-out}
+.inp::placeholder{color:var(--muted)}
+.inp:hover{border-color:var(--muted)}
+.inp[disabled]{background-color:var(--ground);border-color:var(--hairline);color:var(--muted);cursor:default}
+.inp.err{border-color:var(--loss)}
+.inp.n{text-align:right;font-variant-numeric:tabular-nums}
+.w150{width:150px}.w140{width:140px}.w120{width:120px}.w170{width:170px}
+.inp::-webkit-outer-spin-button,.inp::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+select.inp{appearance:none;-webkit-appearance:none;-moz-appearance:none;padding-right:32px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235A6067' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat:no-repeat;background-position:right 11px center;background-size:12px}
+:root[data-theme="dark"] select.inp{
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23979CA1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat:no-repeat;background-position:right 11px center;background-size:12px}
+
+/* save — same block, no heading */
+.saverow{display:flex;align-items:flex-end;gap:18px;padding-top:14px;flex-wrap:wrap}
+.status{font-size:13px;margin-top:6px}
+.s-ok{color:var(--gain)}.s-bad{color:var(--loss)}.s-warn{color:var(--stale)}.s-neutral{color:var(--muted)}
+
+/* narrow */
+.stack{display:none}
+.hrow{padding:16px 0;border-bottom:1px solid var(--hairline)}
+.hrow .line1{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.hrow .mv{font-size:20px;font-weight:500;margin-top:4px}
+.hrow .meta{font-size:13px;color:var(--muted);margin-top:3px}
+.hrow .pl{font-size:15px;font-weight:500;margin-top:5px}
+.hrow .edits{display:flex;gap:18px;padding-top:10px}
+.hrow .edits .field{flex:1}
+.hrow .rmvline{padding-top:10px}
+@media (max-width:720px){
+  .wrap{padding:0 20px 72px}
+  .nav{gap:14px}
+  .topbar{flex-wrap:wrap;row-gap:12px}
+  table.holdings{display:none}
+  .stack{display:block}
+  .formrow .field,.formrow .inp,.saverow .field,.saverow .inp{width:100%}
+  .hrow .edits .field{min-width:0}
+  .hrow .edits .inp{width:100%}
+  .w150,.w140,.w120,.w170{width:100%}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">Calboard</div>
+    <div class="nav">
+      <a href="#">Dashboard</a>
+      <a href="#" class="on">Holdings</a>
+      <button class="iconbare" id="privacy" aria-pressed="false" aria-label="Hide values" title="Hide values">
+        <svg id="eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+      <button class="iconbare" id="mode" aria-label="Switch to dark mode" title="Switch to dark mode">
+        <svg id="modeicon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="pagehead">
+    <h2>Holdings</h2>
+    <div class="checked">Prices as of the 29 Aug 2026 close &middot; checked 21:04 SGT
+      <button class="iconbare sm" aria-label="Refresh prices" title="Refresh prices">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sechead"><h2>Positions</h2><div class="note">Alphabetical</div></div>
+
+    <table class="holdings">
+      <colgroup><col class="c-sym"><col class="c-type"><col class="c-qty"><col class="c-avg"><col class="c-price"><col class="c-mv"><col class="c-pl"><col class="c-act"></colgroup>
+      <thead><tr>
+        <th class="l">Symbol</th><th class="l">Type</th><th>Quantity</th><th>Avg cost</th>
+        <th>Price</th><th>Market value</th><th>Unrealised P&amp;L</th><th></th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td class="l sym">VOO</td><td class="l dim">ETF</td>
+          <td><input class="cellinput num mask" value="210" aria-label="VOO quantity"></td>
+          <td><input class="cellinput num mask" value="452.80" aria-label="VOO average cost"></td>
+          <td class="num">$561.20</td>
+          <td class="num strong mask">$117,852.00</td><td class="num strong gain mask">+$22,764.00</td>
+          <td><button class="iconbare rmv" aria-label="Remove VOO" title="Remove VOO"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></td>
+        </tr>
+        <tr>
+          <td class="l sym">AAPL</td><td class="l dim">Equity</td>
+          <td><input class="cellinput num mask" value="140" aria-label="AAPL quantity"></td>
+          <td><input class="cellinput num mask" value="268.50" aria-label="AAPL average cost"></td>
+          <td class="num">$344.30</td>
+          <td class="num strong mask">$48,202.00</td><td class="num strong gain mask">+$10,612.00</td>
+          <td><button class="iconbare rmv" aria-label="Remove AAPL" title="Remove AAPL"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></td>
+        </tr>
+        <tr>
+          <td class="l sym">BTC</td><td class="l dim">Crypto</td>
+          <td><input class="cellinput num mask" value="0.42" aria-label="BTC quantity"></td>
+          <td><input class="cellinput num mask" value="61,240.00" aria-label="BTC average cost"></td>
+          <td class="num">$108,930.00</td>
+          <td class="num strong mask">$45,750.60</td><td class="num strong gain mask">+$20,029.80</td>
+          <td><button class="iconbare rmv" aria-label="Remove BTC" title="Remove BTC"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></td>
+        </tr>
+        <tr>
+          <td class="l sym">MSFT</td><td class="l dim">Equity</td>
+          <td><input class="cellinput num mask" value="82" aria-label="MSFT quantity"></td>
+          <td>
+            <input class="cellinput num mask err" value="-578.20" aria-label="MSFT average cost" aria-invalid="true" aria-describedby="msft-err">
+            <span class="rowerr" id="msft-err">Must be positive</span>
+          </td>
+          <td class="num">$512.44</td>
+          <td class="num strong mask">$42,020.08</td><td class="num strong loss mask">−$5,392.32</td>
+          <td><button class="iconbare rmv" aria-label="Remove MSFT" title="Remove MSFT"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></td>
+        </tr>
+        <tr>
+          <td class="l sym">QQQ</td><td class="l dim">ETF</td>
+          <td><input class="cellinput num mask" value="55" aria-label="QQQ quantity"></td>
+          <td><input class="cellinput num mask" value="640.00" aria-label="QQQ average cost"></td>
+          <td class="num">$598.10</td>
+          <td class="num strong mask">$32,895.50</td><td class="num strong loss mask">−$2,304.50</td>
+          <td><button class="iconbare rmv" aria-label="Remove QQQ" title="Remove QQQ"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></td>
+        </tr>
+        <tr>
+          <td class="l sym">NVDA</td><td class="l dim">Equity</td>
+          <td><input class="cellinput num mask" value="120" aria-label="NVDA quantity"></td>
+          <td><input class="cellinput num mask" value="118.40" aria-label="NVDA average cost"></td>
+          <td class="num stale" title="Priced at 27 Aug close"><span class="marker"></span>$186.75</td>
+          <td class="num strong mask">$22,410.00</td><td class="num strong gain mask">+$8,202.00</td>
+          <td><button class="iconbare rmv" aria-label="Remove NVDA" title="Remove NVDA"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></td>
+        </tr>
+        <tr>
+          <td class="l sym">SCHD</td><td class="l dim">ETF</td>
+          <td><input class="cellinput num mask" value="300" aria-label="SCHD quantity"></td>
+          <td><input class="cellinput num mask" value="27.90" aria-label="SCHD average cost"></td>
+          <td class="num stale" title="No price available"><span class="marker"></span>—</td>
+          <td class="num dim">—</td><td class="num dim">—</td>
+          <td><button class="iconbare rmv" aria-label="Remove SCHD" title="Remove SCHD"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="footnote">NVDA is priced at 27 Aug close. SCHD has no price and is excluded from market value and P&amp;L.</div>
+
+    <div class="stack">
+      <div class="hrow">
+        <div class="line1"><span class="sym">VOO</span><span class="dim num mask">38.1%</span></div>
+        <div class="mv num mask">$117,852.00</div>
+        <div class="meta num">$561.20 · ETF</div>
+        <div class="pl num gain mask">+$22,764.00</div>
+        <div class="edits">
+          <div class="field"><label>Quantity</label><input class="inp n mask" value="210"></div>
+          <div class="field"><label>Avg cost</label><input class="inp n mask" value="452.80"></div>
+        </div>
+        <div class="rmvline"><button class="btn2" style="height:30px;font-size:13px">Remove</button></div>
+      </div>
+      <div class="hrow">
+        <div class="line1"><span class="sym">AAPL</span><span class="dim num mask">15.6%</span></div>
+        <div class="mv num mask">$48,202.00</div>
+        <div class="meta num">$344.30 · Equity</div>
+        <div class="pl num gain mask">+$10,612.00</div>
+        <div class="edits">
+          <div class="field"><label>Quantity</label><input class="inp n mask" value="140"></div>
+          <div class="field"><label>Avg cost</label><input class="inp n mask" value="268.50"></div>
+        </div>
+        <div class="rmvline"><button class="btn2" style="height:30px;font-size:13px">Remove</button></div>
+      </div>
+      <div class="hrow">
+        <div class="line1"><span class="sym">NVDA</span><span class="dim num mask">7.2%</span></div>
+        <div class="mv num mask">$22,410.00</div>
+        <div class="meta num stale"><span class="marker"></span>$186.75 · priced at 27 Aug close</div>
+        <div class="pl num gain mask">+$8,202.00</div>
+        <div class="edits">
+          <div class="field"><label>Quantity</label><input class="inp n mask" value="120"></div>
+          <div class="field"><label>Avg cost</label><input class="inp n mask" value="118.40"></div>
+        </div>
+        <div class="rmvline"><button class="btn2" style="height:30px;font-size:13px">Remove</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sechead"><h2>Add a holding</h2></div>
+    <div class="formrow">
+      <div class="field"><label for="tk">Ticker symbol</label><input class="inp w150" id="tk" placeholder="e.g. VTI"></div>
+      <div class="field"><label for="at">Asset type</label>
+        <select class="inp w140" id="at"><option>Equity</option><option>ETF</option><option>Crypto</option></select>
+      </div>
+      <div class="field"><label for="qy">Quantity</label><input class="inp n w120" id="qy" type="number"></div>
+      <div class="field"><label for="ac">Average cost (USD)</label><input class="inp n w150" id="ac" type="number"></div>
+      <button class="btn">Add holding</button>
+    </div>
+
+    <div class="saverow">
+      <div class="field">
+        <label for="eff">Recording as of</label>
+        <input class="inp w170" id="eff" type="date" value="2026-09-01" max="2026-09-01">
+      </div>
+      <button class="btn" id="save">Save</button>
+    </div>
+    <div class="status s-ok">Saved. 7 positions recorded as of 1 Sep 2026.</div>
+  </div>
+
+</div>
+
+<script>
+var root=document.documentElement,mb=document.getElementById('mode'),mi=document.getElementById('modeicon');
+var SUN='<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
+var MOON='<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>';
+mb.onclick=function(){var d=root.getAttribute('data-theme')==='dark';root.setAttribute('data-theme',d?'light':'dark');
+  mi.innerHTML=d?MOON:SUN;var t=d?'Switch to dark mode':'Switch to light mode';mb.setAttribute('aria-label',t);mb.setAttribute('title',t);};
+
+/* Privacy — mirrors MaskableValue: each digit becomes a bullet, signs,
+   separators and decimal points preserved, so no column width shifts.
+   Quantity, Avg cost, Market value and P&L are masked. Price is not. */
+function maskDigits(s){return s.replace(/[0-9]/g,'\u2022');}
+var pb=document.getElementById('privacy'),eye=document.getElementById('eye');
+var EYE='<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>';
+var EYEOFF='<path d="M10.6 6.7A9.9 9.9 0 0 1 12 6.6c6.4 0 10 6.5 10 6.5a17 17 0 0 1-3.2 3.9M6.3 7.8A17 17 0 0 0 2 13.1s3.6 6.5 10 6.5a9.6 9.6 0 0 0 4.3-1M3 3l18 18"/>';
+var hid=false, store=[];
+document.querySelectorAll('.mask').forEach(function(el){
+  var isInput = el.tagName==='INPUT';
+  store.push([el,isInput,isInput?el.value:el.textContent]);
+});
+pb.onclick=function(){
+  hid=!hid;
+  eye.innerHTML=hid?EYEOFF:EYE;
+  pb.setAttribute('aria-pressed',hid?'true':'false');
+  var t=hid?'Show values':'Hide values';
+  pb.setAttribute('aria-label',t);pb.setAttribute('title',t);
+  store.forEach(function(r){
+    var el=r[0],isInput=r[1],orig=r[2];
+    if(isInput){
+      el.value = hid?maskDigits(orig):orig;
+      if(hid){el.setAttribute('readonly','');el.setAttribute('aria-label','hidden');}
+      else{el.removeAttribute('readonly');}
+    }else{
+      el.textContent = hid?maskDigits(orig):orig;
+      if(hid)el.setAttribute('aria-label','hidden');else el.removeAttribute('aria-label');
+    }
+  });
+};
+</script>
+</body>
+</html>
