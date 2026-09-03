@@ -108,8 +108,7 @@ export default async function DashboardPage() {
                   className={`delta num${portfolio!.totalUnrealisedPlUsd.isNegative() ? " loss" : " gain"}`}
                 >
                   {portfolio!.totalUnrealisedPlUsd.isNegative() ? "−" : "+"}US$
-                  <MaskableValue>{formatUsd(portfolio!.totalUnrealisedPlUsd.abs())}</MaskableValue> since
-                  cost
+                  <MaskableValue>{formatUsd(portfolio!.totalUnrealisedPlUsd.abs())}</MaskableValue>
                   {portfolio!.totalUnrealisedPlPct !== null && (
                     <> ({portfolio!.totalUnrealisedPlPct.toFixed(2)}%)</>
                   )}
