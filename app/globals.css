@@ -481,6 +481,9 @@ h6 {
 .cb-dash .asof-label {
   font-weight: 500;
 }
+.cb-dash .checked-inline {
+  color: var(--muted);
+}
 .cb-dash .value {
   font-size: 40px;
   font-weight: 500;

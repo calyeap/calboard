@@ -53,7 +53,7 @@ async function HoldingsPageBody() {
   );
   const checkedTime = formatCheckedTime(new Date());
   const freshness = latestPriceDate
-    ? `Prices as of ${formatAsOfDate(latestPriceDate)} close · checked ${checkedTime}`
+    ? `Prices as of the ${formatAsOfDate(latestPriceDate)} close · checked ${checkedTime}`
     : `checked ${checkedTime}`;
 
   return (
