@@ -89,6 +89,28 @@ describe("DashboardHoldingsTable", () => {
     expect(table.textContent).toContain("−$50.00");
   });
 
+  it("an unpriced row's P&L shows the em-dash sentinel with no gain/loss colour class in the desktop table, and omits the P&L line entirely in the mobile stack (the plOf() null branch — previously unexercised: no prior test asserted on its rendered output or class)", () => {
+    const positions = [
+      position({
+        symbol: "NOPX",
+        priceStatus: "unavailable",
+        latestPriceUsd: null,
+        marketValueUsd: null,
+        unrealisedPlUsd: null,
+      }),
+    ];
+    const { container } = render(<DashboardHoldingsTable positions={positions} />);
+
+    const desktopRow = container.querySelector("table.holdings tbody tr")!;
+    const plTd = desktopRow.querySelectorAll("td")[6];
+    expect(plTd.textContent).toContain("—");
+    expect(plTd.className).not.toMatch(/\bgain\b/);
+    expect(plTd.className).not.toMatch(/\bloss\b/);
+
+    const stackRow = container.querySelector(".stack .hrow")!;
+    expect(stackRow.querySelector(".pl")).toBeNull();
+  });
+
   it("masks Quantity, Avg cost, Market value and P&L in BOTH the desktop table and the mobile stack, keeping Price visible in both", () => {
     function ToggleButton() {
       const { toggle } = usePrivacy();
