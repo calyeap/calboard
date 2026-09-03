@@ -20,31 +20,67 @@ Where a page-specific measurement in a mock differs from a general rule here, th
 
 ## 0. TOKENS
 
-Existing tokens from the frozen direction, unchanged:
+Core tokens. **Light mode was retuned to warm paper in the cross-route consistency pass** — the ground moved off cool neutral toward a warm off-white, and ink, muted and the two line tokens were re-warmed against it so nothing reads cold on the new ground. Dark mode is unchanged.
 
 | Token | Light | Dark |
 |---|---|---|
-| `--ground` | `#F0F0ED` | `#16181A` |
-| `--ink` | `#1B1D1F` | `#E9EAE7` |
-| `--muted` | `#5A6067` | `#979CA1` |
-| `--hairline` | `#DCDCD6` | `#2C2F33` |
+| `--ground` | `#F2EEE5` | `#16181A` |
+| `--ink` | `#1F1C17` | `#E9EAE7` |
+| `--muted` | `#5F5A50` | `#979CA1` |
+| `--hairline` | `#E2DBCC` | `#2C2F33` |
 | `--gain` | `#1B6B4A` | `#56B98C` |
 | `--loss` | `#A3352A` | `#E27A66` |
 | `--stale` | `#856713` | `#D9AB45` |
 
-New tokens required for controls. These are additive; nothing above changes.
+The three semantic colours are deliberately unchanged. They are the only colours in the system that carry meaning, and retuning them alongside the ground would have moved the one thing the eye is trained on.
+
+### Allocation palettes
+
+The donut and its legend use **two separate palettes**, one per view. This is deliberate. Colour encodes rank position, not identity — the largest slice is always `--a1`. With one shared palette, switching from **By holding** to **By asset class** keeps blue at the top while the thing blue points to changes, which implies an identity the chart is not claiming.
+
+Two palettes make the views visibly different families, so a colour carried across the toggle is never mistaken for the same entity.
+
+**Holding palette** — up to six categorical hues, alternating dark and light so adjacent ranks differ in both hue and lightness.
+
+| Token | Light | Dark |
+|---|---|---|
+| `--a1` | `#0F3357` | `#5C9FE0` |
+| `--a2` | `#7FD4CE` | `#7FE3DB` |
+| `--a3` | `#5B4B8A` | `#A98FE0` |
+| `--a4` | `#9AB6D6` | `#3F8FA6` |
+| `--a5` | `#2C7A87` | `#4FC2C9` |
+| `--a6` | `#BDA9D6` | `#D5C4EC` |
+
+`--a4` was retuned in the cross-route consistency pass. It previously sat at `#6FA8DC` light and `#3E7BA8` dark, both close enough to `--a1` that position 1 and position 4 read as the same blue. This is the recorded position-4 collision and it is now closed.
+
+**Asset-class palette** — a slate ramp, darkest to lightest by weight. Asset classes are few and inherently ordered, so a ramp is honest where six hues would be arbitrary.
+
+| Token | Light | Dark |
+|---|---|---|
+| `--c1` | `#2F4858` | `#A8C0D0` |
+| `--c2` | `#6E8A9C` | `#7291A5` |
+| `--c3` | `#A9BCC6` | `#4E6B7C` |
+| `--c4` | `#58707E` | `#93AEC0` |
+
+`--c4` is a reserve for a fourth class. Three are defined today: Equity, ETF, Crypto.
+
+**Constraints on both palettes.** No saturated green or red. `--gain` and `--loss` are the only colours in the product that carry meaning, and a green wedge beside a green P&L column makes the chart look like it is asserting something. Teals are permitted; they are far enough from `#1B6B4A` to read as neutral.
+
+**Accessibility.** Neither palette may be the sole carrier of information. Every wedge has a legend row with a text label, and the donut's `aria-label` describes the view rather than the colours.
+
+Control tokens.
 
 | Token | Light | Dark | Purpose |
 |---|---|---|---|
-| `--field` | `#F7F7F5` | `#1E2124` | Input and select fill |
-| `--line-strong` | `#C6C6BE` | `#3C4045` | Input, select and secondary-button borders |
-| `--pri-fill` | `#1B1D1F` | `#3A4046` | Primary button fill |
-| `--pri-text` | `#F0F0ED` | `#E9EAE7` | Primary button text |
+| `--field` | `#F8F5EE` | `#1E2124` | Input and select fill |
+| `--line-strong` | `#CBC2AE` | `#3C4045` | Input, select and secondary-button borders |
+| `--pri-fill` | `#1F1C17` | `#3A4046` | Primary button fill |
+| `--pri-text` | `#F2EEE5` | `#E9EAE7` | Primary button text |
 | `--pri-hover` | `#33373A` | `#474E55` | Primary button fill on hover |
-| `--pri-off` | `#DCDCD6` | `#24272A` | Primary button fill when disabled |
-| `--cell-line` | `#B0B0A6` | `#4E545B` | Editable table-cell underline |
-| `--seg-fill` | `#1B1D1F` | `#33383D` | Active segment fill |
-| `--seg-text` | `#F0F0ED` | `#E9EAE7` | Active segment text |
+| `--pri-off` | `#E2DBCC` | `#24272A` | Primary button fill when disabled |
+| `--cell-line` | `#B4AC9A` | `#4E545B` | Editable table-cell underline |
+| `--seg-fill` | `#1F1C17` | `#33383D` | Active segment fill |
+| `--seg-text` | `#F2EEE5` | `#E9EAE7` | Active segment text |
 
 `--hairline` is for structural rules between rows and sections. `--line-strong` is for control edges. Do not substitute one for the other — a control bounded by `--hairline` disappears into the table.
 
@@ -88,26 +124,32 @@ One family, IBM Plex Sans. Five sizes, two weights, one line-height ratio of 1.5
 
 | Role | Size / weight | Where |
 |---|---|---|
-| Portfolio headline | `40px` / `500`, line-height `44px` | `/` only. Never coloured — §2.1 of the page direction. |
+| Portfolio headline | `28px` / `500`, line-height `1.1` | `/` only. Never coloured — §2.1 of the page direction. |
 | Wordmark | `18px` / `500`, `-0.01em` | Both. §1.1. |
-| Section heading | `20px` / `500` | Both. Also serves as the page title on `/holdings`. |
-| Body and supporting text | `15px` / `400` | Both. The freshness clause of the value line, nav links, table cells. |
-| Primary-metric label | `15px` / `500`, ink | `/` only. `Portfolio value` in the value line. Reuses the emphasised-cell weight; introduces no new size. |
+| Page title / section heading | `20px` / `500` | Both. `Portfolio value` on `/`, `Holdings` on `/holdings`, and every section heading on both. |
+| Body and supporting text | `15px` / `400` | Both. Nav links, table cells, the delta line. |
 | Nav link | `15px` / `400` | Both. §1.1 — declared, never inherited. |
 | Table cell, emphasised | `15px` / `500` | Both. Symbol, market value, P&L. |
 | Table cell, secondary | `15px` / `400` | Both. Quantity, avg cost, price. |
 | Table header | `13px` / `400`, `--muted` | Both. |
-| Metadata and status | `13px` / `400` | Both. Section notes, footnotes, field labels, status messages. `/holdings` freshness line. |
+| Metadata and status | `13px` / `400`, `--muted` | Both. The freshness line, section notes, footnotes, field labels, status messages. |
 
-`Data checked` is the one exception. On Dashboard it sits inline at the end of the value line, so it takes that line's `15px` and is separated from the market date by `--muted` rather than by size. On `/holdings` it stays at `13px` / `--muted`. See the divergence table in §1.1.
+**The value block, `/` — four elements in this order:**
 
-**Primary-metric label.** In `Portfolio value · Prices as of the 29 Aug 2026 close`, `Portfolio value` carries weight 500 and the freshness clause carries weight 400. Both stay at 15px in full `--ink`.
+1. `Portfolio value` — the page title, `20px / 500`, structurally identical to `Holdings` on the other route
+2. The value — `28px / 500`, `-0.02em`, never coloured
+3. The delta — `15px / 400`, gain/loss coloured
+4. The freshness line — `13px / 400 / --muted`, market date and `checked` clause with the refresh control inline
 
-The freshness clause is **not** dropped to `--muted`. Setting the market date in full ink beside the value is a load-bearing decision from the frozen page direction — grey small text reads as "ignore me," and this date qualifies the headline number. Weight, not colour, separates label from metadata here.
+**Why 28px and not 40px.** The headline was 40px through the control-direction milestone. It was reduced deliberately. Calboard's governing constraint is anti-momentum — EOD-only prices, no auto-refresh, no percentage-change sorting — and a 40px portfolio total is the most momentum-inviting element the page could carry. It is the thing that makes you open the tab. A quieter number is more consistent with the product than a louder one. 28px keeps a 1.4× lead over the 20px page title, so the value still dominates its block without shouting.
 
-**This applies to Dashboard only.** The value block is three elements: the merged label-and-freshness line, the value, the delta. `checked` is part of the first line and is held apart by `--muted`, not by size. On `/holdings` there is no headline number for the market date to qualify, so a full-ink 15px line there labels nothing and reads as a heading; that route merges at 13px `--muted` instead. See the divergence table in §1.1.
+28px is a deliberate addition to the scale, not a local override. It fills a real gap: 20px is the page-title role, so the value at 20px would be no louder than its own label.
 
-**Deliberate role collision:** the `/holdings` page title and its section headings are both `20px / 500`. They are the same role. Dashboard has no page title — it opens on the portfolio value — so a distinct page-title role would exist on one route only and be used once. Collapsing them is the smaller and more honest choice. Do not introduce a separate page-title size.
+**Why the freshness line moved below.** It previously sat inline on the label line at full ink, on the reasoning that the market date qualifies the headline number and must not be greyed. That reasoning held while the number was 40px and read like a live ticker. At 28px it carries less urgency, and the cost of the old arrangement — a long three-clause line above the number, and a treatment that differed from `/holdings` for no user-visible reason — outweighs it. Both routes now use one pattern: metadata sits below its content at `13px / --muted`.
+
+**Do not shrink the freshness line below 13px.** 13px is the metadata floor for the whole system. This line states that prices are from a market close rather than live, which is the one piece of metadata that changes what the value means, and it is already `--muted` on a light ground.
+
+**Deliberate role collision:** page titles and section headings are both `20px / 500`. They are the same role on both routes. Do not introduce a separate page-title size.
 
 Anything needing a size outside this table is a gap in the table, not a licence to invent one. Raise it rather than adding a value locally.
 
@@ -180,9 +222,8 @@ These differ by design. A future reader finding them should leave them alone.
 | Property | Dashboard | `/holdings` | Why |
 |---|---|---|---|
 | Table sort order | Weight | Alphabetical | See §8.2. |
-| Freshness line | One line on the value label: date at `15px` ink, `checked` clause `--muted` | One line at `13px` / `--muted` beneath the title | Both routes merge the market date and `checked` into a single line. They merge in opposite directions. On Dashboard the date qualifies the headline number directly beneath it and must stay full ink, so `checked` rises to meet it and is separated by colour. `/holdings` has no headline number, so nothing anchors the line at ink and the whole thing sits at metadata weight. See §1.2. |
 
-Those are the only page-level divergences. Vertical rhythm is shared — see below.
+That is the only page-level divergence. The freshness line was divergent through the page-furniture milestone and no longer is — both routes now place it below its content at `13px` / `--muted`. See §1.2. Vertical rhythm is shared — see below.
 
 ### Vertical rhythm — shared, both routes
 
@@ -210,7 +251,7 @@ Height 34px · padding `0 16px` · 15px / weight 500 · no border.
 
 | State | Light | Dark |
 |---|---|---|
-| Default | fill `#1B1D1F`, text `#F0F0ED` | fill `#3A4046`, text `#E9EAE7` |
+| Default | fill `#1F1C17`, text `#F2EEE5` | fill `#3A4046`, text `#E9EAE7` |
 | Hover | fill `#33373A` | fill `#474E55` |
 | Active | fill `--pri-fill`, no other change | same |
 | Focus | default fill + global focus ring | same |
@@ -644,6 +685,7 @@ Two are (§15.1, §15.2). Two are not, and are named explicitly rather than disg
 - [ ] No `opacity`-based disabled states anywhere (§1)
 - [ ] `Save` and `+ Add holding` primary; step and edit buttons secondary (§2)
 - [ ] Dark primary uses `--pri-fill` `#3A4046`, never `--ink` (§2.1)
+- [ ] Light ground is `#F2EEE5` warm paper, not the retired `#F0F0ED` (§0)
 - [ ] `Remove` red on hover only, never at rest — bare × with per-symbol label on Holdings desktop, text form below 720px (§2.3)
 - [ ] Editable cells are 20px-inset underlines; row errors 11px, 2–4px below the underline, rows stay 48px (§3.1)
 - [ ] Spinner arrows suppressed on all numeric inputs (§3)
@@ -736,4 +778,4 @@ The classification is required on every entry. "It looks wrong" without a contra
 
 ### Out of scope for this gate
 
-Wordmark selection. Bar composition below the measured 404–416px minimum. Donut colour split and the position-4 palette swap. `Total (priced)` redesign — rule behaviour only. Setup Wizard layout. Holdings column layout and widths. The mask column-shift. All are LATER and must not be raised as FAIL entries here.
+Wordmark selection. Bar composition below the measured 404–416px minimum. `Total (priced)` redesign — rule behaviour only. Setup Wizard layout. Holdings column layout and widths. The mask column-shift. All are LATER and must not be raised as FAIL entries here.

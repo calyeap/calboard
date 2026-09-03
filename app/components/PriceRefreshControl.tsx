@@ -11,18 +11,12 @@ import { refreshAllPricesAction } from "@/app/actions/prices";
 export function PriceRefreshControl({
   checkedAt,
   label,
-  variant = "standalone",
 }: {
   checkedAt?: string;
-  // Overrides the default "Data checked {checkedAt}" text — /holdings uses
-  // this to merge its own price-date line into the same checked row instead
-  // of stacking two freshness lines.
+  // Overrides the default "Data checked {checkedAt}" text — both routes use
+  // this to merge their own price-date line into the same ".checked" row
+  // instead of stacking two freshness lines.
   label?: ReactNode;
-  // "standalone" (default): own ".checked" line, used by /holdings.
-  // "inline": a ".checked-inline" span meant to sit inside another line's
-  // text (the Dashboard's single ".asof" line) — same refresh behaviour,
-  // just a different wrapper/placement.
-  variant?: "standalone" | "inline";
 }) {
   const router = useRouter();
   const [state, setState] = useState<
@@ -76,10 +70,6 @@ export function PriceRefreshControl({
       )}
     </>
   );
-
-  if (variant === "inline") {
-    return <span className="checked-inline"> &middot; {content}</span>;
-  }
 
   return <div className="checked">{content}</div>;
 }

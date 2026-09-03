@@ -321,24 +321,28 @@ h6 {
    original foundation above unchanged. See DESIGN.md for why this is a
    second, parallel token set instead of replacing --color-*. */
 .cb-dash {
-  --ground: #F0F0ED;
-  --ink: #1B1D1F;
-  --muted: #5A6067;
-  --hairline: #DCDCD6;
+  --ground: #F2EEE5;
+  --ink: #1F1C17;
+  --muted: #5F5A50;
+  --hairline: #E2DBCC;
   --gain: #1B6B4A;
   --loss: #A3352A;
   --stale: #856713;
   --a1: #0F3357;
   --a2: #7FD4CE;
   --a3: #5B4B8A;
-  --a4: #6FA8DC;
+  --a4: #9AB6D6;
   --a5: #2C7A87;
   --a6: #BDA9D6;
-  --field: #F7F7F5;
-  --line-strong: #C6C6BE;
+  --c1: #2F4858;
+  --c2: #6E8A9C;
+  --c3: #A9BCC6;
+  --c4: #58707E;
+  --field: #F8F5EE;
+  --line-strong: #CBC2AE;
   --ink-hover: #33373A;
-  --seg-fill: #1B1D1F;
-  --seg-text: #F0F0ED;
+  --seg-fill: #1F1C17;
+  --seg-text: #F2EEE5;
 
   display: block;
   background: var(--ground);
@@ -369,9 +373,13 @@ h6 {
   --a1: #5C9FE0;
   --a2: #7FE3DB;
   --a3: #A98FE0;
-  --a4: #3E7BA8;
+  --a4: #3F8FA6;
   --a5: #4FC2C9;
   --a6: #D5C4EC;
+  --c1: #A8C0D0;
+  --c2: #7291A5;
+  --c3: #4E6B7C;
+  --c4: #93AEC0;
   --field: #1E2124;
   --line-strong: #3C4045;
   --ink-hover: #474E55;
@@ -477,19 +485,11 @@ h6 {
 .cb-dash .valueblock {
   padding: 56px 0 40px;
 }
-.cb-dash .asof {
-  font-size: 15px;
-  color: var(--ink);
+.cb-dash .valueblock h2 {
   margin-bottom: 10px;
 }
-.cb-dash .asof-label {
-  font-weight: 500;
-}
-.cb-dash .checked-inline {
-  color: var(--muted);
-}
 .cb-dash .value {
-  font-size: 40px;
+  font-size: 28px;
   font-weight: 500;
   letter-spacing: -0.02em;
   line-height: 1.1;
@@ -502,7 +502,10 @@ h6 {
 .cb-dash .checked {
   font-size: 13px;
   color: var(--muted);
-  margin-top: 6px;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 .cb-dash .gain {
   color: var(--gain);
@@ -548,7 +551,7 @@ h6 {
 .cb-dash .dashboard-section + .dashboard-section {
   padding-top: 64px;
 }
-.cb-dash .sechead h2 {
+.cb-dash h2 {
   font-size: 20px;
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -730,7 +733,7 @@ h6 {
     padding-bottom: 72px;
   }
   .cb-dash .value {
-    font-size: 32px;
+    font-size: 24px;
   }
   .cb-dash .valueblock {
     padding: 40px 0 32px;
@@ -771,21 +774,21 @@ h6 {
    to this control language, instead of hiding the table for a second card
    markup the way Dashboard's read-only table does. */
 .holdings-chrome {
-  --ground: #F0F0ED;
-  --ink: #1B1D1F;
-  --muted: #5A6067;
-  --hairline: #DCDCD6;
+  --ground: #F2EEE5;
+  --ink: #1F1C17;
+  --muted: #5F5A50;
+  --hairline: #E2DBCC;
   --gain: #1B6B4A;
   --loss: #A3352A;
   --stale: #856713;
-  --field: #F7F7F5;
-  --line-strong: #C6C6BE;
+  --field: #F8F5EE;
+  --line-strong: #CBC2AE;
   --ink-hover: #33373A;
-  --cell-line: #B0B0A6;
-  --pri-fill: #1B1D1F;
-  --pri-text: #F0F0ED;
+  --cell-line: #B4AC9A;
+  --pri-fill: #1F1C17;
+  --pri-text: #F2EEE5;
   --pri-hover: #33373A;
-  --pri-off: #DCDCD6;
+  --pri-off: #E2DBCC;
 
   display: block;
   background: var(--ground);

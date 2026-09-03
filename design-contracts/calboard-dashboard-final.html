@@ -9,16 +9,16 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root[data-theme="light"]{
-  --ground:#F0F0ED;
-  --ink:#1B1D1F;
-  --muted:#5A6067;
-  --hairline:#DCDCD6;
+  --ground:#F2EEE5;
+  --ink:#1F1C17;
+  --muted:#5F5A50;
+  --hairline:#E2DBCC;
   --gain:#1B6B4A;
   --loss:#A3352A;
   --stale:#856713;
-  --line-strong:#C6C6BE; --seg-fill:#1B1D1F; --seg-text:#F0F0ED;
+  --line-strong:#CBC2AE; --seg-fill:#1F1C17; --seg-text:#F2EEE5;
   --a1:#0F3357; --a2:#7FD4CE; --a3:#5B4B8A;
-  --a4:#6FA8DC; --a5:#2C7A87; --a6:#BDA9D6;
+  --a4:#9AB6D6; --a5:#2C7A87; --a6:#BDA9D6;
 }
 :root[data-theme="dark"]{
   --ground:#16181A;
@@ -30,7 +30,7 @@
   --stale:#D9AB45;
   --line-strong:#3C4045; --seg-fill:#33383D; --seg-text:#E9EAE7;
   --a1:#5C9FE0; --a2:#7FE3DB; --a3:#A98FE0;
-  --a4:#3E7BA8; --a5:#4FC2C9; --a6:#D5C4EC;
+  --a4:#3F8FA6; --a5:#4FC2C9; --a6:#D5C4EC;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%}
@@ -61,11 +61,10 @@ body{
 .ctl svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 
 .valueblock{padding:56px 0 40px}
-.asof{font-size:15px;color:var(--ink);margin-bottom:10px}
-.asof-label{font-weight:500}
-.value{font-size:40px;font-weight:500;letter-spacing:-0.02em;line-height:1.1}
+.valueblock h2{margin-bottom:10px}
+.value{font-size:28px;font-weight:500;letter-spacing:-0.02em;line-height:1.1}
 .delta{font-size:15px;font-weight:400;margin-top:10px}
-.checked-inline{color:var(--muted)}
+.checked{font-size:13px;color:var(--muted);margin-top:10px;display:flex;align-items:center;gap:2px}
 .gain{color:var(--gain)}
 .loss{color:var(--loss)}
 
@@ -108,7 +107,7 @@ tfoot td{padding-top:16px;font-size:13px;color:var(--muted);text-align:left}
 
 @media (max-width:720px){
   .wrap{padding:0 20px 72px}
-  .value{font-size:32px}
+  .value{font-size:24px}
   .valueblock{padding:40px 0 32px}
   .section + .section{padding-top:48px}
   table.holdings{display:none}
@@ -138,9 +137,10 @@ tfoot td{padding-top:16px;font-size:13px;color:var(--muted);text-align:left}
   </div>
 
   <div class="valueblock">
-    <div class="asof"><span class="asof-label">Portfolio value</span> &middot; Prices as of the 29 Aug 2026 close<span class="checked-inline"> &middot; checked 21:04 SGT<button class="refresh" aria-label="Refresh prices" title="Refresh prices"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg></button></span></div>
+    <h2>Portfolio value</h2>
     <div class="value num">$309,130.18</div>
     <div class="delta num gain">+$53,910.98 since cost</div>
+    <div class="checked">Prices as of the 29 Aug 2026 close &middot; checked 21:04 SGT<button class="refresh" aria-label="Refresh prices" title="Refresh prices"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg></button></div>
   </div>
 
   <div class="section">
@@ -183,7 +183,7 @@ tfoot td{padding-top:16px;font-size:13px;color:var(--muted);text-align:left}
     </div>
 
     <div class="alloc">
-      <svg class="donut" width="184" height="184" viewBox="0 0 184 184" role="img" aria-label="Allocation by holding, shaded darkest to lightest by weight">
+      <svg class="donut" width="184" height="184" viewBox="0 0 184 184" role="img" aria-label="Allocation by holding, ordered largest to smallest by weight">
         <g transform="rotate(-90 92 92)" fill="none" stroke-width="24">
           <circle cx="92" cy="92" r="70" stroke="var(--a1)" stroke-dasharray="163.6 276.2" stroke-dashoffset="0"></circle>
           <circle cx="92" cy="92" r="70" stroke="var(--a2)" stroke-dasharray="64.6 375.2" stroke-dashoffset="-167.6"></circle>

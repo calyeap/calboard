@@ -6,11 +6,18 @@ import { MaskableValue } from "./MaskableValue";
 import { usePrivacy } from "./PrivacyContext";
 
 // Decorative only — allocation is never communicated through colour alone
-// (every value is text in the legend). Swatches are aria-hidden. The frozen
-// six-value palette, via CSS custom properties so dark mode (.cb-dash
+// (every value is text in the legend). Swatches are aria-hidden. Two
+// separate palettes, via CSS custom properties so dark mode (.cb-dash
 // [data-theme="dark"]) swaps them automatically — deliberately excludes
 // green/red/amber, reserved for gain/loss/stale.
-const SWATCHES = ["var(--a1)", "var(--a2)", "var(--a3)", "var(--a4)", "var(--a5)", "var(--a6)"];
+//
+// By-holding and by-asset-class are deliberately different colour families
+// (control-spec §0): colour encodes rank position, not identity, so a
+// shared palette would make the same hue point at different things across
+// the toggle. The six-value categorical palette is for By holding; the
+// four-value slate ramp is for By asset class.
+const SWATCHES_HOLDING = ["var(--a1)", "var(--a2)", "var(--a3)", "var(--a4)", "var(--a5)", "var(--a6)"];
+const SWATCHES_CLASS = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)"];
 
 const SIZE = 160;
 const STROKE = 22;
@@ -38,6 +45,7 @@ export function AllocationDonut({
   const [view, setView] = useState<"holding" | "class">("holding");
   const active = view === "class" && allocationByAssetClass ? allocationByAssetClass : allocation;
   const { hidden } = usePrivacy();
+  const SWATCHES = view === "class" ? SWATCHES_CLASS : SWATCHES_HOLDING;
 
   if (!active.hasAllocation) {
     return (

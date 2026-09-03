@@ -80,6 +80,9 @@ export default async function DashboardPage() {
     null
   );
   const checkedAt = formatCheckedTime(new Date());
+  const freshness = latestPriceDate
+    ? `Prices as of the ${formatAsOfDate(latestPriceDate)} close · checked ${checkedAt}`
+    : `checked ${checkedAt}`;
 
   return (
     <>
@@ -102,11 +105,7 @@ export default async function DashboardPage() {
           ) : (
             <>
               <div className="valueblock">
-                <div className="asof">
-                  <span className="asof-label">Portfolio value</span>
-                  {latestPriceDate && ` · Prices as of the ${formatAsOfDate(latestPriceDate)} close`}
-                  <PriceRefreshControl variant="inline" label={`checked ${checkedAt}`} />
-                </div>
+                <h2>Portfolio value</h2>
                 <div className="value num">
                   US$
                   <MaskableValue>{formatUsd(portfolio!.totalMarketValueUsd)}</MaskableValue>
@@ -121,6 +120,7 @@ export default async function DashboardPage() {
                     <> ({portfolio!.totalUnrealisedPlPct.toFixed(2)}%)</>
                   )}
                 </div>
+                <PriceRefreshControl label={freshness} />
                 {portfolio!.excludedFromTotalSymbols.length > 0 && (
                   <p className="status-msg status-warning">
                     Portfolio total excludes {portfolio!.excludedFromTotalSymbols.length} holding
