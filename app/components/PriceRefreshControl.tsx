@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { refreshAllPricesAction } from "@/app/actions/prices";
 
@@ -8,7 +8,22 @@ import { refreshAllPricesAction } from "@/app/actions/prices";
 // interval-based). Most clicks change nothing — EOD data updates once a day
 // — so an explicit "Up to date" / "Updated" state is required: silence
 // after a click reads as broken, not as "nothing to do".
-export function PriceRefreshControl({ checkedAt }: { checkedAt: string }) {
+export function PriceRefreshControl({
+  checkedAt,
+  label,
+  variant = "standalone",
+}: {
+  checkedAt?: string;
+  // Overrides the default "Data checked {checkedAt}" text — /holdings uses
+  // this to merge its own price-date line into the same checked row instead
+  // of stacking two freshness lines.
+  label?: ReactNode;
+  // "standalone" (default): own ".checked" line, used by /holdings.
+  // "inline": a ".checked-inline" span meant to sit inside another line's
+  // text (the Dashboard's single ".asof" line) — same refresh behaviour,
+  // just a different wrapper/placement.
+  variant?: "standalone" | "inline";
+}) {
   const router = useRouter();
   const [state, setState] = useState<
     | { kind: "idle" }
@@ -28,9 +43,9 @@ export function PriceRefreshControl({ checkedAt }: { checkedAt: string }) {
     router.refresh();
   }
 
-  return (
-    <div className="checked">
-      Data checked {checkedAt}
+  const content = (
+    <>
+      {label ?? `Data checked ${checkedAt}`}
       <button
         type="button"
         className="refresh"
@@ -59,6 +74,12 @@ export function PriceRefreshControl({ checkedAt }: { checkedAt: string }) {
           {state.message}
         </span>
       )}
-    </div>
+    </>
   );
+
+  if (variant === "inline") {
+    return <span className="checked-inline"> &middot; {content}</span>;
+  }
+
+  return <div className="checked">{content}</div>;
 }

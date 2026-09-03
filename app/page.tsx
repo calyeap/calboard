@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { listAccounts } from "@/lib/accounts";
 import { getPortfolioView } from "@/lib/portfolio";
-import { getLastSnapshotConfirmation } from "@/lib/holdings";
 import { computeAllocation, groupByAssetClass } from "@/lib/allocation";
-import { formatCheckedAt } from "@/lib/formatCheckedAt";
+import { formatCheckedTime } from "@/lib/formatCheckedAt";
 import { formatUsd } from "@/lib/formatUsd";
 import { DashboardShell } from "./components/DashboardShell";
 import { DashboardTopBar } from "./components/DashboardTopBar";
@@ -18,16 +17,6 @@ import { MaskableValue } from "./components/MaskableValue";
 // app/actions/setup.ts and app/actions/prices.ts always have a per-request
 // render to invalidate.
 export const dynamic = "force-dynamic";
-
-// "Holdings last updated" is a confirmation timestamp (model rule 10): the
-// moment the user pressed Save, shown as local "YYYY-MM-DD HH:MM". It is NOT
-// the as-of date the entered figures represent, and it is NOT price
-// freshness — kept as its own muted line, distinct from the two ranked
-// price timestamps above it.
-function formatConfirmedAt(at: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${at.getFullYear()}-${p(at.getMonth() + 1)}-${p(at.getDate())} ${p(at.getHours())}:${p(at.getMinutes())}`;
-}
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -47,13 +36,6 @@ export default async function DashboardPage() {
   // ADJUSTMENT) still exists, but getPortfolioView returns no positions; that
   // state shows the same "Add your holdings" empty state, not a $0.00 view.
   const hasHoldings = portfolio !== null && portfolio.positions.length > 0;
-
-  // V1 keeps exactly one hidden portfolio account. Only read freshness when
-  // that invariant holds; if more than one account somehow exists, don't
-  // guess which is "the" portfolio — omit the line rather than risk showing
-  // the wrong timestamp. (Duplicate-account setup is out of scope here.)
-  const lastConfirmation =
-    accounts.length === 1 ? await getLastSnapshotConfirmation(accounts[0].id) : null;
 
   // Weight-sorted for THIS page only (spec: default sort is portfolio
   // weight, never percentage change). getPortfolioView()'s own SQL order
@@ -97,7 +79,7 @@ export default async function DashboardPage() {
     (max, p) => (p.priceDate && (!max || p.priceDate > max) ? p.priceDate : max),
     null
   );
-  const checkedAt = formatCheckedAt(new Date());
+  const checkedAt = formatCheckedTime(new Date());
 
   return (
     <>
@@ -122,7 +104,8 @@ export default async function DashboardPage() {
               <div className="valueblock">
                 <div className="asof">
                   <span className="asof-label">Portfolio value</span>
-                  {latestPriceDate && ` · Prices as of ${formatAsOfDate(latestPriceDate)} close`}
+                  {latestPriceDate && ` · Prices as of the ${formatAsOfDate(latestPriceDate)} close`}
+                  <PriceRefreshControl variant="inline" label={`checked ${checkedAt}`} />
                 </div>
                 <div className="value num">
                   US$
@@ -136,17 +119,6 @@ export default async function DashboardPage() {
                   cost
                   {portfolio!.totalUnrealisedPlPct !== null && (
                     <> ({portfolio!.totalUnrealisedPlPct.toFixed(2)}%)</>
-                  )}
-                </div>
-                <PriceRefreshControl checkedAt={checkedAt} />
-                <div className="dashboard-note">
-                  {lastConfirmation ? (
-                    <>
-                      Holdings last updated: {formatConfirmedAt(lastConfirmation.confirmedAt)}
-                      {lastConfirmation.asOfDate && ` (snapshot as of ${lastConfirmation.asOfDate})`}
-                    </>
-                  ) : (
-                    "Holdings last updated: —"
                   )}
                 </div>
                 {portfolio!.excludedFromTotalSymbols.length > 0 && (

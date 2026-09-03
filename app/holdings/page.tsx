@@ -4,7 +4,7 @@ import { HoldingsShell } from "../components/HoldingsShell";
 import { PriceRefreshControl } from "../components/PriceRefreshControl";
 import { getAllHoldings } from "@/lib/holdings";
 import { getPortfolioView } from "@/lib/portfolio";
-import { formatCheckedAt } from "@/lib/formatCheckedAt";
+import { formatCheckedTime } from "@/lib/formatCheckedAt";
 import { HoldingsEditor, type EditorInitialRow } from "./HoldingsEditor";
 
 // Always render dynamically — see app/page.tsx (Task 3) for why.
@@ -51,15 +51,16 @@ async function HoldingsPageBody() {
     (max, p) => (p.priceDate && (!max || p.priceDate > max) ? p.priceDate : max),
     null
   );
-  const checkedAt = formatCheckedAt(new Date());
+  const checkedTime = formatCheckedTime(new Date());
+  const freshness = latestPriceDate
+    ? `Prices as of the ${formatAsOfDate(latestPriceDate)} close · checked ${checkedTime}`
+    : `checked ${checkedTime}`;
 
   return (
     <>
       <div className="pagehead">
         <h2>Holdings</h2>
-        <div className="lede">Edit quantities and average costs to match what you hold, then save.</div>
-        {latestPriceDate && <div className="asof">Prices as of {formatAsOfDate(latestPriceDate)} close</div>}
-        <PriceRefreshControl checkedAt={checkedAt} />
+        <PriceRefreshControl label={freshness} />
       </div>
       <HoldingsEditor initial={initial} />
     </>

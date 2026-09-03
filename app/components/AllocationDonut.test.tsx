@@ -23,7 +23,7 @@ describe("AllocationDonut", () => {
 
     const table = screen.getByRole("table");
     const rows = within(table).getAllByRole("row");
-    // header + 2 data rows + footer
+    // header + 2 data rows
     const text = table.textContent ?? "";
     expect(text).toContain("AAPL");
     expect(text).toContain("75.00%");
@@ -33,9 +33,7 @@ describe("AllocationDonut", () => {
     expect(text).toContain("US$1,000.00");
     // centre total = the exact priced aggregate
     expect(container.querySelector("svg")?.textContent).toContain("US$4,000.00");
-    // legend also carries the priced total (understandable without the SVG)
-    expect(text).toContain("US$4,000.00");
-    expect(rows.length).toBe(4);
+    expect(rows.length).toBe(3);
   });
 
   it("one included holding shows as 100%", () => {
@@ -163,7 +161,7 @@ describe("AllocationDonut — M1.5: view by asset class", () => {
 
     expect(screen.getByRole("button", { name: /by holding/i })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /by asset class/i })).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("table", { name: /allocation by holding/i })).toBeInTheDocument();
+    expect(screen.getByRole("table").textContent).toContain("AAPL");
   });
 
   it("the toggle group carries the .toggle CSS hook so the segmented-control styling applies", () => {
@@ -171,17 +169,18 @@ describe("AllocationDonut — M1.5: view by asset class", () => {
     expect(screen.getByRole("group", { name: /allocation view/i })).toHaveClass("toggle");
   });
 
-  it("clicking By asset class swaps the legend and caption to the grouped data, without altering the calculation", () => {
+  it("clicking By asset class swaps the legend to the grouped data, without altering the calculation", () => {
     render(<AllocationDonut allocation={byHolding} allocationByAssetClass={byAssetClass} />);
 
     fireEvent.click(screen.getByRole("button", { name: /by asset class/i }));
 
-    const table = screen.getByRole("table", { name: /allocation by asset class/i });
+    const table = screen.getByRole("table");
     expect(table.textContent).toContain("Equity");
     expect(table.textContent).toContain("75.00%");
     expect(table.textContent).toContain("ETF");
     expect(table.textContent).toContain("25.00%");
-    expect(screen.queryByRole("table", { name: /allocation by holding/i })).toBeNull();
+    expect(table.textContent).not.toContain("AAPL");
+    expect(table.textContent).not.toContain("VOO");
   });
 
   it("clicking back to By holding restores the original view", () => {
@@ -190,7 +189,7 @@ describe("AllocationDonut — M1.5: view by asset class", () => {
     fireEvent.click(screen.getByRole("button", { name: /by asset class/i }));
     fireEvent.click(screen.getByRole("button", { name: /by holding/i }));
 
-    expect(screen.getByRole("table", { name: /allocation by holding/i }).textContent).toContain("AAPL");
+    expect(screen.getByRole("table").textContent).toContain("AAPL");
   });
 });
 
@@ -221,7 +220,7 @@ describe("AllocationDonut — M1.5: privacy toggle", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "toggle" }));
 
-    const table = screen.getByRole("table", { name: /allocation by holding/i });
+    const table = screen.getByRole("table");
     expect(table.textContent).toContain("75.00%");
     expect(table.textContent).toContain("25.00%");
     expect(table.textContent).not.toContain("3000.00");

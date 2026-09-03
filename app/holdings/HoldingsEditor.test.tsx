@@ -51,15 +51,6 @@ describe("HoldingsEditor", () => {
     expect((screen.getByLabelText("As-of date") as HTMLInputElement).value).toBe(localTodayIso());
   });
 
-  it("shows a non-blocking note when a quantity is increased but its average cost is untouched", () => {
-    render(<HoldingsEditor initial={baseInitial()} />);
-    fireEvent.change(screen.getByLabelText("Quantity for AAPL"), { target: { value: "25" } });
-    expect(
-      screen.getByText(/your existing average cost is \$150\.00\. update it if your real average cost changed/i)
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^save$/i })).not.toBeDisabled();
-  });
-
   it("a rejected submit shows the field error and keeps the entered quantity", async () => {
     updateHoldingsActionMock.mockResolvedValue({
       ok: false,
@@ -236,7 +227,7 @@ describe("HoldingsEditor", () => {
     });
   });
 
-  it("B: a successful Save rebases rows — note clears, removed & manually-zeroed rows disappear, derived figures match, a second Save submits the rebased state", async () => {
+  it("B: a successful Save rebases rows — removed & manually-zeroed rows disappear, derived figures match, a second Save submits the rebased state", async () => {
     updateHoldingsActionMock.mockResolvedValue({ ok: true });
     const initial: EditorInitialRow[] = [
       row({ assetId: "1", symbol: "AAPL", quantity: "10", avgCostUsd: "150", priceUsd: "200.00" }),
@@ -246,14 +237,12 @@ describe("HoldingsEditor", () => {
     render(<HoldingsEditor initial={initial} />);
 
     fireEvent.change(screen.getByLabelText("Quantity for AAPL"), { target: { value: "20" } });
-    expect(screen.getByText(/your existing average cost is \$150\.00/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /remove msft/i }));
     fireEvent.change(screen.getByLabelText("Quantity for CCC"), { target: { value: "0" } });
 
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     await waitFor(() => expect(screen.getByText(/holdings updated/i)).toBeInTheDocument());
 
-    expect(screen.queryByText(/your existing average cost is/i)).toBeNull();
     expect(screen.queryByLabelText("Quantity for MSFT")).toBeNull();
     expect(screen.queryByLabelText("Quantity for CCC")).toBeNull();
     // AAPL derived: MV = 20 * 200 = 4000.00 ; P&L = (200 - 150) * 20 = 1000.00

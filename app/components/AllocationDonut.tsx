@@ -107,9 +107,6 @@ export function AllocationDonut({
         </svg>
 
         <table style={{ borderCollapse: "collapse" }}>
-          <caption style={{ textAlign: "left", fontWeight: 600, marginBottom: "0.25rem" }}>
-            Allocation by {view === "class" ? "asset class" : "holding"}
-          </caption>
           <thead>
             <tr>
               <th style={{ textAlign: "left", padding: "0.15rem 0.75rem 0.15rem 0" }}>Holding</th>
@@ -142,15 +139,6 @@ export function AllocationDonut({
               </tr>
             ))}
           </tbody>
-          <tfoot>
-            <tr>
-              <th style={{ textAlign: "left", padding: "0.15rem 0.75rem 0.15rem 0" }}>Total (priced)</th>
-              <td style={{ textAlign: "right", padding: "0.15rem 0.75rem" }}>100.00%</td>
-              <td style={{ textAlign: "right", padding: "0.15rem 0 0.15rem 0.75rem" }}>
-                US$<MaskableValue>{totalUsd}</MaskableValue>
-              </td>
-            </tr>
-          </tfoot>
         </table>
       </div>
     </section>

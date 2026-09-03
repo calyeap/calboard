@@ -5,12 +5,10 @@ import Decimal from "decimal.js";
 import type { PortfolioView, PositionView } from "@/lib/portfolio";
 import { listAccounts } from "@/lib/accounts";
 import { getPortfolioView } from "@/lib/portfolio";
-import { getLastSnapshotConfirmation } from "@/lib/holdings";
 import { PrivacyProvider } from "@/app/components/PrivacyContext";
 
 vi.mock("@/lib/accounts", () => ({ listAccounts: vi.fn() }));
 vi.mock("@/lib/portfolio", () => ({ getPortfolioView: vi.fn() }));
-vi.mock("@/lib/holdings", () => ({ getLastSnapshotConfirmation: vi.fn() }));
 // Pulled in transitively by <PriceRefreshControl> in the value block.
 vi.mock("@/app/actions/prices", () => ({
   retryPriceFetchAction: vi.fn(),
@@ -27,7 +25,6 @@ vi.mock("next/link", () => ({
 
 const listAccountsMock = vi.mocked(listAccounts);
 const getPortfolioViewMock = vi.mocked(getPortfolioView);
-const getLastSnapshotConfirmationMock = vi.mocked(getLastSnapshotConfirmation);
 
 // Re-import after mocks are registered.
 const { default: DashboardPage } = await import("./page");
@@ -39,9 +36,7 @@ afterEach(() => {
 beforeEach(() => {
   listAccountsMock.mockReset();
   getPortfolioViewMock.mockReset();
-  getLastSnapshotConfirmationMock.mockReset();
   listAccountsMock.mockResolvedValue([{ id: 1, name: "My Portfolio", custodian: null }]);
-  getLastSnapshotConfirmationMock.mockResolvedValue(null);
 });
 
 function position(over: Partial<PositionView> & Pick<PositionView, "symbol">): PositionView {
@@ -105,7 +100,9 @@ describe("Dashboard — Allocation section", () => {
     expect(valueBlock.textContent).toContain("US$4,000.00");
 
     // Allocation legend
-    const table = screen.getByRole("table", { name: /allocation by holding/i });
+    const table = within(screen.getByRole("heading", { name: /^allocation$/i }).closest("section")!).getByRole(
+      "table"
+    );
     const text = table.textContent ?? "";
     expect(text).toContain("AAPL");
     expect(text).toContain("75.00%");
@@ -149,7 +146,9 @@ describe("Dashboard — Allocation section", () => {
 
     // portfolio.totalMarketValueUsd = 3000 + 500 = 3500 (STL's stale price
     // still contributes; NOPX has no usable price).
-    const allocTable = screen.getByRole("table", { name: /allocation by holding/i });
+    const allocTable = within(screen.getByRole("heading", { name: /^allocation$/i }).closest("section")!).getByRole(
+      "table"
+    );
     const allocRows = within(allocTable).getAllByRole("row");
 
     // STL is inside the Allocation legend with its own USD value and percentage.
@@ -209,7 +208,9 @@ describe("Dashboard — Allocation section", () => {
     );
     render(await DashboardPage());
 
-    const table = screen.getByRole("table", { name: /allocation by holding/i });
+    const table = within(screen.getByRole("heading", { name: /^allocation$/i }).closest("section")!).getByRole(
+      "table"
+    );
     expect(table.textContent).toContain("ONLY");
     expect(table.textContent).toContain("100.00%");
   });
@@ -225,8 +226,8 @@ describe("Dashboard — hierarchy, weight sort & responsive Dashboard", () => {
 
   function holdingsTableOf(): HTMLTableElement {
     // The Holdings detail table is the one inside the "Holdings" section;
-    // the AllocationDonut legend lives in the "Allocation" section and has
-    // an accessible name (<caption>Allocation by holding</caption>).
+    // the AllocationDonut legend lives in its own "Allocation" section, so
+    // scope to the section ancestor to disambiguate the two tables.
     return within(
       screen.getByRole("heading", { name: /^holdings$/i }).closest("section")!
     ).getByRole("table") as HTMLTableElement;
@@ -295,16 +296,13 @@ describe("Dashboard — hierarchy, weight sort & responsive Dashboard", () => {
     expect(screen.queryAllByRole("button", { name: /retry/i }).length).toBe(0);
   });
 
-  it("the value figure uses the .value hook and the confirmation line uses .dashboard-note", async () => {
+  it("the value figure uses the .value hook", async () => {
     getPortfolioViewMock.mockResolvedValue(twoPriced());
     const { container } = render(await DashboardPage());
 
     const valueEl = container.querySelector(".valueblock .value");
     expect(valueEl).not.toBeNull();
     expect(valueEl!.textContent).toContain("US$4,000.00");
-
-    const freshness = screen.getByText(/holdings last updated:/i);
-    expect(freshness).toHaveClass("dashboard-note");
   });
 
   it("the Dashboard-only top bar renders (brand, Dashboard/Holdings nav, privacy + theme controls)", async () => {
@@ -328,10 +326,6 @@ describe("Dashboard — empty state derives from holdings existence (Rev-3 §2.3
     // whether any holdings exist — not from whether an account row exists.
     listAccountsMock.mockResolvedValue([{ id: 1, name: "My Portfolio", custodian: null }]);
     getPortfolioViewMock.mockResolvedValue(portfolio([]));
-    getLastSnapshotConfirmationMock.mockResolvedValue({
-      confirmedAt: new Date("2026-08-28T10:00:00Z"),
-      asOfDate: "2026-08-28",
-    });
 
     const { container } = render(await DashboardPage());
 
@@ -348,7 +342,6 @@ describe("Dashboard — empty state derives from holdings existence (Rev-3 §2.3
     expect(container.querySelector(".valueblock")).toBeNull();
     expect(screen.queryByRole("heading", { name: /^holdings$/i })).toBeNull();
     expect(screen.queryByRole("heading", { name: /allocation/i })).toBeNull();
-    expect(screen.queryByText(/holdings last updated/i)).toBeNull();
   });
 
   it("a portfolio with at least one holding still renders the populated Dashboard", async () => {
