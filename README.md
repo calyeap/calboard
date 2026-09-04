@@ -12,6 +12,7 @@ Local-only, single-user, never publicly deployed. Not financial advice.
 
 ## Screenshots
 
+
 ![Calboard dashboard showing portfolio value, allocation, and holdings summary](docs/images/dashboard.png)
 
 *Dashboard — demonstration data, not real holdings.*
