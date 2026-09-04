@@ -12,6 +12,9 @@ Local-only, single-user, never publicly deployed. Not financial advice.
 
 ## Screenshots
 
+*Predate the page-furniture, Group A/B visual-consistency, and typography
+passes — spacing, colour, and font have since changed. Refresh pending.*
+
 ![Calboard dashboard showing portfolio value, allocation, and holdings summary](docs/images/dashboard.png)
 
 *Dashboard — demonstration data, not real holdings.*
