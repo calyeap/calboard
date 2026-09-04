@@ -5,7 +5,8 @@ import { PriceRefreshControl } from "../components/PriceRefreshControl";
 import { getAllHoldings } from "@/lib/holdings";
 import { getPortfolioView } from "@/lib/portfolio";
 import { formatCheckedTime } from "@/lib/formatCheckedAt";
-import { HoldingsEditor, type EditorInitialRow } from "./HoldingsEditor";
+import { HoldingsEditor } from "./HoldingsEditor";
+import { buildInitialRows } from "./buildInitialRows";
 
 // Always render dynamically — see app/page.tsx (Task 3) for why.
 export const dynamic = "force-dynamic";
@@ -65,22 +66,4 @@ async function HoldingsPageBody() {
       <HoldingsEditor initial={initial} />
     </>
   );
-}
-
-// Current holdings pre-fill with per-row price health. getPortfolioView's
-// positions carry the average cost, latest price, and price date; every
-// value crossing to the client component is serialized to a plain string
-// first. Market value and unrealised P&L are NOT passed — the editor
-// derives them live from each row's edited quantity / average cost.
-function buildInitialRows(positions: Awaited<ReturnType<typeof getPortfolioView>>["positions"]): EditorInitialRow[] {
-  return positions.map((p) => ({
-    assetId: p.assetId,
-    symbol: p.symbol,
-    assetClass: p.assetClass,
-    quantity: p.quantity.toString(),
-    avgCostUsd: p.avgCostUsd ? p.avgCostUsd.toString() : "0",
-    priceUsd: p.latestPriceUsd ? p.latestPriceUsd.toFixed(2) : null,
-    priceStatus: p.priceStatus,
-    priceDate: p.priceDate,
-  }));
 }

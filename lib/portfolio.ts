@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { getPool } from "./db";
 import type { AssetClass } from "./assets";
 import { normalizePgDate } from "./dateValidation";
+import { marketValue, roundMoney, unrealisedPl } from "./money";
 
 export type PriceStatus = "current" | "stale" | "unavailable";
 
@@ -28,7 +29,15 @@ export interface PositionView {
   quantity: Decimal;
   avgCostUsd: Decimal | null;
   costBasisUsd: Decimal;
+  // The latest EOD close ROUNDED TO THE CENT — the price this app displays,
+  // and the price every money figure derived from it is computed with (see
+  // lib/money.ts). Prices are persisted at 6dp, so this is not always the
+  // stored value; rawLatestPriceUsd keeps that.
   latestPriceUsd: Decimal | null;
+  // The close exactly as persisted (6dp). Provenance only — it lets a price
+  // refresh tell whether the provider actually returned a different number,
+  // at full stored precision. Never multiply money by this; use latestPriceUsd.
+  rawLatestPriceUsd: Decimal | null;
   priceDate: string | null;
   priceSourceId: number | null;
   priceStatus: PriceStatus;
@@ -87,9 +96,14 @@ export async function getPortfolioView(asOf: Date = new Date()): Promise<Portfol
     const quantity = new Decimal(row.quantity);
     const costBasisUsd = new Decimal(row.cost_basis_usd);
     const avgCostUsd = row.avg_cost_usd ? new Decimal(row.avg_cost_usd) : null;
-    const latestPriceUsd = row.latest_price ? new Decimal(row.latest_price) : null;
-    const marketValueUsd = latestPriceUsd ? quantity.mul(latestPriceUsd) : null;
-    const unrealisedPlUsd = marketValueUsd ? marketValueUsd.sub(costBasisUsd) : null;
+    const rawLatestPriceUsd = row.latest_price ? new Decimal(row.latest_price) : null;
+    // Round the price to the cent ONCE, here, before anything multiplies by
+    // it. Both routes display this price, so both must compute from it —
+    // otherwise price × quantity does not reconcile with the market value
+    // printed on the same row. See lib/money.ts.
+    const latestPriceUsd = rawLatestPriceUsd ? roundMoney(rawLatestPriceUsd) : null;
+    const marketValueUsd = latestPriceUsd ? marketValue(quantity, latestPriceUsd) : null;
+    const unrealisedPlUsd = marketValueUsd ? roundMoney(marketValueUsd.sub(costBasisUsd)) : null;
     // Reuse the shared normalizePgDate helper (the app's ONE definition of
     // how a Postgres DATE becomes a plain "YYYY-MM-DD" string) — it handles
     // both the raw string lib/db.ts's global type-parser override returns
@@ -116,6 +130,7 @@ export async function getPortfolioView(asOf: Date = new Date()): Promise<Portfol
       avgCostUsd,
       costBasisUsd,
       latestPriceUsd,
+      rawLatestPriceUsd,
       priceDate,
       priceSourceId: row.price_source_id ?? null,
       priceStatus,
@@ -127,6 +142,9 @@ export async function getPortfolioView(asOf: Date = new Date()): Promise<Portfol
   const cashResult = await pool.query(`SELECT COALESCE(SUM(cash_usd), 0) AS total FROM account_cash`);
   const totalCashUsd = new Decimal(cashResult.rows[0].total);
 
+  // The sum of the ROUNDED per-row market values, so the headline figure is
+  // exactly what the rows printed underneath it add up to (DESIGN.md: "a
+  // detail row and its aggregate are computed and formatted identically").
   const totalMarketValueUsd = positions.reduce(
     (sum, p) => (p.marketValueUsd ? sum.add(p.marketValueUsd) : sum),
     new Decimal(0)
@@ -146,8 +164,10 @@ export async function getPortfolioView(asOf: Date = new Date()): Promise<Portfol
   let aggregateCostBasisUsd = new Decimal(0);
   for (const p of positions) {
     if (p.latestPriceUsd && p.avgCostUsd) {
+      // The same one formula, rounded the same way, that both routes print
+      // per row — so this aggregate is the sum of the visible row figures.
       totalUnrealisedPlUsd = totalUnrealisedPlUsd.add(
-        p.latestPriceUsd.sub(p.avgCostUsd).mul(p.quantity)
+        unrealisedPl(p.quantity, p.latestPriceUsd, p.avgCostUsd)
       );
       aggregateCostBasisUsd = aggregateCostBasisUsd.add(p.avgCostUsd.mul(p.quantity));
     }

@@ -46,7 +46,11 @@ export async function refreshAllPricesAction(): Promise<{
   }
 
   const before = await getPortfolioView();
-  const beforeKeys = new Map(before.positions.map((p) => [p.assetId, priceKey(p.priceDate, p.latestPriceUsd)]));
+  // Keyed on the RAW stored close, not the cent-rounded one the UI shows, so
+  // "nothing changed" stays as sensitive to a real refresh as it has always been.
+  const beforeKeys = new Map(
+    before.positions.map((p) => [p.assetId, priceKey(p.priceDate, p.rawLatestPriceUsd)])
+  );
 
   const results = await Promise.allSettled(
     holdings.map((h) => upsertLatestPrice(h.assetId, h.symbol, h.assetClass))
@@ -62,7 +66,7 @@ export async function refreshAllPricesAction(): Promise<{
 
   const after = await getPortfolioView();
   const changed = after.positions.some(
-    (p) => beforeKeys.get(p.assetId) !== priceKey(p.priceDate, p.latestPriceUsd)
+    (p) => beforeKeys.get(p.assetId) !== priceKey(p.priceDate, p.rawLatestPriceUsd)
   );
 
   return failures > 0

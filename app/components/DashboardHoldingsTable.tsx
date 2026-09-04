@@ -2,11 +2,15 @@ import Decimal from "decimal.js";
 import type { PositionView } from "@/lib/portfolio";
 import { formatAssetClass } from "@/lib/assets";
 import { formatUsd, formatSignedUsd } from "@/lib/formatUsd";
+import { unrealisedPl } from "@/lib/money";
 import { MaskableValue } from "./MaskableValue";
 
+// The per-row unrealised P&L, via lib/money.ts's one shared definition —
+// the same call getPortfolioView's aggregate and the /holdings editor make,
+// so all three agree to the cent.
 function plOf(p: PositionView): { usd: Decimal; pct: Decimal | null } | null {
   if (!p.latestPriceUsd || !p.avgCostUsd) return null;
-  const usd = p.latestPriceUsd.sub(p.avgCostUsd).mul(p.quantity);
+  const usd = unrealisedPl(p.quantity, p.latestPriceUsd, p.avgCostUsd);
   const basis = p.avgCostUsd.mul(p.quantity);
   const pct = basis.isZero() ? null : usd.div(basis).mul(100);
   return { usd, pct };
