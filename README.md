@@ -1,8 +1,7 @@
 # Calboard
 
-Calboard is a personal portfolio intelligence dashboard for US-listed equities,
-ETFs, and Bitcoin. It **monitors, analyses, and suggests** — value, holdings,
-cost basis, unrealised gain/loss, allocation, data freshness.
+Calboard tracks your portfolio — value, holdings, cost basis, unrealised
+gain/loss, allocation, and price freshness.
 
 **Calboard never executes trades.** Your brokerage/trading platform is the
 system of record for buying and selling; Calboard is a read-only intelligence
