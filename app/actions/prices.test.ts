@@ -60,6 +60,9 @@ function pos(over: { assetId: string; priceDate: string | null; price: string | 
     avgCostUsd: new Decimal(1),
     costBasisUsd: new Decimal(1),
     latestPriceUsd: over.price ? new Decimal(over.price) : null,
+    // refreshAllPricesAction keys its "did anything change" check on the raw
+    // stored close, so these fixtures must carry it.
+    rawLatestPriceUsd: over.price ? new Decimal(over.price) : null,
     priceDate: over.priceDate,
     priceSourceId: 1,
     priceStatus: over.price ? "current" : "unavailable",

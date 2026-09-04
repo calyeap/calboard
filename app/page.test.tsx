@@ -53,6 +53,8 @@ function position(over: Partial<PositionView> & Pick<PositionView, "symbol">): P
     avgCostUsd,
     costBasisUsd: avgCostUsd ? avgCostUsd.mul(quantity) : new Decimal("0"),
     latestPriceUsd: "latestPriceUsd" in over ? over.latestPriceUsd! : new Decimal("120"),
+    // Fixtures use already-cent-rounded prices, so raw === displayed here.
+    rawLatestPriceUsd: "latestPriceUsd" in over ? over.latestPriceUsd! : new Decimal("120"),
     priceDate: over.priceDate ?? "2026-08-26",
     priceSourceId: 1,
     priceStatus: over.priceStatus ?? "current",

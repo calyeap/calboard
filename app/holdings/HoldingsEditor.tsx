@@ -5,6 +5,7 @@ import Decimal from "decimal.js";
 import { localTodayIso } from "@/lib/dateValidation";
 import { formatAssetClass, type AssetClass } from "@/lib/assetClass";
 import { formatUsd, formatSignedUsd } from "@/lib/formatUsd";
+import { marketValue, unrealisedPl } from "@/lib/money";
 import type { PriceStatus } from "@/lib/portfolio";
 import { PriceCell } from "@/app/components/PriceCell";
 import { MaskableValue } from "@/app/components/MaskableValue";
@@ -58,16 +59,19 @@ function isZeroQty(s: string): boolean {
 }
 
 // Live derived figures — market value = quantity × latest price, unrealised
-// gain/loss = (price − avgCost) × quantity, the same formula lib/portfolio.ts
-// uses for the Dashboard row/aggregate. A price-unavailable holding shows
+// gain/loss = (price − avgCost) × quantity, through the SAME lib/money.ts
+// helpers lib/portfolio.ts uses for the Dashboard row and the aggregate.
+// Calling them (rather than restating the arithmetic here) is what keeps the
+// two routes from drifting apart by a cent. `r.priceUsd` is already
+// cent-rounded by buildInitialRows. A price-unavailable holding shows
 // nothing (preserved from Task 16/17); a stale price still contributes.
 function derived(r: Row): { mv: string; pl: string } {
   const price = r.priceStatus === "unavailable" ? null : tryDecimal(r.priceUsd ?? "");
   const qty = tryDecimal(r.quantity);
   const avg = tryDecimal(r.avgCostUsd);
   if (!price || !qty) return { mv: "—", pl: "—" };
-  const pl = avg ? price.sub(avg).mul(qty) : null;
-  return { mv: `$${formatUsd(qty.mul(price))}`, pl: pl ? formatSignedUsd(pl) : "—" };
+  const pl = avg ? unrealisedPl(qty, price, avg) : null;
+  return { mv: `$${formatUsd(marketValue(qty, price))}`, pl: pl ? formatSignedUsd(pl) : "—" };
 }
 
 type SaveState =
