@@ -264,7 +264,12 @@ export const MSFT_FIXTURE: CompanyFixture = {
     },
   },
   scenarioValues: { bear: new Decimal(265), base: new Decimal(510), bull: new Decimal(650) },
-  revalueBaseCaseAtRate: (rate: Decimal) => shares.mul(price).mul(new Decimal("0.1").dividedBy(rate)),
+  // PER-SHARE, matching `price`'s own units — solveRateForTargetValue
+  // compares this against currentPrice ($510.12), not against an aggregate
+  // market cap. Anchored so the base case exactly equals price at r=10%
+  // (illustrative; not one of the mock's own disclosed numbers, which
+  // shows only "X.X%" as a placeholder for this figure).
+  revalueBaseCaseAtRate: (rate: Decimal) => price.mul(new Decimal("0.1").dividedBy(rate)),
 
   configuredConstants: {
     nopatTaxRate: new Decimal("0.2"),
