@@ -62,7 +62,7 @@ describe("AnalyzerReport — MSFT", () => {
   it("report order is exactly A, B, C, D, E, F, G, H, I, I2, J, at-a-glance — J immediately followed by at-a-glance, no section between them", () => {
     const { container } = render(<AnalyzerReport result={result} />);
     const ids = Array.from(container.querySelectorAll("main > section")).map((el) => el.id);
-    expect(ids).toEqual(["A", "B", "C", "D", "E", "F", "G", "H", "I", "I2", "J", "atglance"]);
+    expect(ids).toEqual(["quickread", "A", "B", "C", "D", "E", "F", "G", "H", "I", "I2", "J", "atglance"]);
   });
 });
 
@@ -110,7 +110,7 @@ describe("AnalyzerReport — OKLO", () => {
   it("report order is exactly A, B, C, D, E, F, G, H, I, I2, J, at-a-glance — J immediately followed by at-a-glance, no extra section inserted for the pre-revenue material", () => {
     const { container } = render(<AnalyzerReport result={result} />);
     const ids = Array.from(container.querySelectorAll("main > section")).map((el) => el.id);
-    expect(ids).toEqual(["A", "B", "C", "D", "E", "F", "G", "H", "I", "I2", "J", "atglance"]);
+    expect(ids).toEqual(["quickread", "A", "B", "C", "D", "E", "F", "G", "H", "I", "I2", "J", "atglance"]);
   });
 
   it("both funding-stack ramps render with their four lines", () => {

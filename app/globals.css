@@ -1456,29 +1456,14 @@ h6 {
   --tint: #24272A;
 }
 
+/* Single dominant reading path (Quick Read at the top of `main`, then the
+   full A-J report) — corrected from an earlier permanent two-column
+   layout that competed with the report for attention. No sidebar; wide
+   screens get extra whitespace/margin, not a second prose column. */
 .cb-analyzer .layout {
-  display: grid;
-  gap: 40px;
-  max-width: 1200px;
+  max-width: 900px;
   margin: 0 auto;
   padding: 32px 24px 96px;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  /* Quick Read stays first in DOM order (read-this-first, and sane
-     without CSS/for screen readers) but is placed as the narrow right
-     column visually — named areas, not DOM order, control layout,
-     matching the approved mocks' own ultrawide convention. */
-  grid-template-areas: "main quick";
-}
-.cb-analyzer .layout > main {
-  grid-area: main;
-}
-.cb-analyzer .layout > .quickread {
-  grid-area: quick;
-}
-.cb-analyzer .quickread {
-  position: sticky;
-  top: 24px;
-  align-self: start;
 }
 .cb-analyzer main {
   min-width: 0;
@@ -1766,57 +1751,93 @@ h6 {
   font-size: 12px;
 }
 
-.cb-analyzer .quickread h2 {
-  margin: 0 0 2px;
-  font-size: 11px;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--muted);
-  font-weight: 600;
+/* ---------- Quick Read / "finding" block (Milestone 6 correction) ------
+   Main finding -> Why it matters -> What it means here -> What to examine
+   next -> Learn more (progressive disclosure). Used for Quick Read at the
+   top of the report; §10.2 sections do not currently use this pattern but
+   may reuse the same classes without conflict. */
+.cb-analyzer .finding {
+  max-width: 68ch;
+  margin: 0 0 8px;
 }
-.cb-analyzer .qsub {
-  font-size: 11px;
-  color: var(--muted);
+.cb-analyzer .finding .lede {
+  font-size: 17px;
+  line-height: 1.42;
+  font-weight: 500;
   margin: 0 0 16px;
 }
-.cb-analyzer .qrule {
-  border: 0;
-  border-top: 1px solid var(--line-strong);
-  margin: 0 0 16px;
+.cb-analyzer .finding dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 8px 16px;
 }
-.cb-analyzer .qitem {
-  padding: 0 0 14px;
-  margin-bottom: 14px;
-  border-bottom: 1px solid var(--hairline);
-}
-.cb-analyzer .qitem:last-child {
-  border-bottom: 0;
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
-.cb-analyzer .qitem .k {
-  display: block;
+.cb-analyzer .finding dt {
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
   font-weight: 600;
-  margin-bottom: 5px;
+  padding-top: 2px;
 }
-.cb-analyzer .qitem .t {
+.cb-analyzer .finding dd {
+  margin: 0;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--ink);
-  margin: 0;
 }
-.cb-analyzer .qitem ul {
-  margin: 0;
-  padding-left: 16px;
+.cb-analyzer .disclose {
+  margin-top: 16px;
 }
-.cb-analyzer .qitem li {
+.cb-analyzer .disclose summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
-  line-height: 1.5;
-  margin-bottom: 4px;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 8px 0;
+}
+.cb-analyzer .disclose summary::-webkit-details-marker {
+  display: none;
+}
+.cb-analyzer .disclose summary::marker {
+  content: "";
+}
+.cb-analyzer .disclose summary::before {
+  content: "\25B8";
+  font-size: 11px;
+  color: var(--muted);
+}
+.cb-analyzer .disclose[open] summary::before {
+  content: "\25BE";
+}
+.cb-analyzer .disclose summary .lbl {
+  border-bottom: 1px solid var(--line-strong);
+  padding-bottom: 1px;
+}
+.cb-analyzer .disclose .body {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 8px;
+  line-height: 1.6;
+  max-width: 66ch;
+}
+.cb-analyzer .disclose .body ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.cb-analyzer .disclose .body li {
+  margin-bottom: 6px;
+}
+@media (max-width: 720px) {
+  .cb-analyzer .finding dl {
+    grid-template-columns: 1fr;
+    gap: 3px 0;
+  }
+  .cb-analyzer .finding dt {
+    padding-top: 10px;
+  }
 }
 
 .cb-analyzer .atglance {

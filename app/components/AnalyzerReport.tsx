@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import Decimal from "decimal.js";
+import { QuickRead } from "./QuickRead";
 import type {
   AnalysisResult,
   ComputedValue,
@@ -13,8 +14,9 @@ import type {
 // from the AnalysisResult passed in; this component computes nothing
 // (§10.0.2 rule 3: "No figure appears in the rendered report that is not
 // in the result object. The renderer adds formatting and prose; it adds
-// no content."). Section order (A-J) is §10.2's, unchanged. Quick Read and
-// "Investment case at a glance" are restatement-only: every line is a
+// no content."). Section order (A-J) is §10.2's, unchanged. Quick Read
+// (QuickRead.tsx, ONE dominant reading path — no permanent second column)
+// and "Investment case at a glance" are restatement-only: every line is a
 // direct read of an AnalysisResult field, never a new computation, score
 // or verdict. Where the mock's own hand-written narrative would require
 // interpretive prose this component cannot manufacture (interpretation.
@@ -157,60 +159,9 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
 
   return (
     <div className="layout">
-      <aside className="quickread" aria-label="Quick read">
-        <h2>Quick read</h2>
-        <p className="qsub">{result.companyName} · price as of {result.price.timestamp}</p>
-        <hr className="qrule" />
-
-        <div className="qitem">
-          <span className="k">Profile</span>
-          <p className="t">
-            {result.profile.confirmedOrOverridden}
-            {result.profile.override && ` (overridden — ${result.profile.override.reason})`}
-          </p>
-        </div>
-
-        <div className="qitem">
-          <span className="k">Active states</span>
-          {states.suppressing.length === 0 && states.qualifying.length === 0 ? (
-            <p className="t">None active.</p>
-          ) : (
-            <ul>
-              {states.suppressing.map((s, i) => (
-                <li key={`s${i}`}>
-                  {s.state} — {s.appliesTo}
-                </li>
-              ))}
-              {states.qualifying.map((q, i) => (
-                <li key={`q${i}`}>
-                  {q.flag} — {q.appliesTo}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {result.interpretation.statements.length > 0 && (
-          <div className="qitem">
-            <span className="k">Interpretation</span>
-            <ul>
-              {result.interpretation.statements.map((s, i) => (
-                <li key={i}>{s.statement}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <div className="qitem">
-          <span className="k">Data and model quality</span>
-          <p className="t">
-            {result.facts.filter((f) => f.sourceClass === "SECONDARY" || f.extractionType === "AI-EXTRACTED" || f.verificationState !== "VERIFIED").length} of{" "}
-            {result.facts.length} facts carry a non-default provenance marker — see Section B.
-          </p>
-        </div>
-      </aside>
-
       <main>
+        <QuickRead result={result} />
+
         {/* ============ A ============ */}
         <section id="A">
           <div className="sechead">
