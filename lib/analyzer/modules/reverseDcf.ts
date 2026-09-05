@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { POLICY } from "../policy";
 import { resolveMarginLevels } from "../marginLevels";
+import { growthAt } from "../growthPath";
 import { combineProvenance, CLEAN_PROVENANCE } from "../provenance";
 import { computedValue, suppressedValue } from "../figures";
 import type {
@@ -293,16 +294,6 @@ export interface ReverseDcfProjection {
   year10Revenue: Decimal;
 }
 
-// Growth realised IN year t: constant for years 1-5, linear fade to
-// terminal growth over years 6-10, terminal growth beyond (§7.1 path
-// shape). Shared by the explicit-period loop (this year's own growth,
-// used for the revenue path) and the reinvestment calculation (NEXT
-// year's growth, per the calibrated convention below).
-function growthAt(t: number, growth: Decimal, terminalGrowth: Decimal): Decimal {
-  if (t <= 5) return growth;
-  if (t <= 10) return growth.minus(growth.minus(terminalGrowth).mul(t - 5).dividedBy(5));
-  return terminalGrowth;
-}
 
 // Exported for testing (round-trip solver verification: project at a known
 // growth rate, feed its EV back in as the solver's target, confirm the

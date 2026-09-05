@@ -408,7 +408,11 @@ export interface FcfYieldGrowthResult {
 
 export interface RunRateResult {
   seasonalityTestResult: "PASS" | "SEASONAL — RUN-RATE SUPPRESSED" | "INCOMPLETE";
-  ttm: Decimal;
+  // Null only when TTM itself is unavailable (a separate REQUIRED-input
+  // gap from the seasonality test's own inputs) — "TTM stands alone" is
+  // the fallback display precisely because TTM's availability does not
+  // depend on the seasonality test passing.
+  ttm: Decimal | null;
   // Null whenever the test does not pass — never computed at all, not even
   // internally, under SEASONAL — RUN-RATE SUPPRESSED or INCOMPLETE (M12).
   runRate: Decimal | null;
