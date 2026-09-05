@@ -12,6 +12,15 @@ import type { Figure, FundingRamp, FundingStackLine, SuccessDefinitionState } fr
 
 // --- unit economics -------------------------------------------------------
 
+// SUPERSEDED as the pre-scale-solve gate (Command Center ruling,
+// 2026-09-05) — see `computeUnitExitBreakEvenPrice` / `evaluateUnitExitEconomics`
+// below, which now implement that role per methodology §8.6 (exit value
+// vs capex, solved for output price). This function's perpetuity-of-cash-
+// flows approach does not match §8.6's text, and is kept only for its own
+// existing tests / as a historical record of the earlier approach — it
+// must NOT be combined (ANDed) with the new gate; a caller wiring up M16's
+// report uses the new gate alone, not both.
+//
 // Runs BEFORE the scale solve (§7.2 M16). A per-unit screening test: if a
 // single unit's contribution margin, valued as of the SAME date its capex
 // is spent, does not cover that capex, no scale fixes that — every
@@ -86,6 +95,244 @@ export function computeUnitEconomicsBreakeven(
   // one deliberate change in meaning from the pre-correction version,
   // which returned an annual surplus).
   return computedValue(perpetuityValueAtCapexDate.minus(capexPerUnit), CLEAN_PROVENANCE);
+}
+
+// --- unit exit economics — §8.6's actual gate ------------------------------
+//
+// APPROVED PROVISIONAL CLARIFICATION (Command Center ruling, 2026-09-05).
+// Methodology §8.6 requires comparing a unit's EXIT VALUE against its
+// capex and solving for the breakeven output price, across a grid of
+// capex-per-unit and exit-multiple assumptions, before the scale solve —
+// not a perpetuity of operating cash flows (see `computeUnitEconomicsBreakeven`
+// above, now superseded for this role). This is a PROVISIONAL definition,
+// recorded alongside the frozen source, not a reading its text established.
+//
+// ANNUAL CONTRIBUTION, precisely defined:
+//   annualContribution = (outputPrice × annualOutputPerUnit) − operatingCostPerUnit
+// `operatingCostPerUnit` deducts ONLY the unit's own direct operating cost
+// per year (the same figure `computeUnitEconomicsBreakeven` and the
+// funding stack's line 3 already use) — no corporate overhead, no tax, no
+// D&A. Those live in the funding stack's own retained-operating-cash-flow
+// line (a separate mechanism, unchanged by this correction) and are never
+// deducted twice by including them here too.
+//
+// THE MULTIPLE is an EXIT-VALUE-TO-ANNUAL-CONTRIBUTION multiple —
+// `exitValueToAnnualContributionMultiple` — dimensionless, read as "years
+// of annual contribution": exitValue = annualContribution × multiple.
+// This is explicitly NOT an EV/EBITDA multiple (EBITDA is a P&L
+// aggregate across a whole company's reported income statement, on a
+// different accounting basis than this per-unit contribution figure) and
+// must never be silently treated as one — a caller's recorded anchor for
+// this number must describe it as this exact ratio (exit value ÷ annual
+// contribution at commissioning), not cite an EBITDA comparable.
+//
+// THREE DATES, compared at one:
+//   - Capex date: t=0 (unchanged from the existing accepted convention).
+//   - Exit date: t=constructionLeadYears, the commissioning date — value
+//     crystallises exactly when the unit starts operating, no additional
+//     holding/ramp period (a PROVISIONAL choice; the source states no
+//     exit date at all).
+//   - Valuation/comparison date: t=0, matching the capex date — both
+//     sides of the equation below are at t=0.
+// `annualOutputPerUnit` and `operatingCostPerUnit` are the unit's OPERATING
+// RUN RATE as of commissioning — the steady level used to value the exit,
+// not a multi-year ramp and not a growth path.
+//
+// EXIT VALUE ONLY — no separate operating payment is added on top of the
+// exit value, and no perpetuity term. The screen is purely:
+//   capexPerUnit = exitValue(outputPrice) × (1+requiredReturn)^(−constructionLeadYears)
+// reusing the SAME unlevered `requiredReturn` input already in this
+// module, for the plain lump-sum time-value bridge between the exit date
+// and the capex date.
+//
+// THIS IS A LUMP SUM, NOT A PERPETUITY — the discount factor is
+// (1+requiredReturn)^(−constructionLeadYears), the untouched, ordinary PV
+// factor, NOT `computeUnitEconomicsBreakeven`'s (−(constructionLeadYears−1))
+// adjustment. That "−1" exists solely because `contribution÷requiredReturn`
+// is an ordinary-perpetuity formula already valued one period before its
+// first payment; a lump-sum exit value carries no such built-in offset,
+// and reusing that exponent here would silently reintroduce the exact
+// bug the earlier fix removed, in a new place. One consequence, entirely
+// unlike the perpetuity version: at zero construction lead the exponent
+// is simply 0 (factor = 1) — nothing to clamp, nothing special-cased.
+//
+// Solved for outputPrice (algebra, not re-derived per call):
+//   outputPrice = ( capexPerUnit × (1+requiredReturn)^constructionLeadYears
+//                   ÷ exitValueToAnnualContributionMultiple
+//                   + operatingCostPerUnit )
+//                 ÷ annualOutputPerUnit
+//
+// Worked example (illustrative, not a reproduction of OKLO's real
+// figures): capexPerUnit=$1,000, exitValueToAnnualContributionMultiple=5,
+// operatingCostPerUnit=$20/yr, annualOutputPerUnit=10 units/yr,
+// requiredReturn=10%, constructionLeadYears=2.
+//   outputPrice = (1,000×1.10² ÷ 5 + 20) ÷ 10 = (242+20)÷10 = $26.20
+// Substituting back: contribution = 26.20×10−20 = $242/yr; exit value =
+// 242×5 = $1,210 at t=2; discounted: 1,210÷1.10² = $1,000.00 = capexPerUnit.
+//
+// MISSING VS INVALID VS DESTROYED — three genuinely different states,
+// never conflated:
+//   - A missing REQUIRED input (any of the five below) → `available: false`
+//     with a `cause`. Never a verdict.
+//   - annualOutputPerUnit or exitValueToAnnualContributionMultiple ≤ 0 is
+//     INVALID (unpriceable / undefined ratio, checked BEFORE any division)
+//     → also `available: false` with a `cause` distinguishing it from a
+//     missing input, but STILL never an economic-impossibility verdict.
+//   - Only once a price is actually solved does a VERDICT exist at all:
+//     comparing an explicit assumed output price against the solved
+//     breakeven price. Below breakeven FAILS this scenario's unit-value
+//     gate; AT breakeven is exactly zero net value (explicitly not
+//     "destruction" — its own state, not folded into FAILS); above
+//     breakeven PASSES. A pass here is a NECESSARY screen, not proof of
+//     overall viability — the funding stack's debt service, prepayments,
+//     and dilution are still unmodelled by this check.
+//   - A single cell's FAILS verdict must never suppress a different
+//     cell's (different capex/multiple assumption) or a different
+//     scenario's PASSES verdict — this function is evaluated per cell;
+//     any "every cell in this grid fails" aggregation belongs to the
+//     scale solve, not here, and is out of scope for this correction.
+export interface UnitExitEconomicsInput {
+  // Output-units per year each unit produces/sells once in service (e.g.
+  // MWh/year per unit) — the unit's operating run rate at commissioning.
+  annualOutputPerUnit: Decimal | null;
+  // The unit's own direct operating cost per year — see "ANNUAL
+  // CONTRIBUTION" above for exactly what this does and does not include.
+  operatingCostPerUnit: Decimal | null;
+  // Capex per unit, spent at t=0 — an explicit analyst assumption with a
+  // recorded anchor, one value per grid row.
+  capexPerUnit: Decimal | null;
+  // Exit-value-to-annual-contribution multiple — an explicit analyst
+  // assumption with a recorded anchor describing THIS ratio, never an
+  // EBITDA comparable — one value per grid column.
+  exitValueToAnnualContributionMultiple: Decimal | null;
+  // The existing unlevered required-return input, reused unchanged for
+  // the lump-sum time-value bridge between the exit and capex dates.
+  requiredReturn: Decimal | null;
+  constructionLeadYears: number;
+}
+
+export type UnitExitBreakEvenResult =
+  | { available: true; breakEvenOutputPrice: Decimal }
+  | { available: false; cause: string };
+
+export function computeUnitExitBreakEvenPrice(input: UnitExitEconomicsInput): UnitExitBreakEvenResult {
+  const missing = [
+    input.annualOutputPerUnit === null ? "annualOutputPerUnit" : null,
+    input.operatingCostPerUnit === null ? "operatingCostPerUnit" : null,
+    input.capexPerUnit === null ? "capexPerUnit" : null,
+    input.exitValueToAnnualContributionMultiple === null ? "exitValueToAnnualContributionMultiple" : null,
+    input.requiredReturn === null ? "requiredReturn" : null,
+  ].filter((f): f is string => f !== null);
+
+  if (missing.length > 0) {
+    return { available: false, cause: `missing REQUIRED input(s): ${missing.join(", ")}` };
+  }
+
+  const annualOutputPerUnit = input.annualOutputPerUnit as Decimal;
+  const exitValueToAnnualContributionMultiple = input.exitValueToAnnualContributionMultiple as Decimal;
+  const capexPerUnit = input.capexPerUnit as Decimal;
+  const operatingCostPerUnit = input.operatingCostPerUnit as Decimal;
+  const requiredReturn = input.requiredReturn as Decimal;
+
+  // Validated BEFORE division — never an economic-impossibility verdict,
+  // just an invalid-input refusal.
+  if (annualOutputPerUnit.lessThanOrEqualTo(0)) {
+    return {
+      available: false,
+      cause: "annualOutputPerUnit must be positive — zero or negative output cannot be priced",
+    };
+  }
+  if (exitValueToAnnualContributionMultiple.lessThanOrEqualTo(0)) {
+    return {
+      available: false,
+      cause: "exitValueToAnnualContributionMultiple must be positive",
+    };
+  }
+
+  const growthToExitDate = new Decimal(1).plus(requiredReturn).pow(input.constructionLeadYears);
+  const breakEvenOutputPrice = capexPerUnit
+    .mul(growthToExitDate)
+    .dividedBy(exitValueToAnnualContributionMultiple)
+    .plus(operatingCostPerUnit)
+    .dividedBy(annualOutputPerUnit);
+
+  return { available: true, breakEvenOutputPrice };
+}
+
+export type UnitExitEconomicsVerdict =
+  | { kind: "UNAVAILABLE"; cause: string }
+  | { kind: "BELOW BREAK-EVEN — GATE FAILS"; breakEvenOutputPrice: Decimal; assumedOutputPrice: Decimal }
+  | { kind: "AT BREAK-EVEN"; breakEvenOutputPrice: Decimal; assumedOutputPrice: Decimal }
+  | { kind: "ABOVE BREAK-EVEN — GATE PASSES"; breakEvenOutputPrice: Decimal; assumedOutputPrice: Decimal };
+
+// The solved price (above) and this verdict are deliberately separate
+// calls — a caller can always read the breakeven price on its own, and
+// the verdict is only ever a comparison against an EXPLICIT assumed
+// output price, never implied.
+export function evaluateUnitExitEconomics(
+  input: UnitExitEconomicsInput,
+  assumedOutputPrice: Decimal | null
+): UnitExitEconomicsVerdict {
+  const solved = computeUnitExitBreakEvenPrice(input);
+  if (!solved.available) {
+    return { kind: "UNAVAILABLE", cause: solved.cause };
+  }
+  if (assumedOutputPrice === null) {
+    return { kind: "UNAVAILABLE", cause: "missing REQUIRED input(s): assumedOutputPrice" };
+  }
+
+  const { breakEvenOutputPrice } = solved;
+  if (assumedOutputPrice.lessThan(breakEvenOutputPrice)) {
+    return { kind: "BELOW BREAK-EVEN — GATE FAILS", breakEvenOutputPrice, assumedOutputPrice };
+  }
+  if (assumedOutputPrice.equals(breakEvenOutputPrice)) {
+    return { kind: "AT BREAK-EVEN", breakEvenOutputPrice, assumedOutputPrice };
+  }
+  return { kind: "ABOVE BREAK-EVEN — GATE PASSES", breakEvenOutputPrice, assumedOutputPrice };
+}
+
+export interface UnitExitEconomicsGridInput {
+  // Explicit analyst assumptions, one row per value — see
+  // `UnitExitEconomicsInput.capexPerUnit`.
+  capexPerUnitGrid: Decimal[];
+  // Explicit analyst assumptions, one column per value — see
+  // `UnitExitEconomicsInput.exitValueToAnnualContributionMultiple`.
+  exitMultipleGrid: Decimal[];
+  annualOutputPerUnit: Decimal | null;
+  operatingCostPerUnit: Decimal | null;
+  requiredReturn: Decimal | null;
+  constructionLeadYears: number;
+  assumedOutputPrice: Decimal | null;
+}
+
+export interface UnitExitEconomicsGridCell {
+  capexPerUnit: Decimal;
+  exitValueToAnnualContributionMultiple: Decimal;
+  verdict: UnitExitEconomicsVerdict;
+}
+
+// One cell per (capexPerUnit, exitMultiple) combination — a failing cell
+// here has no effect on any other cell's verdict (see "MISSING VS INVALID
+// VS DESTROYED" above).
+export function computeUnitExitEconomicsGrid(input: UnitExitEconomicsGridInput): UnitExitEconomicsGridCell[] {
+  const cells: UnitExitEconomicsGridCell[] = [];
+  for (const capexPerUnit of input.capexPerUnitGrid) {
+    for (const exitValueToAnnualContributionMultiple of input.exitMultipleGrid) {
+      const verdict = evaluateUnitExitEconomics(
+        {
+          annualOutputPerUnit: input.annualOutputPerUnit,
+          operatingCostPerUnit: input.operatingCostPerUnit,
+          capexPerUnit,
+          exitValueToAnnualContributionMultiple,
+          requiredReturn: input.requiredReturn,
+          constructionLeadYears: input.constructionLeadYears,
+        },
+        input.assumedOutputPrice
+      );
+      cells.push({ capexPerUnit, exitValueToAnnualContributionMultiple, verdict });
+    }
+  }
+  return cells;
 }
 
 // --- funding stack, solved year by year -----------------------------------

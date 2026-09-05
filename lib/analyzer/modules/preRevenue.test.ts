@@ -5,7 +5,11 @@ import {
   computeFundingStackYearByYear,
   computeBothFundingRamps,
   computeImpliedProbability,
+  computeUnitExitBreakEvenPrice,
+  evaluateUnitExitEconomics,
+  computeUnitExitEconomicsGrid,
   type FundingStackYearParams,
+  type UnitExitEconomicsInput,
 } from "./preRevenue";
 
 // Independently verified timing cases (contribution=100, requiredReturn=
@@ -79,6 +83,183 @@ describe("computeUnitEconomicsBreakeven", () => {
     // The function's return type carries no viability verdict — only a
     // per-unit NPV figure or a suppressing state. There is no field here
     // that could be mistaken for "project approved."
+  });
+});
+
+// APPROVED PROVISIONAL CLARIFICATION (Command Center ruling, 2026-09-05) —
+// see preRevenue.ts's own doc comment above computeUnitExitBreakEvenPrice
+// for the full definition, dates, and worked-example derivation these
+// tests check against.
+function baseExitInput(overrides: Partial<UnitExitEconomicsInput> = {}): UnitExitEconomicsInput {
+  return {
+    annualOutputPerUnit: new Decimal(10),
+    operatingCostPerUnit: new Decimal(20),
+    capexPerUnit: new Decimal(1000),
+    exitValueToAnnualContributionMultiple: new Decimal(5),
+    requiredReturn: new Decimal("0.1"),
+    constructionLeadYears: 2,
+    ...overrides,
+  };
+}
+
+describe("computeUnitExitBreakEvenPrice", () => {
+  it("solves the worked example: capex=1000, multiple=5, opCost=20/yr, output=10/yr, r=10%, lead=2 -> $26.20", () => {
+    const result = computeUnitExitBreakEvenPrice(baseExitInput());
+    expect(result.available).toBe(true);
+    if (result.available) expect(result.breakEvenOutputPrice.toString()).toBe("26.2");
+  });
+
+  it("substitutes the solved price back and confirms exit value discounts to exactly capex", () => {
+    const result = computeUnitExitBreakEvenPrice(baseExitInput());
+    expect(result.available).toBe(true);
+    if (!result.available) return;
+
+    const annualContribution = result.breakEvenOutputPrice.mul(10).minus(20); // outputPrice*annualOutputPerUnit - operatingCostPerUnit
+    expect(annualContribution.toString()).toBe("242");
+    const exitValue = annualContribution.mul(5); // * exitValueToAnnualContributionMultiple
+    expect(exitValue.toString()).toBe("1210");
+    const pvAtCapexDate = exitValue.dividedBy(new Decimal("1.1").pow(2)); // discount lump sum back (1+r)^-lead
+    expect(pvAtCapexDate.toString()).toBe("1000");
+  });
+
+  it("at zero construction lead, the discount factor is exactly 1 — no clamping, no special case", () => {
+    // outputPrice = (1000*1.1^0/5 + 20)/10 = (200+20)/10 = 22
+    const result = computeUnitExitBreakEvenPrice(baseExitInput({ constructionLeadYears: 0 }));
+    expect(result.available).toBe(true);
+    if (result.available) expect(result.breakEvenOutputPrice.toString()).toBe("22");
+  });
+
+  it("at nonzero lead the price rises to compensate for time value — lead=2 requires a higher breakeven price than lead=0", () => {
+    const lead0 = computeUnitExitBreakEvenPrice(baseExitInput({ constructionLeadYears: 0 }));
+    const lead2 = computeUnitExitBreakEvenPrice(baseExitInput({ constructionLeadYears: 2 }));
+    expect(lead0.available).toBe(true);
+    expect(lead2.available).toBe(true);
+    if (lead0.available && lead2.available) {
+      expect(lead2.breakEvenOutputPrice.greaterThan(lead0.breakEvenOutputPrice)).toBe(true);
+    }
+  });
+
+  it("does NOT use the perpetuity's (-(lead-1)) exponent — lead=1 must differ from the old formula's zero-discount case", () => {
+    // Old (superseded) formula treats lead=1 as needing no further discount
+    // at all (exponent 0). The new lump-sum formula still discounts a
+    // full period at lead=1: factor = 1.1^1, not 1.1^0.
+    const lead1 = computeUnitExitBreakEvenPrice(baseExitInput({ constructionLeadYears: 1 }));
+    expect(lead1.available).toBe(true);
+    if (lead1.available) {
+      // (1000*1.1^1/5 + 20)/10 = (220+20)/10 = 24
+      expect(lead1.breakEvenOutputPrice.toString()).toBe("24");
+    }
+  });
+
+  it("is unavailable (never a value) when any required input is missing", () => {
+    for (const field of [
+      "annualOutputPerUnit",
+      "operatingCostPerUnit",
+      "capexPerUnit",
+      "exitValueToAnnualContributionMultiple",
+      "requiredReturn",
+    ] as const) {
+      const result = computeUnitExitBreakEvenPrice(baseExitInput({ [field]: null }));
+      expect(result.available).toBe(false);
+      if (!result.available) expect(result.cause).toContain(field);
+    }
+  });
+
+  it("is unavailable, not economically impossible, when annualOutputPerUnit is zero or negative", () => {
+    const zero = computeUnitExitBreakEvenPrice(baseExitInput({ annualOutputPerUnit: new Decimal(0) }));
+    const negative = computeUnitExitBreakEvenPrice(baseExitInput({ annualOutputPerUnit: new Decimal(-5) }));
+    expect(zero.available).toBe(false);
+    expect(negative.available).toBe(false);
+    if (!zero.available) expect(zero.cause).toContain("annualOutputPerUnit");
+    if (!negative.available) expect(negative.cause).toContain("annualOutputPerUnit");
+  });
+
+  it("is unavailable, not economically impossible, when the exit multiple is zero or negative", () => {
+    const zero = computeUnitExitBreakEvenPrice(
+      baseExitInput({ exitValueToAnnualContributionMultiple: new Decimal(0) })
+    );
+    const negative = computeUnitExitBreakEvenPrice(
+      baseExitInput({ exitValueToAnnualContributionMultiple: new Decimal(-2) })
+    );
+    expect(zero.available).toBe(false);
+    expect(negative.available).toBe(false);
+    if (!zero.available) expect(zero.cause).toContain("exitValueToAnnualContributionMultiple");
+    if (!negative.available) expect(negative.cause).toContain("exitValueToAnnualContributionMultiple");
+  });
+});
+
+describe("evaluateUnitExitEconomics", () => {
+  // Break-even at these inputs is $26.20 (verified above).
+  it("returns BELOW BREAK-EVEN — GATE FAILS when the assumed price is below breakeven", () => {
+    const result = evaluateUnitExitEconomics(baseExitInput(), new Decimal("26.19"));
+    expect(result.kind).toBe("BELOW BREAK-EVEN — GATE FAILS");
+  });
+
+  it("returns AT BREAK-EVEN, not a failure, when the assumed price exactly equals breakeven", () => {
+    const result = evaluateUnitExitEconomics(baseExitInput(), new Decimal("26.2"));
+    expect(result.kind).toBe("AT BREAK-EVEN");
+  });
+
+  it("returns ABOVE BREAK-EVEN — GATE PASSES when the assumed price exceeds breakeven", () => {
+    const result = evaluateUnitExitEconomics(baseExitInput(), new Decimal("26.21"));
+    expect(result.kind).toBe("ABOVE BREAK-EVEN — GATE PASSES");
+  });
+
+  it("always exposes the solved breakeven price on every verdict, separately from the verdict itself", () => {
+    const result = evaluateUnitExitEconomics(baseExitInput(), new Decimal("30"));
+    expect(result.kind).toBe("ABOVE BREAK-EVEN — GATE PASSES");
+    if (result.kind !== "UNAVAILABLE") expect(result.breakEvenOutputPrice.toString()).toBe("26.2");
+  });
+
+  it("is UNAVAILABLE, never a verdict, when the assumed output price itself is missing", () => {
+    const result = evaluateUnitExitEconomics(baseExitInput(), null);
+    expect(result.kind).toBe("UNAVAILABLE");
+  });
+
+  it("is UNAVAILABLE when the underlying breakeven solve is unavailable (missing input propagates)", () => {
+    const result = evaluateUnitExitEconomics(baseExitInput({ requiredReturn: null }), new Decimal("30"));
+    expect(result.kind).toBe("UNAVAILABLE");
+    if (result.kind === "UNAVAILABLE") expect(result.cause).toContain("requiredReturn");
+  });
+});
+
+describe("computeUnitExitEconomicsGrid", () => {
+  it("produces mixed outcomes across cells, and a failing cell never suppresses a passing one", () => {
+    // Cheap capex / rich multiple clears $28 easily; expensive capex / thin
+    // multiple does not — both cells computed from the SAME assumed price.
+    const cells = computeUnitExitEconomicsGrid({
+      capexPerUnitGrid: [new Decimal(500), new Decimal(2000)],
+      exitMultipleGrid: [new Decimal(8), new Decimal(2)],
+      annualOutputPerUnit: new Decimal(10),
+      operatingCostPerUnit: new Decimal(20),
+      requiredReturn: new Decimal("0.1"),
+      constructionLeadYears: 2,
+      assumedOutputPrice: new Decimal(28),
+    });
+
+    expect(cells).toHaveLength(4);
+    const cheapRich = cells.find((c) => c.capexPerUnit.equals(500) && c.exitValueToAnnualContributionMultiple.equals(8));
+    const expensiveThin = cells.find(
+      (c) => c.capexPerUnit.equals(2000) && c.exitValueToAnnualContributionMultiple.equals(2)
+    );
+    expect(cheapRich?.verdict.kind).toBe("ABOVE BREAK-EVEN — GATE PASSES");
+    expect(expensiveThin?.verdict.kind).toBe("BELOW BREAK-EVEN — GATE FAILS");
+    // The failing cell's presence has no bearing on the passing cell's kind.
+    expect(cheapRich?.verdict.kind).not.toBe(expensiveThin?.verdict.kind);
+  });
+
+  it("each cell reports UNAVAILABLE independently when shared inputs are missing, never an impossibility verdict", () => {
+    const cells = computeUnitExitEconomicsGrid({
+      capexPerUnitGrid: [new Decimal(500)],
+      exitMultipleGrid: [new Decimal(8)],
+      annualOutputPerUnit: null,
+      operatingCostPerUnit: new Decimal(20),
+      requiredReturn: new Decimal("0.1"),
+      constructionLeadYears: 2,
+      assumedOutputPrice: new Decimal(28),
+    });
+    expect(cells).toHaveLength(1);
+    expect(cells[0].verdict.kind).toBe("UNAVAILABLE");
   });
 });
 
