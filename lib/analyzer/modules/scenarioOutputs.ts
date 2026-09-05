@@ -25,7 +25,13 @@ export function computeScenarioEnterpriseValue(
   margin: Decimal | Decimal[],
   capitalIntensity: Decimal | Decimal[],
   rate: Decimal,
-  nopatTaxRate: Decimal
+  nopatTaxRate: Decimal,
+  // Optional, defaulting to the policy constant — every existing caller
+  // omits this and gets EXACTLY the prior hardcoded behaviour. Added
+  // solely so M14's sensitivity module can vary terminal growth through
+  // this same existing model (its rate x terminal-growth table) without
+  // duplicating this function's formula; the formula itself is unchanged.
+  terminalGrowth: Decimal = POLICY.terminalGrowth
 ): Decimal {
   if (growthPath.length !== 10) {
     throw new Error("growthPath must have exactly ten entries (years 1-10)");
@@ -52,7 +58,6 @@ export function computeScenarioEnterpriseValue(
   }
 
   const year10Revenue = revenues[10];
-  const terminalGrowth = POLICY.terminalGrowth;
   const nopat10 = year10Revenue.mul(marginAt(10)).mul(afterTax);
   const terminalNopat = nopat10.mul(new Decimal(1).plus(terminalGrowth));
   const terminalRoic = rate.plus(POLICY.terminalRoicPremium);
