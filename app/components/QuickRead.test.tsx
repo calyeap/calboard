@@ -49,6 +49,60 @@ describe("QuickRead — structure", () => {
   });
 });
 
+// E1 — authorised valuation strip above the eight items, not a ninth one.
+describe("QuickRead — valuation strip (defect E1)", () => {
+  it("MSFT: renders the Bear/Base/Bull/Current price strip as a header, before the eight items, not counted among them", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    const { container } = render(<QuickRead result={result} />);
+    const section = container.querySelector("section#quickread") as HTMLElement;
+    const strip = section.querySelector(".atglance");
+    expect(strip).not.toBeNull();
+    expect(strip?.textContent).toContain("Bear");
+    expect(strip?.textContent).toContain("$265");
+    expect(strip?.textContent).toContain("Base");
+    expect(strip?.textContent).toContain("$510");
+    expect(strip?.textContent).toContain("Bull");
+    expect(strip?.textContent).toContain("$650");
+    expect(strip?.textContent).toContain("Current price");
+    expect(strip?.textContent).toContain("$510.12");
+    // Still exactly eight items — the strip is not a ninth one.
+    expect(section.querySelectorAll(".qitem")).toHaveLength(8);
+    // The strip precedes the first item in document order.
+    const firstItem = section.querySelector(".qitem") as HTMLElement;
+    expect(strip!.compareDocumentPosition(firstItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("MSFT: shows the price-location line beneath the strip, restated from priceLocationWithinRange (64%)", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    render(<QuickRead result={result} />);
+    expect(result.scenarioOutputs.priceLocationWithinRange.mul(100).toFixed(0)).toBe("64");
+    expect(screen.getByText(/64% of the way from bear to bull/)).not.toBeNull();
+  });
+
+  it("OKLO: renders the §10.4 distribution form (Failure / Success as described / Current price), never compressed to bear/base/bull bounds", () => {
+    const result = assembleAnalysisResult(OKLO_FIXTURE);
+    const { container } = render(<QuickRead result={result} />);
+    const section = container.querySelector("section#quickread") as HTMLElement;
+    const strip = section.querySelector(".atglance");
+    expect(strip).not.toBeNull();
+    expect(strip?.textContent).toContain("Failure");
+    expect(strip?.textContent).toContain("$3.10");
+    expect(strip?.textContent).toContain("Success as described");
+    expect(strip?.textContent).toContain("$31.00 - $48.00");
+    expect(strip?.textContent).toContain("Current price");
+    expect(strip?.textContent).toContain("$14.50");
+    expect(strip?.textContent).not.toMatch(/\bBear\b|\bBull\b/);
+    expect(section.querySelectorAll(".qitem")).toHaveLength(8);
+  });
+
+  it("OKLO: shows the price-location line in failure/success wording, never bear/bull", () => {
+    const result = assembleAnalysisResult(OKLO_FIXTURE);
+    render(<QuickRead result={result} />);
+    const pct = result.scenarioOutputs.priceLocationWithinRange.mul(100).toFixed(0);
+    expect(screen.getByText(new RegExp(`${pct}% of the way from failure to success`))).not.toBeNull();
+  });
+});
+
 describe("QuickRead — MSFT", () => {
   const result = assembleAnalysisResult(MSFT_FIXTURE);
 

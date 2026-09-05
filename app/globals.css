@@ -2018,6 +2018,11 @@ h6 {
 .cb-analyzer .atglance .cur {
   background: var(--field);
 }
+.cb-analyzer .striploc {
+  font-size: 12px;
+  color: var(--muted);
+  margin: -14px 0 22px;
+}
 .cb-analyzer .closing {
   font-size: 14px;
   line-height: 1.5;

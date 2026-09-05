@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from "react";
 import Decimal from "decimal.js";
 import { formatUsd } from "@/lib/formatUsd";
 import { QuickRead } from "./QuickRead";
+import { ValuationStrip } from "./ValuationStrip";
 import type {
   AnalysisResult,
   ComputedValue,
@@ -1233,43 +1234,7 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
             <span className="k">Synthesis, not a new figure</span>
           </div>
           <hr />
-          {preRevenue ? (
-            <div className="atglance" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
-              <div>
-                <span className="lb">Failure — cash floor</span>
-                <span className="fig">${num(preRevenue.cashPerShare)}</span>
-              </div>
-              <div>
-                <span className="lb">Success as described</span>
-                <span className="fig">
-                  {fairValueRange.kind === "pre-revenue-distribution" ? formatRange(fairValueRange.successAsCommonlyDescribed) : "—"}
-                </span>
-              </div>
-              <div className="cur">
-                <span className="lb">Current price</span>
-                <span className="fig">${num(result.price.value)}</span>
-              </div>
-            </div>
-          ) : (
-            <div className="atglance">
-              <div>
-                <span className="lb">Bear</span>
-                <span className="fig">{fairValueRange.kind === "range" ? `$${num(fairValueRange.bear, 0)}` : "—"}</span>
-              </div>
-              <div>
-                <span className="lb">Base</span>
-                <span className="fig">${num(scenarioOutputs.values.base, 0)}</span>
-              </div>
-              <div>
-                <span className="lb">Bull</span>
-                <span className="fig">{fairValueRange.kind === "range" ? `$${num(fairValueRange.bull, 0)}` : "—"}</span>
-              </div>
-              <div className="cur">
-                <span className="lb">Current price</span>
-                <span className="fig">${num(result.price.value)}</span>
-              </div>
-            </div>
-          )}
+          <ValuationStrip result={result} />
           <p className="closing">
             {states.suppressing.length > 0 || states.qualifying.length > 0
               ? `${states.suppressing.length} state(s) suppress an output; ${states.qualifying.length} flag(s) qualify one. See Section A for what and why.`

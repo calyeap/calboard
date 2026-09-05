@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Decimal from "decimal.js";
 import type { AnalysisResult, Profile, SuppressingState } from "@/lib/analyzer/types";
+import { ValuationStrip } from "./ValuationStrip";
 
 // IA-audit restoration (2026-09-05) — Quick Read matches §17.16 exactly:
 // eight items, always visible, one component (no "Learn more" drawer —
@@ -504,6 +505,7 @@ export function QuickRead({ result }: { result: AnalysisResult }) {
         </span>
       </div>
       <hr />
+      <ValuationStrip result={result} showLocation />
       {items.map((item) => (
         <div className="qitem" key={item.label}>
           <span className="k">{item.label}</span>

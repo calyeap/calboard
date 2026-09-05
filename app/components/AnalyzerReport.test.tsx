@@ -361,3 +361,25 @@ describe("AnalyzerReport — Section B always shows the full three-token provena
     expect(sectionD.textContent).not.toMatch(/\bVerified\b/);
   });
 });
+
+// Fifth-pass IA audit (2026-09-05) — E1.
+describe("AnalyzerReport — closing recap 'Investment case — at a glance' is unchanged by the E1 strip reuse", () => {
+  it("MSFT: still renders the same four-figure strip, with no new price-location line added there", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    const { container } = render(<AnalyzerReport result={result} />);
+    const section = container.querySelector("section#atglance") as HTMLElement;
+    expect(within(section).getByText("Bear")).not.toBeNull();
+    expect(within(section).getByText("$265")).not.toBeNull();
+    expect(within(section).getByText("Current price")).not.toBeNull();
+    expect(section.querySelector(".striploc")).toBeNull();
+  });
+
+  it("OKLO: still renders the pre-revenue distribution strip, with no new price-location line added there", () => {
+    const result = assembleAnalysisResult(OKLO_FIXTURE);
+    const { container } = render(<AnalyzerReport result={result} />);
+    const section = container.querySelector("section#atglance") as HTMLElement;
+    expect(within(section).getByText("Failure — cash floor")).not.toBeNull();
+    expect(within(section).getByText("$3.10")).not.toBeNull();
+    expect(section.querySelector(".striploc")).toBeNull();
+  });
+});
