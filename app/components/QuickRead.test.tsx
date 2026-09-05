@@ -42,14 +42,18 @@ describe("QuickRead — MSFT", () => {
     expect(screen.queryByText(/MATURE_PROFITABLE_STABLE_FCF/)).toBeNull();
   });
 
-  it("consolidates the four DEGENERATE reverse-DCF cells into ONE line, not four repeated rows, while keeping the state name visible", () => {
+  it("consolidates the several DEGENERATE reverse-DCF cells into ONE line, not one per row, while keeping the state name visible and never inventing a count", () => {
     render(<QuickRead result={result} />);
     const matches = screen.getAllByText(/DEGENERATE — TERMINAL EXCEEDS TOTAL VALUE/);
     // Exactly one occurrence in Quick Read (the consolidated main-finding
     // sentence) plus at most one more in the "learn more" detail line -
-    // never one per underlying cell (4).
+    // never one per underlying cell (4, per Section E's own grid).
     expect(matches.length).toBeLessThan(4);
     expect(matches.length).toBeGreaterThan(0);
+    // No "N of M" ratio anywhere — that count is not itself a field in the
+    // Analysis Result (only each cell's own state is), so Quick Read must
+    // not manufacture one.
+    expect(screen.queryByText(/\d+ of \d+/)).toBeNull();
   });
 
   it("main finding restates the price-implied growth figure already computed in Section E, not a new number", () => {
@@ -67,10 +71,13 @@ describe("QuickRead — OKLO", () => {
     expect(screen.queryByText(/PRE_REVENUE_UNPROFITABLE/)).toBeNull();
   });
 
-  it("main finding states the worth-less-than-failure count with the state name kept visible (state travels with the summary)", () => {
+  it("main finding states the worth-less-than-failure finding with the state name kept visible (state travels with the summary), without inventing a count", () => {
     render(<QuickRead result={result} />);
-    expect(screen.getByText(/2 of 4/)).not.toBeNull();
     expect(screen.getByText(/THIS SUCCESS IS WORTH LESS THAN FAILURE/)).not.toBeNull();
+    // No "N of M" ratio anywhere — that count is not itself a field in the
+    // Analysis Result (only each definition's own state is), so Quick Read
+    // must not manufacture one.
+    expect(screen.queryByText(/\d+ of \d+/)).toBeNull();
   });
 
   it("restates the $31-$48 commonly-described range already computed in the Analysis Result, not a new figure", () => {

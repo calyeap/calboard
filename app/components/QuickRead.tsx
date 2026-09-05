@@ -37,25 +37,24 @@ function sectionRefFor(appliesTo: string): string | null {
 
 interface ConsolidatedState {
   state: SuppressingState;
-  count: number;
   sectionRef: string | null;
 }
 
-// Collapses repeated identical states (e.g. four DEGENERATE reverse-DCF
+// Collapses repeated identical states (e.g. several DEGENERATE reverse-DCF
 // cells) into one line each, per the approved correction — never dumping
-// the same state name once per row.
+// the same state name once per row. Deliberately reports WHICH states are
+// active, never HOW MANY — a count is not itself a field anywhere in the
+// Analysis Result, only the individual per-cell states are (§10.0.1
+// `states`), so no numeric ratio is manufactured here (Quick Read
+// contract check, 2026-09-05).
 function consolidateStates(suppressing: AnalysisResult["states"]["suppressing"]): ConsolidatedState[] {
-  const byState = new Map<SuppressingState, { count: number; sectionRef: string | null }>();
+  const seen = new Map<SuppressingState, string | null>();
   for (const s of suppressing) {
-    const existing = byState.get(s.state);
-    const sectionRef = sectionRefFor(s.appliesTo);
-    if (existing) {
-      existing.count += 1;
-    } else {
-      byState.set(s.state, { count: 1, sectionRef });
+    if (!seen.has(s.state)) {
+      seen.set(s.state, sectionRefFor(s.appliesTo));
     }
   }
-  return Array.from(byState.entries()).map(([state, v]) => ({ state, count: v.count, sectionRef: v.sectionRef }));
+  return Array.from(seen.entries()).map(([state, sectionRef]) => ({ state, sectionRef }));
 }
 
 function formatDollar(v: Decimal): string {
@@ -78,14 +77,15 @@ function buildQuickRead(result: AnalysisResult): QuickReadContent {
   const consolidated = consolidateStates(states.suppressing);
   const marginAtHigh = states.qualifying.some((q) => q.flag === "MARGIN AT HISTORICAL HIGH");
 
+  const anyNonDefaultProvenanceFact = result.facts.some(
+    (f) => f.sourceClass === "SECONDARY" || f.extractionType === "AI-EXTRACTED" || f.verificationState !== "VERIFIED"
+  );
   const learnMoreBullets: string[] = [
-    ...consolidated.map(
-      (c) => `${c.count > 1 ? `${c.count} outputs return` : "One output returns"} ${c.state}${c.sectionRef ? ` — see ${c.sectionRef}` : ""}.`
-    ),
+    ...consolidated.map((c) => `Output(s) return ${c.state}${c.sectionRef ? ` — see ${c.sectionRef}` : ""}.`),
     ...states.qualifying.map((q) => `${q.flag} — ${q.appliesTo}.`),
-    `${result.facts.filter((f) => f.sourceClass === "SECONDARY" || f.extractionType === "AI-EXTRACTED" || f.verificationState !== "VERIFIED").length} of ${
-      result.facts.length
-    } facts in Section B carry a non-default provenance marker (secondary source, AI-extracted, or unverified).`,
+    ...(anyNonDefaultProvenanceFact
+      ? ["One or more facts in Section B carry a non-default provenance marker (secondary source, AI-extracted, or unverified)."]
+      : []),
   ];
   if (result.interpretation.statements.length === 0) {
     learnMoreBullets.push("Interpretation (Section I) has not run for this analysis yet.");
@@ -118,16 +118,18 @@ function buildQuickRead(result: AnalysisResult): QuickReadContent {
 
   // --- Pre-revenue --------------------------------------------------------
   if (preRevenue !== null && fairValueRange.kind === "pre-revenue-distribution") {
-    const total = preRevenue.successDefinitions.length;
-    const worthLess = preRevenue.successDefinitions.filter((d) => d.state.kind === "THIS SUCCESS IS WORTH LESS THAN FAILURE").length;
+    // Existence check only (.some), not a count — "how many" is not a
+    // field anywhere in the Analysis Result; each success definition's own
+    // state is (preRevenue.successDefinitions[].state), restated in full,
+    // unconsolidated, in Section D.
+    const anyWorthLessThanFailure = preRevenue.successDefinitions.some((d) => d.state.kind === "THIS SUCCESS IS WORTH LESS THAN FAILURE");
     const range = fairValueRange.successAsCommonlyDescribed;
     const rangeText = range.low.equals(range.high) ? formatDollar(range.low) : `${formatDollar(range.low)}-${formatDollar(range.high)}`;
 
     return {
-      mainFinding:
-        worthLess > 0
-          ? `On ${worthLess} of ${total} ways ${result.companyName} could succeed, shareholders would end up with less than if it simply held its cash (THIS SUCCESS IS WORTH LESS THAN FAILURE).`
-          : `Every modelled way ${result.companyName} could succeed is worth more than simply holding its cash — none returns THIS SUCCESS IS WORTH LESS THAN FAILURE.`,
+      mainFinding: anyWorthLessThanFailure
+        ? `On one or more of the modelled ways ${result.companyName} could succeed, shareholders would end up with less than if it simply held its cash (THIS SUCCESS IS WORTH LESS THAN FAILURE) — see Section D for which.`
+        : `Every modelled way ${result.companyName} could succeed is worth more than simply holding its cash — none returns THIS SUCCESS IS WORTH LESS THAN FAILURE.`,
       whyItMatters:
         "For a pre-revenue company, \"how likely is success?\" is meaningless until you say which success — building the asset but earning a thin return on it can leave shareholders worse off than the cash on the balance sheet today, once dilution is counted.",
       whatItMeansHere: `The cash floor is ${formatDollar(fairValueRange.failure)} per share. Success, as the modelled cases commonly describe it, is worth ${rangeText} — the spread is the honest uncertainty, not an error. Success as today's price (${formatDollar(result.price.value)}) would require is restated in Section H.`,
@@ -138,10 +140,13 @@ function buildQuickRead(result: AnalysisResult): QuickReadContent {
 
   // --- Mature / high-growth (reverse-DCF applies) -------------------------
   const cleanCell = priceImplied.reverseDcfGrid.find((c) => !c.fiveYearGrowth.suppressed && !c.tenYearCagr.suppressed);
-  const degenerateCells = priceImplied.reverseDcfGrid.filter(
+  // Existence check only (.some), not a count — "how many of nine" is not
+  // a field anywhere in the Analysis Result; each cell's own state is
+  // (priceImplied.reverseDcfGrid[].fiveYearGrowth), shown in full,
+  // unconsolidated, in Section E's own 3x3 grid.
+  const anyDegenerateCell = priceImplied.reverseDcfGrid.some(
     (c) => c.fiveYearGrowth.suppressed && c.fiveYearGrowth.state === "DEGENERATE — TERMINAL EXCEEDS TOTAL VALUE"
   );
-  const totalCells = priceImplied.reverseDcfGrid.length;
 
   const growthLine =
     cleanCell && !cleanCell.fiveYearGrowth.suppressed && !cleanCell.tenYearCagr.suppressed
@@ -151,10 +156,9 @@ function buildQuickRead(result: AnalysisResult): QuickReadContent {
       : "The reverse-DCF grid does not resolve to a usable growth figure at this run's inputs.";
 
   return {
-    mainFinding:
-      degenerateCells.length > 0
-        ? `${growthLine} ${degenerateCells.length} of ${totalCells} reverse-DCF scenarios return no number at all (DEGENERATE — TERMINAL EXCEEDS TOTAL VALUE) rather than a misleading one.`
-        : growthLine,
+    mainFinding: anyDegenerateCell
+      ? `${growthLine} One or more reverse-DCF scenarios return no number at all (DEGENERATE — TERMINAL EXCEEDS TOTAL VALUE) rather than a misleading one — see Section E for which.`
+      : growthLine,
     whyItMatters:
       "A reverse DCF solves for the growth the current price already requires, rather than starting from a growth guess — that turns a valuation into something checkable against the company's own record. A DEGENERATE result means more than all of the model's value would sit in the distant terminal period, which stops being a valuation and starts being an assumption about the far future.",
     whatItMeansHere: `${
