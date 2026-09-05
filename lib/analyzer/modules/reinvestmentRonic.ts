@@ -168,30 +168,69 @@ function classifyRonicCell(
 //   growth = RONIC_implied × reinvestmentRate
 //   =>  RONIC_implied = growth ÷ reinvestmentRate = growth × NOPAT ÷ reinvestment
 //
-// PROVENANCE OF THE GROWTH DEFINITION — established from the frozen text,
-// not chosen to fit 20.9%:
+// PROVENANCE — CORRECTED (this section's earlier claim that "18%,"
+// "17.8%," and "22.0%" appeared "nowhere in the hashed frozen artefacts"
+// was wrong beyond the five original BUILD artefacts; see the source-methodology
+// citation below) AND THEN CLARIFIED BY AN EXPLICIT COMMAND CENTER RULING
+// (2026-09-05) — see "APPROVED DEFINITION" below. Read both parts: the
+// citation establishes what the source says; the ruling establishes what
+// this module computes where the source does not say it.
 //
-// §5.4 states the reinvestment RATE (reinvestment ÷ NOPAT) for Microsoft
-// FY26 as 66% excluding finance-lease ROU additions and 86% including
-// them, "moving the implied return on new capital from 27.2% to 20.9%."
-// Both 66%/27.2% and 86%/20.9% are in the hashed spec file (§5.4 line
-// 332, §11.4 line 919). Back-solving growth = reinvestmentRate ×
-// impliedReturn from EACH pair independently:
-//   66%  × 27.2% = 17.952%
-//   86%  × 20.9% = 17.974%
-// These two INDEPENDENTLY back-solved figures agree to within 0.022
-// points — consistent with a single underlying growth rate of
-// approximately 18.0%, given the frozen text's own one-decimal rounding
-// of all four inputs. This is a genuine cross-consistency check of the
-// IDENTITY (using only numbers already in the hashed spec), not a fitted
-// growth value — no external "18%" figure appears anywhere in the hashed
-// artefacts, and none is assumed here. It also establishes the PERIOD:
-// since reinvestment ÷ NOPAT is inherently a single-year ratio for one
-// named fiscal year (FY26), the growth figure it is compared against
-// must be that SAME fiscal year's NOPAT growth (year-over-year) — not a
-// five-year trailing figure, and not M7's unrelated price-implied
-// growth-rate solve (which happens to be numerically close for
-// Microsoft's specific case, by coincidence, not by construction).
+// SOURCE CITATION. calboard-valuation-methodology_2.md (SHA-256
+// a4a39e33717993fe9558f263009cec3814555765ac69c69728d99354d4a5ec7c,
+// matching the hash the spec itself cites for that file) — not supplied
+// to BUILD until after the original five artefacts — §3.3
+// ("Reinvestment") states, verbatim:
+//   "The implied return on new capital at FY26's 18% growth is 20.9%,
+//   not 27.2% — a six-point move on the definition alone. Read alongside
+//   the computed anchors below (17.8% five-year, 22.0% excluding ~$69B of
+//   Activision goodwill), it is the whole empirical basis for a
+//   base-case RONIC assumption."
+// and, immediately after:
+//   "Return on new capital (RONIC) is computed, not chosen [S]: RONIC =
+//   trailing five-year change in NOPAT ÷ trailing five-year change in
+//   invested capital, invested capital including lease-funded assets."
+// This confirms 17.8% is not back-solved — it is the direct output of
+// the same five-year ΔNOPAT/ΔInvestedCapital formula `computeRonicLadder`
+// above already implements — and that the FY26 single-year figure
+// (20.9%/27.2%) and the five-year figure (17.8%) are read "alongside"
+// each other as two DIFFERENT, independently-computed anchors, not one
+// feeding the other. This corroborates the structural separation already
+// built here (a distinct function, never fed into M7 or the RONIC
+// ladder).
+//
+// What the citation does NOT settle: which growth metric "FY26's 18%
+// growth" refers to in the source's OWN historical calculation. §3.3
+// says only "growth," unqualified, and the methodology's own convention
+// elsewhere (§3.1 is titled "Revenue growth" and uses unqualified
+// "growth" to mean revenue growth) leaves that genuinely open. The
+// Microsoft 20.9%/27.2%/18% historical reproduction therefore REMAINS
+// UNRESOLVED as a reference-reproduction question — nothing below
+// changes that, and no test in this file should be read as having
+// settled it.
+//
+// APPROVED DEFINITION (Command Center ruling, 2026-09-05) — for THIS
+// module's own prospective diagnostic, going forward, independent of
+// what the source's historical calculation used:
+//   implied return on new capital ≈ (year-over-year NOPAT growth) ÷
+//     (same fiscal year's reinvestment ÷ NOPAT ratio)
+// This is an EXPLICITLY APPROVED CLARIFICATION alongside the frozen
+// source, not a claim that the original wording ("FY26's 18% growth")
+// established NOPAT growth as the metric — it did not; see above. The
+// result is an APPROXIMATE growth-implied return diagnostic: it is a
+// rearrangement of the value-driver identity (g = RONIC × reinvestment
+// rate), not an exact accounting identity, and not a measured or
+// realised return on any actual capital outlay. It must not be conflated
+// with the five-year trailing RONIC ladder above, and must never be fed
+// into M7.
+//
+// What IS settled, independent of the metric question: the
+// reinvestment-rate DENOMINATOR and its period — reinvestment ÷ NOPAT is
+// inherently a single-fiscal-year ratio (FY26 in the worked example),
+// computed via `computeReinvestment` verbatim, so the growth numerator is
+// that SAME fiscal year's growth (year-over-year) — not a five-year
+// trailing figure, and not M7's unrelated price-implied growth-rate
+// solve.
 //
 // This function therefore takes both `currentNopat` and
 // `currentYearNopatGrowth` as REQUIRED inputs — never a hardcoded value —
@@ -205,9 +244,14 @@ export interface ImpliedReturnOnNewCapitalInput {
   // Current fiscal year NOPAT — a single-period figure, not the RONIC
   // ladder's five-year invested-capital base.
   currentNopat: SourcedValue<Decimal> | null;
-  // Current fiscal year NOPAT growth, year-over-year. NOT the five-year
-  // trailing RONIC's ΔNOPAT measure, and NOT M7's reverse-DCF solved
-  // growth rate — a different, price-implied quantity.
+  // Current fiscal year NOPAT growth, year-over-year — NOT the
+  // five-year trailing RONIC's ΔNOPAT measure, and NOT M7's reverse-DCF
+  // solved growth rate. This metric (NOPAT growth, not revenue growth)
+  // is an APPROVED CLARIFICATION (Command Center ruling, 2026-09-05),
+  // not a reading the frozen source methodology's own wording
+  // establishes — §3.3 says only "FY26's 18% growth," unqualified, and
+  // leaves NOPAT-vs-revenue genuinely open. See the doc comment above
+  // this interface for the full citation and the ruling.
   currentYearNopatGrowth: SourcedValue<Decimal> | null;
 }
 
@@ -239,6 +283,8 @@ export function computeImpliedReturnOnNewCapital(
     return { value: suppressedValue("INCOMPLETE", `missing REQUIRED input(s): ${missing.join(", ")}`), period };
   }
 
+  // Matches the approved definition verbatim (see doc comment above):
+  // NOPAT growth ÷ (same fiscal year's reinvestment ÷ NOPAT).
   const reinvestmentRate = reinvestment.value.dividedBy(input.currentNopat.value);
   const impliedReturn = input.currentYearNopatGrowth.value.dividedBy(reinvestmentRate);
 

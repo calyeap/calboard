@@ -154,7 +154,22 @@ function impliedReturnInput(overrides: Partial<ImpliedReturnOnNewCapitalInput> =
   };
 }
 
-describe("computeImpliedReturnOnNewCapital", () => {
+// APPROVED DEFINITION (Command Center ruling, 2026-09-05): implied return
+// on new capital ≈ year-over-year NOPAT growth ÷ (same fiscal year's
+// reinvestment ÷ NOPAT). An approximate growth-implied return diagnostic
+// — not an exact accounting identity, not a measured/realised return —
+// approved as a clarification ALONGSIDE the frozen source methodology,
+// not as a reading the source's own wording ("FY26's 18% growth",
+// unqualified) established. See reinvestmentRonic.ts's doc comment for
+// the full citation and ruling text.
+//
+// Split below into two groups per that ruling's own instruction: pure
+// arithmetic/gating correctness of the approved formula (this group),
+// versus whether that formula reproduces Microsoft's actual historical
+// figures (next group, below) — the latter remains UNRESOLVED because
+// the source's growth metric (NOPAT vs. revenue) for its own 18%/20.9%/
+// 27.2% figures is still not established.
+describe("computeImpliedReturnOnNewCapital — arithmetic verification", () => {
   it("computes implied return = growth ÷ (reinvestment ÷ NOPAT) with clean synthetic inputs", () => {
     // reinvestmentInput() sums to 40+5+24.6-20+5 = 54.6; rate = 54.6/1000 = 0.0546.
     // implied return = 0.2 / 0.0546 = 3.663003663...
@@ -195,19 +210,35 @@ describe("computeImpliedReturnOnNewCapital", () => {
       expect(result.value.cause).toContain("financeLeaseRouAdditions");
     }
   });
+});
 
-  // CROSS-CONSISTENCY CHECK using only the four numbers already in the
-  // hashed spec (§5.4, §11.4): 66% / 27.2% (cash-capex-only) and 86% /
-  // 20.9% (lease-inclusive). Growth is back-solved independently from
-  // EACH pair (growth = reinvestmentRate × impliedReturn) rather than
-  // taken from any external "18%" figure, which does not appear in any
-  // hashed artefact. The two back-solved growth figures — 17.952% and
-  // 17.974% — agree to within 0.022 points, consistent with a single
-  // underlying growth rate given the spec's own one-decimal rounding of
-  // all four inputs. This proves the IDENTITY is self-consistent against
-  // hash-verified numbers; it is not an independent reproduction of
-  // 20.9% from a separately-disclosed growth figure, which no hashed
-  // artefact supplies.
+// HISTORICAL-REFERENCE ACCEPTANCE — Microsoft FY26 (UNRESOLVED, not an
+// arithmetic-correctness question). Uses the four numbers already in the
+// hashed spec (§5.4, §11.4): 66% / 27.2% (cash-capex-only) and 86% /
+// 20.9% (lease-inclusive). Growth is back-solved independently from EACH
+// pair (growth = reinvestmentRate × impliedReturn).
+//
+// CORRECTED: this comment previously claimed no external "18%" figure
+// appears in any hashed artefact. That was true only of the spec/design
+// files originally on hand — the source methodology document
+// (calboard-valuation-methodology_2.md, hash-verified against the spec's
+// own citation) explicitly states "FY26's 18% growth" in §3.3, alongside
+// "17.8% five-year, 22.0% excluding ~$69B of Activision goodwill." The
+// two figures below (17.952%, 17.974%) are therefore confirming a real,
+// source-stated growth rate, not merely internally consistent with each
+// other.
+//
+// STILL UNRESOLVED, even after the Command Center's approved definition
+// above: that ruling settles what THIS MODULE computes going forward
+// (NOPAT growth, same-year reinvestment/NOPAT), but does not and cannot
+// establish what the SOURCE METHODOLOGY's own "FY26's 18% growth" meant
+// when it produced 20.9%/27.2% — the source text never disambiguates
+// NOPAT growth from revenue growth. The tests below therefore remain a
+// historical-reference/self-consistency check of the ARITHMETIC using
+// hash-verified numbers, not a settled reproduction of Microsoft's
+// original calculation, and must not be read as accepting that
+// reproduction.
+describe("computeImpliedReturnOnNewCapital — Microsoft historical reference (UNRESOLVED growth basis)", () => {
   it("the two independently back-solved FY26 growth figures (from the 66%/27.2% pair and the 86%/20.9% pair) agree to within the spec's own rounding precision", () => {
     const cashCapexOnlyRate = new Decimal("0.66");
     const cashCapexOnlyReturn = new Decimal("0.272");
