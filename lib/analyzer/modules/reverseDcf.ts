@@ -306,9 +306,17 @@ export function projectReverseDcfValue(
   ronic: Decimal,
   rate: Decimal,
   baseRevenue: Decimal,
-  nopatTaxRate: Decimal
+  nopatTaxRate: Decimal,
+  // Optional, defaulting to the policy constant — every existing caller
+  // (the bisection search and final projection below, plus every
+  // existing test) omits this and gets EXACTLY the prior hardcoded
+  // behaviour. Added solely so M14's sensitivity tornado can hold this
+  // model's terminal growth at the SAME selected base-case value used by
+  // its other rows, rather than silently reverting to the policy default
+  // whenever a base case chooses a different terminal growth. The formula
+  // itself is unchanged.
+  terminalGrowth: Decimal = POLICY.terminalGrowth
 ): ReverseDcfProjection {
-  const terminalGrowth = POLICY.terminalGrowth;
   const discountFactorBase = new Decimal(1).plus(rate);
   const afterTax = new Decimal(1).minus(nopatTaxRate);
 

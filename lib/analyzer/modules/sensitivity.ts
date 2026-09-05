@@ -76,22 +76,37 @@ export function buildSensitivityResult(): SensitivityResult {
 // generic mechanism, not a copy of anyone's DCF math). Every valuation is
 // performed by a `ValuationFunction`/`TwoWayValuationFunction` the CALLER
 // supplies, closing over the existing forward-valuation model and
-// whichever base-case assumptions are held fixed. This file's own tests
-// wire real closures against `computeScenarioEnterpriseValue` (§7.2 M15)
-// and `projectReverseDcfValue` (§7.2 M7, in its ordinary given-growth
-// mode — the same mode M7's own bisection search already uses
-// internally, never re-solving anything here) to prove genuine
-// integration, using coherent growth paths via `buildFixedShapeGrowthPath`
-// for every growth-path value — never a flat/spliced substitute. NO
-// valuation formula is altered or duplicated by this file; a rate at or
-// below terminal growth (or any other input combination the underlying
-// model does not itself guard) surfaces whatever that unmodified formula
-// produces, uncaught and unclamped.
+// whichever base-case assumptions are held fixed. NO valuation formula is
+// altered or duplicated by this file; a rate at or below terminal growth
+// (or any other input combination the underlying model does not itself
+// guard) surfaces whatever that unmodified formula produces, uncaught and
+// unclamped.
 //
-// RONIC's row deliberately does not vary terminal growth — RONIC only
-// exists as a parameter of `projectReverseDcfValue`, which fixes terminal
-// growth at the policy constant internally (unchanged, as it always has);
-// this is a documented simplification, not a silent inconsistency.
+// ALL FIVE TORNADO ROWS MUST SHARE ONE MODEL, evaluated at ONE base case
+// — this is why. `computeScenarioEnterpriseValue` (§7.2 M15,
+// capital-intensity-driven reinvestment) and `projectReverseDcfValue`
+// (§7.2 M7, RONIC-driven reinvestment, in its ordinary given-growth mode
+// — the same mode M7's own bisection search already uses internally,
+// never re-solving anything here) are VERIFIED to differ economically:
+// their reinvestment formulas (capitalIntensity × revenue vs. NOPAT ×
+// next-year-growth ÷ RONIC) do not coincide for an arbitrary
+// capitalIntensity/RONIC pairing, confirmed by `sensitivity.test.ts`'s own
+// "the two forward models diverge" check. An earlier version of this
+// module mixed the two — four rows through `computeScenarioEnterpriseValue`,
+// the RONIC row through `projectReverseDcfValue` — which silently gave
+// each row a DIFFERENT base-case value, violating "vary only the named
+// input, hold everything else — including which base case — fixed."
+// Corrected: this file's own tests route ALL FIVE tornado rows through
+// `projectReverseDcfValue` alone (the only one of the two existing models
+// that accepts RONIC as a parameter at all), using coherent growth paths
+// via that function's own internal `growthAt` fixed-shape mechanics for
+// every growth value — never a flat/spliced substitute — and the same
+// function's now-optional `terminalGrowth` parameter (threaded through
+// for exactly this reason) so the terminal-growth row, and every OTHER
+// row, honour the base case's own selected terminal growth rather than
+// silently reverting to the policy default. The two-way tables are
+// unaffected — neither table names RONIC as an axis, so
+// `computeScenarioEnterpriseValue` alone is self-consistent for both.
 export type TornadoDriver = "growth" | "operatingMargin" | "discountRate" | "terminalGrowth" | "ronic";
 
 export const TORNADO_DRIVERS: readonly TornadoDriver[] = [

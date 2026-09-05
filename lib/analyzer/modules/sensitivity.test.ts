@@ -63,44 +63,68 @@ function scenarioValueAt(growth: Decimal, margin: Decimal, rate: Decimal, termin
 
 const BASE_CASE_VALUE = scenarioValueAt(BASE_GROWTH, BASE_MARGIN, BASE_RATE, BASE_TERMINAL_GROWTH);
 
+// The tornado's own base-case evaluator — see "the two forward models
+// diverge" below for why this must be a SINGLE model, distinct from
+// scenarioValueAt above, used for every one of the five tornado rows.
+function reverseDcfValueAt(growth: Decimal, margin: Decimal, ronic: Decimal, rate: Decimal, terminalGrowth: Decimal): Decimal {
+  return projectReverseDcfValue(growth, margin, ronic, rate, BASE_REVENUE, BASE_TAX, terminalGrowth).ev;
+}
+
+const TORNADO_BASE_CASE_VALUE = reverseDcfValueAt(BASE_GROWTH, BASE_MARGIN, BASE_RONIC, BASE_RATE, BASE_TERMINAL_GROWTH);
+
 function range(values: readonly [number, number, number], rationale: string): AnalystSuppliedRange {
   return { values: values.map((v) => new Decimal(v)) as unknown as readonly [Decimal, Decimal, Decimal], rationale };
 }
 
+describe("the two forward models diverge — why the tornado cannot mix them", () => {
+  it("computeScenarioEnterpriseValue and projectReverseDcfValue do NOT reproduce the same value for an arbitrary capitalIntensity/RONIC pairing, even with identical growth, margin, rate and terminal growth", () => {
+    const viaScenario = scenarioValueAt(BASE_GROWTH, BASE_MARGIN, BASE_RATE, BASE_TERMINAL_GROWTH);
+    const viaReverseDcf = reverseDcfValueAt(BASE_GROWTH, BASE_MARGIN, BASE_RONIC, BASE_RATE, BASE_TERMINAL_GROWTH);
+    // capitalIntensity (10%) and RONIC (25%) are unrelated free parameters
+    // representing different reinvestment mechanics (revenue x intensity
+    // vs. NOPAT x next-year-growth / RONIC) — nothing forces these two
+    // formulas to coincide, and they do not here. This is the empirical
+    // basis for routing all five tornado rows through ONE of the two
+    // models (projectReverseDcfValue, the only one that accepts RONIC),
+    // never mixing them within a single tornado.
+    expect(viaScenario.toString()).not.toBe(viaReverseDcf.toString());
+  });
+});
+
 describe("computeTornadoRow", () => {
-  it("computes the growth row through computeScenarioEnterpriseValue with a coherent path per value", () => {
+  it("computes the growth row through projectReverseDcfValue with a coherent path per value", () => {
     const wideGrowthRange = range([0, 0.2, 0.6], "SYNTHETIC test fixture — wide growth swing");
     const result = computeTornadoRow(
       "growth",
       wideGrowthRange,
-      BASE_CASE_VALUE,
-      (g) => scenarioValueAt(g, BASE_MARGIN, BASE_RATE, BASE_TERMINAL_GROWTH)
+      TORNADO_BASE_CASE_VALUE,
+      (g) => reverseDcfValueAt(g, BASE_MARGIN, BASE_RONIC, BASE_RATE, BASE_TERMINAL_GROWTH)
     );
     expect(result.available).toBe(true);
     if (!result.available) return;
     // Spot-check against a direct call — proves genuine reuse of the
     // existing model, not a reimplementation inside sensitivity.ts.
-    expect(result.values[0].toString()).toBe(scenarioValueAt(new Decimal(0), BASE_MARGIN, BASE_RATE, BASE_TERMINAL_GROWTH).toString());
-    expect(result.values[2].toString()).toBe(scenarioValueAt(new Decimal("0.6"), BASE_MARGIN, BASE_RATE, BASE_TERMINAL_GROWTH).toString());
+    expect(result.values[0].toString()).toBe(reverseDcfValueAt(new Decimal(0), BASE_MARGIN, BASE_RONIC, BASE_RATE, BASE_TERMINAL_GROWTH).toString());
+    expect(result.values[2].toString()).toBe(reverseDcfValueAt(new Decimal("0.6"), BASE_MARGIN, BASE_RONIC, BASE_RATE, BASE_TERMINAL_GROWTH).toString());
     // A 0%-60% growth swing on a ten-year DCF is large — must display.
     expect(result.displayed).toBe(true);
   });
 
   it("computes the RONIC row through projectReverseDcfValue's given-growth (not solved-growth) mode", () => {
     const ronicRange = range([0.1, 0.25, 0.5], "SYNTHETIC test fixture — wide RONIC swing");
-    const result = computeTornadoRow("ronic", ronicRange, BASE_CASE_VALUE, (r) =>
-      projectReverseDcfValue(BASE_GROWTH, BASE_MARGIN, r, BASE_RATE, BASE_REVENUE, BASE_TAX).ev
+    const result = computeTornadoRow("ronic", ronicRange, TORNADO_BASE_CASE_VALUE, (r) =>
+      reverseDcfValueAt(BASE_GROWTH, BASE_MARGIN, r, BASE_RATE, BASE_TERMINAL_GROWTH)
     );
     expect(result.available).toBe(true);
     if (!result.available) return;
     expect(result.values[0].toString()).toBe(
-      projectReverseDcfValue(BASE_GROWTH, BASE_MARGIN, new Decimal("0.1"), BASE_RATE, BASE_REVENUE, BASE_TAX).ev.toString()
+      reverseDcfValueAt(BASE_GROWTH, BASE_MARGIN, new Decimal("0.1"), BASE_RATE, BASE_TERMINAL_GROWTH).toString()
     );
   });
 
   it("is UNAVAILABLE, never 'immaterial', when no range is supplied", () => {
-    const result = computeTornadoRow("operatingMargin", null, BASE_CASE_VALUE, (m) =>
-      scenarioValueAt(BASE_GROWTH, m, BASE_RATE, BASE_TERMINAL_GROWTH)
+    const result = computeTornadoRow("operatingMargin", null, TORNADO_BASE_CASE_VALUE, (m) =>
+      reverseDcfValueAt(BASE_GROWTH, m, BASE_RONIC, BASE_RATE, BASE_TERMINAL_GROWTH)
     );
     expect(result.available).toBe(false);
     if (result.available) return;
@@ -112,8 +136,8 @@ describe("computeTornadoRow", () => {
 
   it("is UNAVAILABLE when a range is supplied without a recorded rationale", () => {
     const noRationale: AnalystSuppliedRange = { values: [new Decimal(0), new Decimal("0.1"), new Decimal("0.2")], rationale: "  " };
-    const result = computeTornadoRow("growth", noRationale, BASE_CASE_VALUE, (g) =>
-      scenarioValueAt(g, BASE_MARGIN, BASE_RATE, BASE_TERMINAL_GROWTH)
+    const result = computeTornadoRow("growth", noRationale, TORNADO_BASE_CASE_VALUE, (g) =>
+      reverseDcfValueAt(g, BASE_MARGIN, BASE_RONIC, BASE_RATE, BASE_TERMINAL_GROWTH)
     );
     expect(result.available).toBe(false);
     if (!result.available) expect(result.cause).toContain("rationale");
@@ -123,44 +147,121 @@ describe("computeTornadoRow", () => {
     // A tiny, tight discount-rate range around the base case moves value
     // very little relative to a 10%+10bp-ish swing.
     const narrowRateRange = range([0.099, 0.1, 0.101], "SYNTHETIC test fixture — deliberately negligible swing");
-    const result = computeTornadoRow("discountRate", narrowRateRange, BASE_CASE_VALUE, (r) =>
-      scenarioValueAt(BASE_GROWTH, BASE_MARGIN, r, BASE_TERMINAL_GROWTH)
+    const result = computeTornadoRow("discountRate", narrowRateRange, TORNADO_BASE_CASE_VALUE, (r) =>
+      reverseDcfValueAt(BASE_GROWTH, BASE_MARGIN, BASE_RONIC, r, BASE_TERMINAL_GROWTH)
     );
     expect(result.available).toBe(true);
     if (result.available) expect(result.displayed).toBe(false);
   });
 });
 
+// Builds one shared driver config using projectReverseDcfValue
+// exclusively (per "the two forward models diverge" above) for a given
+// base case — reused by both the ordinary and non-default-terminal-
+// growth regression tests below.
+function reverseDcfTornadoDrivers(baseCase: {
+  growth: Decimal;
+  margin: Decimal;
+  ronic: Decimal;
+  rate: Decimal;
+  terminalGrowth: Decimal;
+}): Record<(typeof TORNADO_DRIVERS)[number], TornadoDriverConfig> {
+  return {
+    growth: {
+      range: range([0, 0.2, 0.4], "SYNTHETIC fixture"),
+      valuationFunction: (g) => reverseDcfValueAt(g, baseCase.margin, baseCase.ronic, baseCase.rate, baseCase.terminalGrowth),
+    },
+    operatingMargin: {
+      range: range([0.2, 0.3, 0.4], "SYNTHETIC fixture"),
+      valuationFunction: (m) => reverseDcfValueAt(baseCase.growth, m, baseCase.ronic, baseCase.rate, baseCase.terminalGrowth),
+    },
+    discountRate: {
+      range: range([0.08, 0.1, 0.12], "SYNTHETIC fixture"),
+      valuationFunction: (r) => reverseDcfValueAt(baseCase.growth, baseCase.margin, baseCase.ronic, r, baseCase.terminalGrowth),
+    },
+    terminalGrowth: {
+      range: range([baseCase.terminalGrowth.minus("0.01").toNumber(), baseCase.terminalGrowth.toNumber(), baseCase.terminalGrowth.plus("0.01").toNumber()], "SYNTHETIC fixture"),
+      valuationFunction: (tg) => reverseDcfValueAt(baseCase.growth, baseCase.margin, baseCase.ronic, baseCase.rate, tg),
+    },
+    ronic: {
+      range: range([0.15, 0.25, 0.35], "SYNTHETIC fixture"),
+      valuationFunction: (r) => reverseDcfValueAt(baseCase.growth, baseCase.margin, r, baseCase.rate, baseCase.terminalGrowth),
+    },
+  };
+}
+
 describe("computeTornado", () => {
   it("evaluates all five drivers in the fixed TORNADO_DRIVERS order, one row failing independently of the others", () => {
-    const drivers: Record<(typeof TORNADO_DRIVERS)[number], TornadoDriverConfig> = {
-      growth: {
-        range: range([0, 0.2, 0.4], "SYNTHETIC fixture"),
-        valuationFunction: (g) => scenarioValueAt(g, BASE_MARGIN, BASE_RATE, BASE_TERMINAL_GROWTH),
-      },
-      operatingMargin: {
-        range: null, // deliberately missing
-        valuationFunction: (m) => scenarioValueAt(BASE_GROWTH, m, BASE_RATE, BASE_TERMINAL_GROWTH),
-      },
-      discountRate: {
-        range: range([0.08, 0.1, 0.12], "SYNTHETIC fixture"),
-        valuationFunction: (r) => scenarioValueAt(BASE_GROWTH, BASE_MARGIN, r, BASE_TERMINAL_GROWTH),
-      },
-      terminalGrowth: {
-        range: range([0.02, 0.03, 0.04], "SYNTHETIC fixture"),
-        valuationFunction: (tg) => scenarioValueAt(BASE_GROWTH, BASE_MARGIN, BASE_RATE, tg),
-      },
-      ronic: {
-        range: range([0.15, 0.25, 0.35], "SYNTHETIC fixture"),
-        valuationFunction: (r) => projectReverseDcfValue(BASE_GROWTH, BASE_MARGIN, r, BASE_RATE, BASE_REVENUE, BASE_TAX).ev,
-      },
-    };
+    const drivers = reverseDcfTornadoDrivers({
+      growth: BASE_GROWTH,
+      margin: BASE_MARGIN,
+      ronic: BASE_RONIC,
+      rate: BASE_RATE,
+      terminalGrowth: BASE_TERMINAL_GROWTH,
+    });
+    drivers.operatingMargin = { ...drivers.operatingMargin, range: null }; // deliberately missing
 
-    const rows = computeTornado(BASE_CASE_VALUE, drivers);
+    const rows = computeTornado(TORNADO_BASE_CASE_VALUE, drivers);
     expect(rows.map((r) => r.driver)).toEqual(["growth", "operatingMargin", "discountRate", "terminalGrowth", "ronic"]);
     expect(rows[1].available).toBe(false); // operatingMargin, missing range
     expect(rows[0].available).toBe(true); // growth, unaffected by margin's gap
     expect(rows[4].available).toBe(true); // ronic, unaffected by margin's gap
+  });
+
+  it("REGRESSION — every row, evaluated at its own base-case input, reproduces the SAME base enterprise value (identical growth, margin, rate, terminal growth and reinvestment/RONIC)", () => {
+    const drivers = reverseDcfTornadoDrivers({
+      growth: BASE_GROWTH,
+      margin: BASE_MARGIN,
+      ronic: BASE_RONIC,
+      rate: BASE_RATE,
+      terminalGrowth: BASE_TERMINAL_GROWTH,
+    });
+
+    const growthAtBase = drivers.growth.valuationFunction(BASE_GROWTH);
+    const marginAtBase = drivers.operatingMargin.valuationFunction(BASE_MARGIN);
+    const rateAtBase = drivers.discountRate.valuationFunction(BASE_RATE);
+    const terminalGrowthAtBase = drivers.terminalGrowth.valuationFunction(BASE_TERMINAL_GROWTH);
+    const ronicAtBase = drivers.ronic.valuationFunction(BASE_RONIC);
+
+    for (const value of [growthAtBase, marginAtBase, rateAtBase, terminalGrowthAtBase, ronicAtBase]) {
+      expect(value.toString()).toBe(TORNADO_BASE_CASE_VALUE.toString());
+    }
+  });
+
+  it("REGRESSION — a NON-DEFAULT terminal-growth base case (5%, not policy's 3%) still reproduces one shared base value across all five rows, proving terminalGrowth is threaded into every row including RONIC", () => {
+    const nonDefaultTerminalGrowth = new Decimal("0.05");
+    expect(nonDefaultTerminalGrowth.toString()).not.toBe(BASE_TERMINAL_GROWTH.toString()); // confirms this really is non-default
+
+    const nonDefaultBaseValue = reverseDcfValueAt(BASE_GROWTH, BASE_MARGIN, BASE_RONIC, BASE_RATE, nonDefaultTerminalGrowth);
+    const drivers = reverseDcfTornadoDrivers({
+      growth: BASE_GROWTH,
+      margin: BASE_MARGIN,
+      ronic: BASE_RONIC,
+      rate: BASE_RATE,
+      terminalGrowth: nonDefaultTerminalGrowth,
+    });
+
+    // Before threading terminalGrowth through projectReverseDcfValue, the
+    // RONIC row would have silently reverted to POLICY.terminalGrowth
+    // (3%) here, diverging from the other four rows' 5% base case — this
+    // is the exact defect the correction fixes.
+    const ronicAtBase = drivers.ronic.valuationFunction(BASE_RONIC);
+    expect(ronicAtBase.toString()).toBe(nonDefaultBaseValue.toString());
+
+    const growthAtBase = drivers.growth.valuationFunction(BASE_GROWTH);
+    expect(growthAtBase.toString()).toBe(nonDefaultBaseValue.toString());
+  });
+
+  it("changing RONIC alone leaves every other assumption fixed", () => {
+    const lowRonicValue = reverseDcfValueAt(BASE_GROWTH, BASE_MARGIN, new Decimal("0.15"), BASE_RATE, BASE_TERMINAL_GROWTH);
+    const highRonicValue = reverseDcfValueAt(BASE_GROWTH, BASE_MARGIN, new Decimal("0.35"), BASE_RATE, BASE_TERMINAL_GROWTH);
+    // Different RONIC must move the value...
+    expect(lowRonicValue.toString()).not.toBe(highRonicValue.toString());
+    // ...but re-running the IDENTICAL RONIC with the same growth, margin,
+    // rate and terminal growth must reproduce the identical value — proving
+    // nothing else silently shifted between calls.
+    const lowRonicValueRepeat = reverseDcfValueAt(BASE_GROWTH, BASE_MARGIN, new Decimal("0.15"), BASE_RATE, BASE_TERMINAL_GROWTH);
+    expect(lowRonicValueRepeat.toString()).toBe(lowRonicValue.toString());
   });
 });
 
