@@ -9,24 +9,65 @@ import {
 } from "./preRevenue";
 
 describe("computeUnitEconomicsBreakeven", () => {
-  it("computes the per-unit annual surplus when contribution exceeds the required capital charge", () => {
-    // contribution = 10-4=6; required charge = 20*0.1=2; surplus=4.
-    const result = computeUnitEconomicsBreakeven(new Decimal(10), new Decimal(4), new Decimal(20), new Decimal("0.1"));
+  it("computes the per-unit NPV at the capex date when contribution exceeds the required capital charge, with zero construction lead", () => {
+    // At leadYears=0, this reproduces the original (pre-timing-correction)
+    // arithmetic exactly: discount factor = (1+0.1)^0 = 1.
+    // perpetuity = 6/0.1 = 60; NPV = 60 - 20 = 40.
+    const result = computeUnitEconomicsBreakeven(new Decimal(10), new Decimal(4), new Decimal(20), new Decimal("0.1"), 0);
     expect(result.suppressed).toBe(false);
-    if (!result.suppressed) expect(result.value.toString()).toBe("4");
+    if (!result.suppressed) expect(result.value.toString()).toBe("40");
   });
 
-  it("returns NOT ACHIEVABLE AT ANY SCALE when a single unit destroys value, never a very large number", () => {
-    // contribution = 10-9=1; required charge = 20*0.1=2; 1 <= 2, destructive.
-    const result = computeUnitEconomicsBreakeven(new Decimal(10), new Decimal(9), new Decimal(20), new Decimal("0.1"));
+  it("returns NOT ACHIEVABLE AT ANY SCALE when a single unit destroys value even with zero lead, never a very large number", () => {
+    // contribution = 10-9=1; perpetuity = 1/0.1=10; capex=20; 10 <= 20, destructive.
+    const result = computeUnitEconomicsBreakeven(new Decimal(10), new Decimal(9), new Decimal(20), new Decimal("0.1"), 0);
     expect(result.suppressed).toBe(true);
     if (result.suppressed) expect(result.state).toBe("NOT ACHIEVABLE AT ANY SCALE");
   });
 
   it("returns INCOMPLETE when the required return is unconfigured", () => {
-    const result = computeUnitEconomicsBreakeven(new Decimal(10), new Decimal(4), new Decimal(20), null);
+    const result = computeUnitEconomicsBreakeven(new Decimal(10), new Decimal(4), new Decimal(20), null, 2);
     expect(result.suppressed).toBe(true);
     if (result.suppressed) expect(result.state).toBe("INCOMPLETE");
+  });
+
+  // REGRESSION — the construction-timing fix. Chosen so the pre-correction
+  // (lead=0) arithmetic PASSES and only accounting for the same
+  // construction lead the funding stack already uses (lead=2, matching
+  // §7.1's PROVISIONAL 2-year constant) FLIPS it to NOT ACHIEVABLE.
+  //
+  // revenuePerUnit=20, operatingCostPerUnit=2 -> contribution=18.
+  // requiredReturn=0.15, capexPerUnit=100.
+  //   lead=0: perpetuity = 18/0.15 = 120; NPV = 120-100 = 20 > 0 -> passes.
+  //   lead=2: discount factor = 1.15^-2 ≈ 0.756144;
+  //           perpetuity-at-capex-date = 120 * 0.756144 ≈ 90.737 <= 100
+  //           -> NOT ACHIEVABLE.
+  it("flips from achievable to NOT ACHIEVABLE once the existing construction delay is accounted for — same inputs, lead=0 vs lead=2", () => {
+    const revenuePerUnit = new Decimal(20);
+    const operatingCostPerUnit = new Decimal(2);
+    const capexPerUnit = new Decimal(100);
+    const requiredReturn = new Decimal("0.15");
+
+    const withoutLead = computeUnitEconomicsBreakeven(revenuePerUnit, operatingCostPerUnit, capexPerUnit, requiredReturn, 0);
+    expect(withoutLead.suppressed).toBe(false);
+    if (!withoutLead.suppressed) expect(withoutLead.value.toString()).toBe("20");
+
+    const withLead = computeUnitEconomicsBreakeven(revenuePerUnit, operatingCostPerUnit, capexPerUnit, requiredReturn, 2);
+    expect(withLead.suppressed).toBe(true);
+    if (withLead.suppressed) expect(withLead.state).toBe("NOT ACHIEVABLE AT ANY SCALE");
+  });
+
+  it("passing this check is a necessary screen, not proof of project viability — it says nothing about debt service, prepayments or dilution", () => {
+    // No behavioural assertion here beyond what the two tests above already
+    // cover — this test exists so the constraint is checked into the suite
+    // as a named expectation, not only as a code comment. A computed
+    // (non-suppressed) result from this function must not be read, by any
+    // future caller, as "the project is viable."
+    const result = computeUnitEconomicsBreakeven(new Decimal(20), new Decimal(2), new Decimal(100), new Decimal("0.15"), 0);
+    expect(result.suppressed).toBe(false);
+    // The function's return type carries no viability verdict — only a
+    // per-unit NPV figure or a suppressing state. There is no field here
+    // that could be mistaken for "project approved."
   });
 });
 

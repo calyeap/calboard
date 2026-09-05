@@ -253,13 +253,12 @@ describe("computeReverseDcfGrid — GOLDEN: Microsoft reference grid (frozen v1.
 
   const cells = computeReverseDcfGrid(msftInput);
 
-  // A tolerance of 0.15 points, not an exact rounding match: the reference
-  // inputs themselves are already rounded (price to the cent, shares to
-  // four decimals, revenue to the nearest $B), so a bisection solve against
-  // them lands close to but not always exactly on the documented one-
-  // decimal figure. This is "reproduces within the frozen rounding policy,"
-  // not "reproduces exactly" — the frozen grid's own numbers are rounded
-  // too.
+  // ±0.15 points is an APPROXIMATE CALIBRATION CHECK, not a tolerance
+  // derived from a stated input-precision analysis — it has not been
+  // justified from documented input precision, only observed to be wide
+  // enough to admit the deltas actually produced (0.01–0.10 points, per
+  // the audit run recorded in this session). Label it as such rather than
+  // implying it follows from "the inputs are rounded."
   function closeTo(actual: Decimal, expected: number, tolerance: number) {
     expect(actual.toNumber()).toBeGreaterThan(expected - tolerance);
     expect(actual.toNumber()).toBeLessThan(expected + tolerance);
@@ -267,6 +266,26 @@ describe("computeReverseDcfGrid — GOLDEN: Microsoft reference grid (frozen v1.
 
   // Five cells solve to a normal growth rate (terminal share under 100%).
   // [marginLevel, rate, expected 5yr growth %, expected 10yr CAGR %]
+  //
+  // PROVENANCE, precisely — do not blend these with the degenerate cells
+  // below: these five growth/CAGR pairs, and every input used to reproduce
+  // them (price $510.12, shares 7.4255B, bridge $6.3B, base revenue $332B,
+  // RONIC 17.8%), were supplied in this session's own chat rather than
+  // read from a file. That does not make them illegitimate as fixture
+  // inputs — a user-supplied number is a normal, valid test fixture, and
+  // hashing a file containing it would not independently verify it either
+  // (a hash proves a file's bytes are unchanged, not that its contents
+  // are the ORIGINAL calculation's actual inputs). What is genuinely
+  // unresolved is narrower and cannot be closed by finding or hashing any
+  // file this session doesn't already have: the ORIGINAL v1.0.1 rerun's
+  // full input set, numeric precision, and modelling conventions —
+  // including the 20% tax rate below, itself a calibration fit, not a
+  // disclosed input — have not been established. Exact reproduction of
+  // the historical Microsoft case stays open for that reason, not a
+  // file-provenance reason. Only the ONE cell at current/8% (18.5%/13.7%)
+  // and the four degenerate terminal shares in the block below are
+  // traceable to the hashed spec file itself (§11.4, §5.4), and match at
+  // whole-percent precision for the terminal shares.
   const computedReference: [string, number, number, number][] = [
     ["current", 0.08, 18.5, 13.7],
     ["current", 0.1, 28.7, 20.6],
@@ -286,9 +305,12 @@ describe("computeReverseDcfGrid — GOLDEN: Microsoft reference grid (frozen v1.
     closeTo(cell.tenYearCagr.value.mul(100), expectedCagrPct, 0.15);
   });
 
-  // The remaining four cells are the frozen contract's own required
-  // degenerate cells (§11.4 of the spec, reproduced exactly by the
-  // recovered v1.0.1 reference grid): terminal share exceeds 100%, so the
+  // The remaining four cells ARE traceable to the hashed spec file itself
+  // (§11.4: "46.8%/12%, 41.8%/12%, 38.0%/10%, 38.0%/12%, at terminal
+  // shares of 115%, 120%, 101%, 124%") — unlike computedReference above,
+  // these four numbers do not depend on the user-message-only inputs for
+  // their EXISTENCE (only for the specific base revenue/price/RONIC used
+  // to reproduce them numerically). Terminal share exceeds 100%, so the
   // module correctly suppresses growth/CAGR/revenue as DEGENERATE —
   // TERMINAL EXCEEDS TOTAL VALUE rather than showing a number.
   // [marginLevel, rate, documented terminal share %]

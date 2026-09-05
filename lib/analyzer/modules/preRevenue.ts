@@ -12,33 +12,64 @@ import type { Figure, FundingRamp, FundingStackLine, SuccessDefinitionState } fr
 
 // --- unit economics -------------------------------------------------------
 
-// Runs BEFORE the scale solve (§7.2 M16). A simplified per-unit test: if a
-// single unit's annual contribution margin does not cover its own
-// capital charge (capex × required return), no scale fixes that — every
-// additional unit destroys value the same way. This is a deliberately
-// simple per-unit annuity check, not a full per-unit NPV over an assumed
-// unit lifetime — the spec specifies the PRINCIPLE ("runs before scale,
-// returns a state rather than a very large number when destructive") but
-// not a full per-unit cash-flow-timing model, so this implementation goes
-// only as far as that principle requires.
+// Runs BEFORE the scale solve (§7.2 M16). A per-unit screening test: if a
+// single unit's contribution margin, valued as of the SAME date its capex
+// is spent, does not cover that capex, no scale fixes that — every
+// additional unit destroys value the same way.
+//
+// PERPETUITY ASSUMPTION, kept explicit and unchanged: the unit's
+// contribution margin is treated as constant and running forever once it
+// starts — there is no finite asset-lifetime term here, and this
+// correction does not add one. That is a deliberate simplification, not
+// an oversight; §7.2 does not specify a per-unit lifetime, and inventing
+// one is exactly what was asked NOT to be done.
+//
+// CONSTRUCTION-TIMING CORRECTION: capex is spent at the unit's
+// capitalisation date (year 0 for this per-unit test); the first
+// operating cash flow arrives `constructionLeadYears` later. Both dates
+// are already defined by, and must match, the funding stack this module
+// also computes (`FundingStackYearParams.constructionLeadYears` — every
+// unit is capitalised `constructionLeadYears` before it comes into
+// service, §7.2 M16). This function takes the same parameter rather than
+// its own assumption, so the two halves of this module cannot silently
+// disagree about the lag. The perpetuity value of the (still perpetual,
+// still constant) contribution margin is discounted back from its actual
+// start date to the capex date by (1+requiredReturn)^(−constructionLeadYears)
+// before comparing to capex — the ONLY change from the undiscounted
+// version; the perpetuity itself is untouched.
+//
+// This is a NECESSARY, not sufficient, per-unit screen. Passing it does
+// not prove the project is viable — it only means this one unit's
+// economics are not destructive before construction-lead timing and
+// perpetuity value are even considered against everything else the
+// funding stack models (debt service, prepayments, dilution).
 export function computeUnitEconomicsBreakeven(
   revenuePerUnit: Decimal,
   operatingCostPerUnit: Decimal,
   capexPerUnit: Decimal,
-  requiredReturn: Decimal | null
+  requiredReturn: Decimal | null,
+  constructionLeadYears: number
 ): Figure<Decimal> {
   if (requiredReturn === null) {
     return suppressedValue("INCOMPLETE", "missing REQUIRED input(s): requiredReturn");
   }
 
   const annualContribution = revenuePerUnit.minus(operatingCostPerUnit);
-  const requiredAnnualReturn = capexPerUnit.mul(requiredReturn);
+  const perpetuityValueAtServiceStart = annualContribution.dividedBy(requiredReturn);
+  const discountFactor = new Decimal(1).plus(requiredReturn).pow(-constructionLeadYears);
+  const perpetuityValueAtCapexDate = perpetuityValueAtServiceStart.mul(discountFactor);
 
-  if (annualContribution.lessThanOrEqualTo(requiredAnnualReturn)) {
-    return suppressedValue("NOT ACHIEVABLE AT ANY SCALE", "unit economics negative before scale solve");
+  if (perpetuityValueAtCapexDate.lessThanOrEqualTo(capexPerUnit)) {
+    return suppressedValue(
+      "NOT ACHIEVABLE AT ANY SCALE",
+      "unit economics negative before scale solve (construction-delay-adjusted)"
+    );
   }
 
-  return computedValue(annualContribution.minus(requiredAnnualReturn), CLEAN_PROVENANCE);
+  // NPV at the capex date (a lump sum, not an annual figure — this is the
+  // one deliberate change in meaning from the pre-correction version,
+  // which returned an annual surplus).
+  return computedValue(perpetuityValueAtCapexDate.minus(capexPerUnit), CLEAN_PROVENANCE);
 }
 
 // --- funding stack, solved year by year -----------------------------------

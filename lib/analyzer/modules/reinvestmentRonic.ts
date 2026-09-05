@@ -9,6 +9,15 @@ import type { DiscountRate, ReinvestmentRonicResult, RonicLadderState, SourcedVa
 // five-year trailing return, classified per policy-rate grid cell). A
 // missing reinvestment input never blocks RONIC, and vice versa — they
 // have disjoint REQUIRED-input sets per §4.2.
+//
+// NOT IMPLEMENTED, recorded so it is not silently forgotten: §5.4 and
+// §11.4's "implied return on new capital" diagnostic (20.9% lease-
+// inclusive vs. 27.2% cash-capex-only, at Microsoft's FY26 growth) — a
+// single-year, growth ÷ reinvestment-rate metric, algebraically distinct
+// from the five-year trailing RONIC this module computes. No function
+// here computes growth ÷ reinvestment-rate as its own output, and no
+// field carries it. §11.4's acceptance case requires this figure be
+// confirmed; that requirement is currently unmet by this module.
 
 export interface ReinvestmentInput {
   capex: SourcedValue<Decimal> | null;
