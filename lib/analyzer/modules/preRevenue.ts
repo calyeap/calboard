@@ -347,13 +347,16 @@ export function computeUnitExitEconomicsGrid(input: UnitExitEconomicsGridInput):
 // Required state mappings, preserved from the pre-existing contract:
 //   - `NOT ACHIEVABLE AT ANY SCALE` (§8.6, the spec's own SuppressingState)
 //     is NOT emitted by this gate directly — a single cell only ever
-//     returns "BELOW BREAK-EVEN — GATE FAILS" for ITSELF. That state is
-//     the SCALE SOLVE's own conclusion, reached only if every grid cell
-//     relevant to the modelled scenario fails at the assumed price. The
-//     scale solve (not yet built) is what must read this gate's per-cell
-//     verdicts and decide whether to emit that state — this file does not
-//     aggregate across cells today, and must not start doing so silently
-//     when Step 4 is built without a deliberate decision to do so.
+//     returns "BELOW BREAK-EVEN — GATE FAILS" for ITSELF. If the scale
+//     solve (not yet built) ever emits this state, it must stay SCOPED TO
+//     THE ONE SCENARIO IT IS EVALUATING — that scenario's own specific
+//     capexPerUnit, exitMultiple and assumed-output-price combination —
+//     NEVER a blanket verdict inferred across other grid cells or other
+//     scenarios' assumptions. A different scenario with cheaper capex or
+//     a richer multiple assumption may still clear, independent of this
+//     one's result. This file does not aggregate across cells today, and
+//     Step 4 must not introduce cross-scenario aggregation without a
+//     deliberate, separately-reviewed decision to do so.
 //   - This gate's own `UNAVAILABLE` (missing or invalid input) maps to the
 //     report's ordinary INCOMPLETE/suppressed-dependent-output convention
 //     for whatever downstream figure depends on it — the same fail-closed
