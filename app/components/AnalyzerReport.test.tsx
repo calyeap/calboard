@@ -52,9 +52,17 @@ describe("AnalyzerReport — MSFT", () => {
     expect(screen.getByText(/challenger call has not completed/)).not.toBeNull();
   });
 
-  it("does not render a pre-revenue module section for the mature-profitable profile", () => {
+  it("does not render any pre-revenue-only D subsection for the mature-profitable profile", () => {
     render(<AnalyzerReport result={result} />);
-    expect(screen.queryByText("Pre-revenue module")).toBeNull();
+    expect(screen.queryByText("D — Implied probability of success")).toBeNull();
+    expect(screen.queryByText("D — Unit economics and the scale solve")).toBeNull();
+    expect(screen.queryByText("D — Funding stack")).toBeNull();
+  });
+
+  it("report order is exactly A, B, C, D, E, F, G, H, I, I2, J, at-a-glance — J immediately followed by at-a-glance, no section between them", () => {
+    const { container } = render(<AnalyzerReport result={result} />);
+    const ids = Array.from(container.querySelectorAll("main > section")).map((el) => el.id);
+    expect(ids).toEqual(["A", "B", "C", "D", "E", "F", "G", "H", "I", "I2", "J", "atglance"]);
   });
 });
 
@@ -91,9 +99,33 @@ describe("AnalyzerReport — OKLO", () => {
     expect(def4Row?.textContent).toContain("25%");
   });
 
-  it("renders the pre-revenue module section with all four funding-stack lines represented", () => {
+  it("renders the M16 pre-revenue material as Section D subsections, not a new top-level section", () => {
     render(<AnalyzerReport result={result} />);
-    expect(screen.getByText("Pre-revenue module")).not.toBeNull();
+    expect(screen.getByText("D — Implied probability of success")).not.toBeNull();
+    expect(screen.getByText("D — Unit economics and the scale solve")).not.toBeNull();
+    expect(screen.getByText("D — Funding stack")).not.toBeNull();
     expect(screen.getByText(/Unit-economics breakeven/)).not.toBeNull();
+  });
+
+  it("report order is exactly A, B, C, D, E, F, G, H, I, I2, J, at-a-glance — J immediately followed by at-a-glance, no extra section inserted for the pre-revenue material", () => {
+    const { container } = render(<AnalyzerReport result={result} />);
+    const ids = Array.from(container.querySelectorAll("main > section")).map((el) => el.id);
+    expect(ids).toEqual(["A", "B", "C", "D", "E", "F", "G", "H", "I", "I2", "J", "atglance"]);
+  });
+
+  it("both funding-stack ramps render with their four lines", () => {
+    render(<AnalyzerReport result={result} />);
+    expect(screen.getByText(/Back-loaded/)).not.toBeNull();
+    expect(screen.getByText("Steady")).not.toBeNull();
+    expect(screen.getAllByText("Project debt").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Customer prepayments").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Retained OCF").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("New equity").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("shows the pre-revenue success-case leverage exception in Section C, alongside the company-level PASS", () => {
+    render(<AnalyzerReport result={result} />);
+    expect(screen.getByText(/company today/)).not.toBeNull();
+    expect(screen.getByText(/success-case cash flow is a residual after debt/)).not.toBeNull();
   });
 });

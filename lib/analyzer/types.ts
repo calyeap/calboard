@@ -516,7 +516,14 @@ export type FairValueRange =
       // variant (§10.4, §10.3).
       kind: "pre-revenue-distribution";
       failure: Decimal;
-      successAsCommonlyDescribed: Decimal;
+      // A RANGE, not a single figure — the approved OKLO design mock
+      // (mock-report-oklo.html) shows this as "$31-$48" twice, never one
+      // number, because more than one success definition can legitimately
+      // qualify as "commonly described." `low` equals `high` when exactly
+      // one definition qualifies. Schema-corrected (Milestone 6) from an
+      // earlier single-Decimal shape that had no frozen basis and forced
+      // an invented selection between multiple equally-valid values.
+      successAsCommonlyDescribed: { low: Decimal; high: Decimal };
       successAsPriceRequires: Decimal;
       cashFloor: Decimal;
     }

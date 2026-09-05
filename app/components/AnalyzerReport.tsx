@@ -38,20 +38,12 @@ function num(value: Decimal, dp = 2): string {
   return value.toFixed(dp);
 }
 
-// "Success as commonly described" — restated directly from
-// preRevenue.successDefinitions (which already preserves every qualifying
-// value) rather than FairValueRange.successAsCommonlyDescribed, whose
-// single-Decimal shape cannot represent a range. See assemble.ts's own
-// note on this schema/design gap (the approved OKLO mock shows "$31-$48",
-// not one number, for this same concept). Purely a restatement of
-// already-computed vSuccess figures — no new calculation.
-function successAsCommonlyDescribedRange(preRevenue: AnalysisResult["preRevenue"]): string {
-  if (!preRevenue) return "—";
-  const qualifying = preRevenue.successDefinitions.filter((d) => d.vSuccess.greaterThan(d.vFail)).map((d) => d.vSuccess);
-  if (qualifying.length === 0) return "none";
-  const min = qualifying.reduce((m, v) => (v.lessThan(m) ? v : m));
-  const max = qualifying.reduce((m, v) => (v.greaterThan(m) ? v : m));
-  return min.equals(max) ? `$${num(min)}` : `$${num(min)} - $${num(max)}`;
+// "Success as commonly described" is a {low, high} range in the Analysis
+// Result itself (types.ts) — the approved OKLO mock shows "$31-$48", never
+// one number, for this concept. Pure formatting of that field; no new
+// calculation.
+function formatRange(range: { low: Decimal; high: Decimal }): string {
+  return range.low.equals(range.high) ? `$${num(range.low)}` : `$${num(range.low)} - $${num(range.high)}`;
 }
 
 const DEFAULT_PROVENANCE: ProvenanceTokens = {
@@ -333,7 +325,7 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
                 </td>
               </tr>
               <tr>
-                <td>Leverage precondition</td>
+                <td>Leverage precondition{preRevenue && " — company today"}</td>
                 <td>
                   <span className="v">{gates.leverage.result}</span>
                   {gates.leverage.netDebtRatio !== null && <div className="sub">net debt ratio {pct(gates.leverage.netDebtRatio)}</div>}
@@ -342,6 +334,18 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
                   )}
                 </td>
               </tr>
+              {preRevenue && gates.leverage.leveredResidualExceptionApplies && (
+                <tr>
+                  <td>Leverage precondition — success cases</td>
+                  <td>
+                    <div className="sub">
+                      A success-case cash flow is a residual after debt and is levered by construction — the levered-residual exception
+                      applies. This does not change the company-level result above; it lets each success definition's own levered cost of
+                      equity (below, per definition) proceed instead of being refused.
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </section>
@@ -445,6 +449,139 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
               </tr>
             </tbody>
           </table>
+
+          {/* Pre-revenue (M16) presentation stays IN Section D, matching
+              the approved OKLO mock's own structure: three repeated
+              "D — ..." sub-blocks (implied probability of success; unit
+              economics and the scale solve; funding stack), never a new
+              top-level section after J. */}
+          {preRevenue && (
+            <>
+              <div className="sechead" style={{ marginTop: "32px" }}>
+                <h2>D — Implied probability of success</h2>
+                <span className="k">Per definition · never one number</span>
+              </div>
+              <hr />
+              <table className="t">
+                <thead>
+                  <tr>
+                    <th>Success definition</th>
+                    <th>V_success</th>
+                    <th>V_fail</th>
+                    <th>Implied probability</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preRevenue.successDefinitions.map((row, i) => (
+                    <tr key={i}>
+                      <td>{row.definition}</td>
+                      <td>
+                        <span className="v">${num(row.vSuccess)}</span>
+                      </td>
+                      <td>
+                        <span className="v">${num(row.vFail)}</span>
+                      </td>
+                      <td className={row.state.kind !== "probability" ? "state" : undefined}>
+                        {row.state.kind === "probability" ? (
+                          <span className="v">{pct(row.state.probability, 0)}</span>
+                        ) : (
+                          <span className="name">{row.state.kind}</span>
+                        )}
+                        {row.rateCapped && <div className="flag">Rate capped — value is an upper bound</div>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="sechead" style={{ marginTop: "32px" }}>
+                <h2>D — Unit economics and the scale solve</h2>
+                <span className="k">Breakeven runs before the solve</span>
+              </div>
+              <hr />
+              <table className="t">
+                <tbody>
+                  <tr>
+                    <td>Cash per share</td>
+                    <td>
+                      <span className="v">${num(preRevenue.cashPerShare)}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Quarterly burn / runway</td>
+                    <td>
+                      <span className="v">
+                        ${num(preRevenue.quarterlyBurn, 0)} / {num(preRevenue.runway, 0)} quarters
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      Unit-economics breakeven
+                      <div className="sub">evaluated before the scale solve</div>
+                    </td>
+                    <td>
+                      <FigureValue figure={preRevenue.unitEconomicsBreakeven} format={(v) => `$${num(v, 2)}/unit`} />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Dilution required (back-loaded reference)</td>
+                    <td>
+                      <span className="v">${num(preRevenue.dilutionRequired, 0)}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div className="sechead" style={{ marginTop: "32px" }}>
+                <h2>D — Funding stack</h2>
+                <span className="k">Four lines · solved year by year · both ramps</span>
+              </div>
+              <hr />
+              {(["back_loaded", "steady"] as const).map((ramp) => (
+                <table className="t" key={ramp} style={{ marginBottom: "16px" }}>
+                  <caption style={{ textAlign: "left", fontSize: "12px", color: "var(--muted)", marginBottom: "8px" }}>
+                    {ramp === "back_loaded" ? "Back-loaded — conservative, and the reference" : "Steady"}
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th>Year</th>
+                      <th>Project debt</th>
+                      <th>Customer prepayments</th>
+                      <th>Retained OCF</th>
+                      <th>New equity</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preRevenue.fundingStackByYear[ramp].map((y) => {
+                      const line = (name: string) => y.lines.find((l) => l.line === name);
+                      const debt = line("project_debt");
+                      const prepay = line("customer_prepayments");
+                      const ocf = line("retained_operating_cash_flow");
+                      const equity = line("new_equity");
+                      return (
+                        <tr key={y.year}>
+                          <td>{y.year}</td>
+                          <td>
+                            <span className="v">{debt?.line === "project_debt" ? `${pct(debt.shareOfCapex, 0)} of capex` : "—"}</span>
+                          </td>
+                          <td>
+                            <span className="v">{prepay?.line === "customer_prepayments" ? `$${num(prepay.amount, 0)}` : "—"}</span>
+                          </td>
+                          <td>
+                            <span className="v">{ocf?.line === "retained_operating_cash_flow" ? `$${num(ocf.amount, 0)}` : "—"}</span>
+                          </td>
+                          <td>
+                            <span className="v">{equity?.line === "new_equity" ? `$${num(equity.amount, 0)}` : "—"}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ))}
+            </>
+          )}
         </section>
 
         {/* ============ E ============ */}
@@ -634,7 +771,7 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
                 </div>
                 <div className="pi">
                   <span className="lbl">Success as commonly described</span>
-                  <b>{successAsCommonlyDescribedRange(preRevenue)}</b>
+                  <b>{formatRange(fairValueRange.successAsCommonlyDescribed)}</b>
                 </div>
                 <div className="pi" style={{ borderBottom: 0 }}>
                   <span className="lbl">Success as the price requires</span>
@@ -729,81 +866,6 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
           </dl>
         </section>
 
-        {/* ============ pre-revenue module ============ */}
-        {preRevenue && (
-          <section id="PreRevenue">
-            <div className="sechead">
-              <h2>Pre-revenue module</h2>
-              <span className="k">§7.2 M16</span>
-            </div>
-            <hr />
-            <table className="t">
-              <tbody>
-                <tr>
-                  <td>Cash per share</td>
-                  <td>
-                    <span className="v">${num(preRevenue.cashPerShare)}</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td>Quarterly burn / runway</td>
-                  <td>
-                    <span className="v">
-                      ${num(preRevenue.quarterlyBurn, 0)} / {num(preRevenue.runway, 0)} quarters
-                    </span>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    Unit-economics breakeven
-                    <div className="sub">evaluated before the scale solve</div>
-                  </td>
-                  <td>
-                    <FigureValue figure={preRevenue.unitEconomicsBreakeven} format={(v) => `$${num(v, 2)}/unit`} />
-                  </td>
-                </tr>
-                <tr>
-                  <td>Dilution required (back-loaded reference)</td>
-                  <td>
-                    <span className="v">${num(preRevenue.dilutionRequired, 0)}</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            <table className="t" style={{ marginTop: "20px" }}>
-              <thead>
-                <tr>
-                  <th>Success definition</th>
-                  <th>V_success</th>
-                  <th>V_fail</th>
-                  <th>Implied probability</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preRevenue.successDefinitions.map((row, i) => (
-                  <tr key={i}>
-                    <td>{row.definition}</td>
-                    <td>
-                      <span className="v">${num(row.vSuccess)}</span>
-                    </td>
-                    <td>
-                      <span className="v">${num(row.vFail)}</span>
-                    </td>
-                    <td className={row.state.kind !== "probability" ? "state" : undefined}>
-                      {row.state.kind === "probability" ? (
-                        <span className="v">{pct(row.state.probability, 0)}</span>
-                      ) : (
-                        <span className="name">{row.state.kind}</span>
-                      )}
-                      {row.rateCapped && <div className="flag">Rate capped — value is an upper bound</div>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        )}
 
         {/* ============ Investment case at a glance ============ */}
         <section id="atglance">
@@ -820,7 +882,9 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
               </div>
               <div>
                 <span className="lb">Success as described</span>
-                <span className="fig">{successAsCommonlyDescribedRange(preRevenue)}</span>
+                <span className="fig">
+                  {fairValueRange.kind === "pre-revenue-distribution" ? formatRange(fairValueRange.successAsCommonlyDescribed) : "—"}
+                </span>
               </div>
               <div className="cur">
                 <span className="lb">Current price</span>

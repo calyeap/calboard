@@ -226,6 +226,17 @@ describe("assembleAnalysisResult — OKLO fixture", () => {
     }
   });
 
+  it("REGRESSION — successAsCommonlyDescribed preserves BOTH $31 and $48 as a range, never silently collapsed to one value", () => {
+    expect(result.fairValueRange.kind).toBe("pre-revenue-distribution");
+    if (result.fairValueRange.kind !== "pre-revenue-distribution") return;
+    expect(result.fairValueRange.successAsCommonlyDescribed.low.toString()).toBe("31");
+    expect(result.fairValueRange.successAsCommonlyDescribed.high.toString()).toBe("48");
+    // Definitions 1 and 2 ($0, $1) do not qualify (vSuccess <= vFail) and
+    // must not pull either bound down.
+    expect(result.fairValueRange.successAsCommonlyDescribed.low.toString()).not.toBe("0");
+    expect(result.fairValueRange.successAsCommonlyDescribed.low.toString()).not.toBe("1");
+  });
+
   it("unit-economics breakeven is computable at this fixture's illustrative capex/multiple assumptions, and sits above the methodology's own $110/MWh reference — reproducing its qualitative 'destroys value at this price' finding, not its exact number (see fixtures/oklo.ts's own header note)", () => {
     const result2 = computeUnitExitBreakEvenPrice(OKLO_FIXTURE.preRevenue!.unitEconomics);
     expect(result2.available).toBe(true);
