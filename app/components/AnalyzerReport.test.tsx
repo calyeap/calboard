@@ -313,3 +313,51 @@ describe("AnalyzerReport — Section D header qualifier restored (defect C5)", (
     expect(screen.getByText(/M1.M14 · extract shown/)).not.toBeNull();
   });
 });
+
+// Fourth-pass IA audit (2026-09-05) — D1.
+describe("AnalyzerReport — Section B always shows the full three-token provenance stamp (defect D1, R4)", () => {
+  it("every fact row carries source class, extraction type and verification state, including fully-defaulted facts", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    const { container } = render(<AnalyzerReport result={result} />);
+    const sectionB = container.querySelector("section#B") as HTMLElement;
+    const rows = sectionB.querySelectorAll("tbody tr");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of Array.from(rows)) {
+      const prov = row.querySelector(".prov");
+      expect(prov).not.toBeNull();
+      const text = prov!.textContent ?? "";
+      expect(text).toMatch(/Primary|Secondary/);
+      expect(text).toMatch(/Deterministic\/structured|AI-extracted/);
+      expect(text).toMatch(/Verified|Unverified|Spot-check pending/);
+    }
+    // "Finance lease liabilities" is fully default (PRIMARY/DETERMINISTIC/
+    // VERIFIED) in the fixture — R4 requires the stamp anyway, unlike
+    // derived cells elsewhere, which stay omitted-when-default.
+    const defaultRow = within(sectionB).getByText("Finance lease liabilities").closest("tr");
+    expect(defaultRow?.querySelector(".prov")?.textContent).toBe("Primary·Deterministic/structured·Verified");
+  });
+
+  it("AI-extracted keeps its distinct .ai styling even when shown alongside two default tokens; a non-default SECONDARY token is plain text, matching both mocks", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    const { container } = render(<AnalyzerReport result={result} />);
+    const sectionB = container.querySelector("section#B") as HTMLElement;
+    const aiRow = within(sectionB).getByText("Finance-lease ROU assets obtained").closest("tr");
+    expect(aiRow?.querySelector(".prov .ai")?.textContent).toBe("AI-extracted");
+    const secondaryRow = within(sectionB).getByText("Current operating margin").closest("tr");
+    expect(secondaryRow?.querySelector(".prov")?.textContent).toBe("Secondary·Deterministic/structured·Verified");
+    expect(secondaryRow?.querySelector(".prov .ai")).toBeNull();
+  });
+
+  it("derived cells elsewhere (Section D/E figures) are unaffected — default provenance still omitted there", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    const { container } = render(<AnalyzerReport result={result} />);
+    const sectionD = container.querySelector("section#D") as HTMLElement;
+    // Implied return on new capital is AI-extracted in the fixture — its
+    // marker should still show (non-default), but nothing in Section D
+    // should render "Verified" or "Primary" as bare filler text the way
+    // Section B now always does.
+    expect(within(sectionD).getByText("AI-extracted")).not.toBeNull();
+    expect(sectionD.textContent).not.toMatch(/\bPrimary\b/);
+    expect(sectionD.textContent).not.toMatch(/\bVerified\b/);
+  });
+});

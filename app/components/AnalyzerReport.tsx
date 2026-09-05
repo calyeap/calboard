@@ -156,7 +156,40 @@ function isDefaultProvenance(tokens: ProvenanceTokens): boolean {
   );
 }
 
-function ProvenanceMarks({ tokens }: { tokens: ProvenanceTokens }) {
+function sourceClassLabel(v: ProvenanceTokens["sourceClass"]): string {
+  return v === "SECONDARY" ? "Secondary" : "Primary";
+}
+function extractionTypeLabel(v: ProvenanceTokens["extractionType"]): string {
+  return v === "AI-EXTRACTED" ? "AI-extracted" : "Deterministic/structured";
+}
+function verificationStateLabel(v: ProvenanceTokens["verificationState"]): string {
+  if (v === "VERIFIED") return "Verified";
+  return v === "UNVERIFIED" ? "Unverified" : "Spot-check pending";
+}
+
+// D1 — R4 rules the full three-token stamp always renders in Section B
+// ("Primary · Deterministic/structured · Verified" even when every token
+// is default), while every other call site keeps R4's own omission rule
+// (non-default tokens only). `full` is Section B's own opt-in, not a
+// change to the default-hiding behaviour anywhere else. Per-token styling
+// is unchanged either way — both mocks' own Section B markup gives
+// AI-EXTRACTED alone the distinct `.ai` treatment; a defaulted or
+// SECONDARY/UNVERIFIED token is plain text in the frozen mocks too, its
+// distinctness carried by the word itself, not an extra style.
+function ProvenanceMarks({ tokens, full = false }: { tokens: ProvenanceTokens; full?: boolean }) {
+  if (full) {
+    return (
+      <div className="prov">
+        <span>{sourceClassLabel(tokens.sourceClass)}</span>
+        <span className="sep">·</span>
+        <span className={tokens.extractionType === "AI-EXTRACTED" ? "ai" : undefined}>
+          {extractionTypeLabel(tokens.extractionType)}
+        </span>
+        <span className="sep">·</span>
+        <span>{verificationStateLabel(tokens.verificationState)}</span>
+      </div>
+    );
+  }
   if (isDefaultProvenance(tokens)) return null;
   const parts: string[] = [];
   if (tokens.sourceClass === "SECONDARY") parts.push("Secondary");
@@ -480,7 +513,10 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
                     <span className="v">{f.value === null ? "—" : f.value.toString()}</span>
                   </td>
                   <td>
-                    <ProvenanceMarks tokens={{ sourceClass: f.sourceClass, extractionType: f.extractionType, verificationState: f.verificationState }} />
+                    <ProvenanceMarks
+                      tokens={{ sourceClass: f.sourceClass, extractionType: f.extractionType, verificationState: f.verificationState }}
+                      full
+                    />
                     <div className="sub">
                       {f.type} · {f.source}
                     </div>
