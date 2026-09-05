@@ -295,7 +295,10 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
     bearValue: fixture.scenarioValues.bear,
     baseValue: fixture.scenarioValues.base,
     bullValue: fixture.scenarioValues.bull,
-    weights: { bear: new Decimal("1"), base: new Decimal("1"), bull: new Decimal("1") }, // equal-weight display only; never a headline
+    // Equal-weight, summing to 1 — display only, never a headline. Was
+    // {1,1,1}, which sums to 3 and turned the weighted average into a
+    // plain sum (B1, third-pass fix; authorised for this one line only).
+    weights: { bear: new Decimal("1").dividedBy(3), base: new Decimal("1").dividedBy(3), bull: new Decimal("1").dividedBy(3) },
     currentPrice: fixture.price.value,
     revalueBaseCaseAtRate: fixture.revalueBaseCaseAtRate,
   });

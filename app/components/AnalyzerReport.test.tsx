@@ -23,7 +23,10 @@ describe("AnalyzerReport — MSFT", () => {
     // Appears at least in the price row and again in the closing "at a
     // glance" current-price figure — both are legitimate, not a defect.
     expect(screen.getAllByText("$510.12").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/MATURE_PROFITABLE_STABLE_FCF/).length).toBeGreaterThan(0);
+    // Defect C3 — the raw enum must never render; the human label from
+    // both mocks' own profileline does.
+    expect(screen.getAllByText(/mature, profitable, stable FCF/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/MATURE_PROFITABLE_STABLE_FCF/)).toBeNull();
   });
 
   it("shows DEGENERATE reverse-DCF cells (Section E) and Trigger A's qualifying flag in Section A's manifest", () => {
@@ -88,8 +91,11 @@ describe("AnalyzerReport — OKLO", () => {
   it("renders HISTORY INSUFFICIENT and the pre-revenue profile", () => {
     render(<AnalyzerReport result={result} />);
     expect(screen.getAllByText("HISTORY INSUFFICIENT").length).toBeGreaterThan(0);
-    // Appears in both Quick Read's profile line and Section A's profileline.
-    expect(screen.getAllByText(/PRE_REVENUE_UNPROFITABLE/).length).toBeGreaterThan(0);
+    // Defect C3 — the raw enum must never render; the human label from
+    // both mocks' own profileline does. Appears in both Quick Read's
+    // profile line and Section A's profileline.
+    expect(screen.getAllByText(/pre-revenue \/ unprofitable/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/PRE_REVENUE_UNPROFITABLE/)).toBeNull();
   });
 
   it("renders the pre-revenue-distribution fair-value shape (cash floor $3.10), never bear/bull bounds", () => {
@@ -264,5 +270,46 @@ describe("AnalyzerReport — §17.12 disclosure component restored in the report
     const result = assembleAnalysisResult(MSFT_FIXTURE);
     render(<AnalyzerReport result={result} />);
     expect(screen.getByText("Why one flag fired and the other did not")).not.toBeNull();
+  });
+});
+
+// Third-pass IA audit (2026-09-05) — C2, C3, C5.
+describe("AnalyzerReport — scenario labels properly cased (defect C2)", () => {
+  it("Section F shows Bear / Base / Bull, never the raw lowercase key", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    const { container } = render(<AnalyzerReport result={result} />);
+    const sectionF = container.querySelector("section#F") as HTMLElement;
+    expect(within(sectionF).getByText("Bear")).not.toBeNull();
+    expect(within(sectionF).getByText("Base")).not.toBeNull();
+    expect(within(sectionF).getByText("Bull")).not.toBeNull();
+    expect(within(sectionF).queryByText("bear")).toBeNull();
+    expect(within(sectionF).queryByText("base")).toBeNull();
+    expect(within(sectionF).queryByText("bull")).toBeNull();
+  });
+});
+
+describe("AnalyzerReport — profile renders as a human label, not the raw enum (defect C3)", () => {
+  it("MSFT: Section A's profileline reads the mock's own wording", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    const { container } = render(<AnalyzerReport result={result} />);
+    const sectionA = container.querySelector("section#A") as HTMLElement;
+    expect(within(sectionA).getByText(/Profile: mature, profitable, stable FCF/)).not.toBeNull();
+    expect(sectionA.textContent).not.toMatch(/MATURE_PROFITABLE_STABLE_FCF/);
+  });
+
+  it("OKLO: Section A's profileline reads the mock's own wording", () => {
+    const result = assembleAnalysisResult(OKLO_FIXTURE);
+    const { container } = render(<AnalyzerReport result={result} />);
+    const sectionA = container.querySelector("section#A") as HTMLElement;
+    expect(within(sectionA).getByText(/Profile: pre-revenue \/ unprofitable/)).not.toBeNull();
+    expect(sectionA.textContent).not.toMatch(/PRE_REVENUE_UNPROFITABLE/);
+  });
+});
+
+describe("AnalyzerReport — Section D header qualifier restored (defect C5)", () => {
+  it("shows 'extract shown' beside the M1-M14 range, matching the MSFT mock", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    render(<AnalyzerReport result={result} />);
+    expect(screen.getByText(/M1.M14 · extract shown/)).not.toBeNull();
   });
 });

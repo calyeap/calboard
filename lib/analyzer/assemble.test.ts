@@ -140,6 +140,21 @@ describe("assembleAnalysisResult — MSFT fixture", () => {
     expect(result.policy.undefinedConstants.nopatTaxRate?.toString()).toBe("0.2");
     expect(result.policy.undefinedConstants.stressMarginLevel?.toString()).toBe("0.38");
   });
+
+  it("REGRESSION (B1) — the probability-weighted value is the equal-weighted average ($475), not the plain sum ($1425) of bear/base/bull, and falls inside the range", () => {
+    const { bear, base, bull } = result.scenarioOutputs.values;
+    expect(bear.toString()).toBe("265");
+    expect(base.toString()).toBe("510");
+    expect(bull.toString()).toBe("650");
+    const weighted = result.scenarioOutputs.weightedDistribution;
+    expect(weighted.toNumber()).toBeCloseTo(475, 5);
+    expect(weighted.greaterThanOrEqualTo(bear)).toBe(true);
+    expect(weighted.lessThanOrEqualTo(bull)).toBe(true);
+  });
+
+  it("REGRESSION (B1) — priceLocationWithinRange is unaffected by the weighting fix (still derived from bear/bull/price alone)", () => {
+    expect(result.scenarioOutputs.priceLocationWithinRange.mul(100).toFixed(0)).toBe("64");
+  });
 });
 
 describe("assembleAnalysisResult — OKLO fixture", () => {
@@ -243,5 +258,13 @@ describe("assembleAnalysisResult — OKLO fixture", () => {
     if (result2.available) {
       expect(result2.breakEvenOutputPrice.greaterThan(110)).toBe(true);
     }
+  });
+
+  it("REGRESSION (B1) — the probability-weighted value falls inside the bear-bull distribution, not their plain sum", () => {
+    const { bear, base, bull } = result.scenarioOutputs.values;
+    const weighted = result.scenarioOutputs.weightedDistribution;
+    expect(weighted.greaterThanOrEqualTo(bear)).toBe(true);
+    expect(weighted.lessThanOrEqualTo(bull)).toBe(true);
+    expect(weighted.toString()).not.toBe(bear.plus(base).plus(bull).toString());
   });
 });

@@ -6,6 +6,7 @@ import type {
   AnalysisResult,
   ComputedValue,
   Figure,
+  Profile,
   ProvenanceTokens,
   ReverseDcfCell,
   SuccessDefinitionRow,
@@ -115,6 +116,31 @@ function stripInternalCitations(text: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+// C2 — scenario keys are internal identifiers, same defect class as B3's
+// camelCase and C3's raw profile enum. Both mocks capitalize these
+// wherever they appear as a label rather than in prose (the "at a
+// glance" box, Section H's range-bar) — "Bear" / "Base" / "Bull", never
+// the raw lowercase key.
+const SCENARIO_LABELS: Record<"bear" | "base" | "bull", string> = {
+  bear: "Bear",
+  base: "Base",
+  bull: "Bull",
+};
+
+// C3 — same defect class: Section A rendered the raw Profile enum. Both
+// mocks' own profileline gives the wording verbatim for the two profiles
+// they cover; the other two are not in either mock, so their wording is
+// lifted from the functional spec's own table (§1) rather than invented.
+// The confirm/override control itself is Milestone 7 (not built) — this
+// only translates the two enum values the existing conditional already
+// reads, not the confirm/override UI.
+const PROFILE_LABELS: Record<Profile, string> = {
+  MATURE_PROFITABLE_STABLE_FCF: "mature, profitable, stable FCF",
+  HIGH_GROWTH_PROFITABLE_UNCERTAIN_DURABILITY: "high-growth, profitable, uncertain durability",
+  PRE_REVENUE_UNPROFITABLE: "pre-revenue / unprofitable",
+  ASSET_BASED: "asset-based",
+};
 
 const DEFAULT_PROVENANCE: ProvenanceTokens = {
   sourceClass: "PRIMARY",
@@ -378,9 +404,9 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
             <span className="ts">{result.price.timestamp}</span>
           </div>
           <p className="profileline">
-            Profile: {result.profile.confirmedOrOverridden}
+            Profile: {PROFILE_LABELS[result.profile.confirmedOrOverridden]}
             {result.profile.recommended !== result.profile.confirmedOrOverridden &&
-              ` (software recommended ${result.profile.recommended})`}
+              ` (software recommended ${PROFILE_LABELS[result.profile.recommended]})`}
           </p>
 
           <div className="manifest">
@@ -520,7 +546,7 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
         <section id="D">
           <div className="sechead">
             <h2>D — Deterministic diagnostics</h2>
-            <span className="k">M1-M14</span>
+            <span className="k">M1–M14 · extract shown</span>
           </div>
           <hr />
           <table className="t">
@@ -883,7 +909,7 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
                 return (
                   <tr key={s}>
                     <td>
-                      {s}
+                      {SCENARIO_LABELS[s]}
                       <div className="sub">{d.writtenAnchor}</div>
                     </td>
                     <td>
