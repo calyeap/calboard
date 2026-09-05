@@ -335,6 +335,33 @@ export function computeUnitExitEconomicsGrid(input: UnitExitEconomicsGridInput):
   return cells;
 }
 
+// --- STEP 4 WIRING CONTRACT (no caller exists yet — report assembly is
+// deferred; traced 2026-09-05, nothing in app/ or lib/ calls any function
+// in this file's unit-economics section) -----------------------------------
+//
+// When Step 4 builds M16's report assembly, it MUST call
+// `evaluateUnitExitEconomics` / `computeUnitExitEconomicsGrid` for the
+// pre-scale-solve gate — NEVER `computeUnitEconomicsBreakeven` (superseded
+// above), and never both ANDed together.
+//
+// Required state mappings, preserved from the pre-existing contract:
+//   - `NOT ACHIEVABLE AT ANY SCALE` (§8.6, the spec's own SuppressingState)
+//     is NOT emitted by this gate directly — a single cell only ever
+//     returns "BELOW BREAK-EVEN — GATE FAILS" for ITSELF. That state is
+//     the SCALE SOLVE's own conclusion, reached only if every grid cell
+//     relevant to the modelled scenario fails at the assumed price. The
+//     scale solve (not yet built) is what must read this gate's per-cell
+//     verdicts and decide whether to emit that state — this file does not
+//     aggregate across cells today, and must not start doing so silently
+//     when Step 4 is built without a deliberate decision to do so.
+//   - This gate's own `UNAVAILABLE` (missing or invalid input) maps to the
+//     report's ordinary INCOMPLETE/suppressed-dependent-output convention
+//     for whatever downstream figure depends on it — the same fail-closed
+//     discipline every other module in this codebase already follows.
+//   - The solved `breakEvenOutputPrice` must remain independently
+//     displayed alongside the verdict, per the approved proposal — Step 4
+//     must not collapse it into a bare pass/fail boolean.
+
 // --- funding stack, solved year by year -----------------------------------
 
 export interface FundingStackYearParams {
