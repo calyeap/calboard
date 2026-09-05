@@ -194,18 +194,29 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
 
   // --- M5 — reinvestment / RONIC + implied-return-on-new-capital diagnostic
   const reinvestmentRonic = computeReinvestmentRonic(fixture.reinvestment, fixture.ronic);
-  // CONTRACT GAP, surfaced by this assembly, not fixed here: this
-  // diagnostic (approved d811305/ff21bad, kept structurally separate from
-  // RONIC and never fed into M7 by design) has no field anywhere in
-  // AnalysisResult / DiagnosticsResult (types.ts) — computed here so the
-  // gap is visible, but there is currently nowhere in the frozen contract
-  // for it to go. Flagged for a Command Center decision, not resolved by
-  // silently adding a field to the contract.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // §10.0.1 / §10.2 Section D require every M1-M14 diagnostic in the
+  // output, and V4 pins this one's MSFT value at 20.9% — so it belongs in
+  // DiagnosticsResult like every other M1-M14 figure (schema corrected;
+  // see DiagnosticsResult.impliedReturnOnNewCapital's own doc comment).
+  // The formula is unchanged (computeImpliedReturnOnNewCapital, untouched).
+  // A fixture that supplies no input (e.g. OKLO, pre-revenue — no
+  // per-unit NOPAT concept) still produces a real Figure here, via the
+  // SAME missing-REQUIRED-input path the function already uses for any
+  // other incomplete call — never a field that's simply absent.
   const impliedReturnOnNewCapital = fixture.impliedReturnOnNewCapital
     ? computeImpliedReturnOnNewCapital(fixture.impliedReturnOnNewCapital)
-    : null;
-  void impliedReturnOnNewCapital;
+    : computeImpliedReturnOnNewCapital({
+        reinvestmentInput: {
+          capex: null,
+          acquisitions: null,
+          financeLeaseRouAdditions: null,
+          depreciationAndAmortization: null,
+          deltaNwc: null,
+          deltaRevenue: null,
+        },
+        currentNopat: null,
+        currentYearNopatGrowth: null,
+      });
 
   const ronicCells = reinvestmentRonic.ronic.suppressed ? [] : reinvestmentRonic.ronic.value.cells;
 
@@ -388,6 +399,7 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
       marginHistory,
       fcf,
       reinvestmentRonic,
+      impliedReturnOnNewCapital,
       terminal,
       impliedExitMultiple,
       rateSensitivity,

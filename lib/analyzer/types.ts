@@ -439,6 +439,13 @@ export interface DiagnosticsResult {
   marginHistory: MarginHistoryResult;
   fcf: FcfResult;
   reinvestmentRonic: ReinvestmentRonicResult;
+  // §5.4 / §11.4 — a single-period diagnostic, structurally and numerically
+  // distinct from `reinvestmentRonic`'s five-year trailing ladder above and
+  // never fed into M7. Always present (never a missing field) — `value` is
+  // itself a Figure, so a genuinely missing REQUIRED input (reinvestment
+  // components, current NOPAT, current-year growth) surfaces as this
+  // Figure's own INCOMPLETE state, not as the field's absence.
+  impliedReturnOnNewCapital: { value: Figure<Decimal>; period: "current fiscal year (year-over-year)" };
   terminal: TerminalDiagnostics;
   impliedExitMultiple: { value: Figure<Decimal>; dividesMetric: string };
   rateSensitivity: RateSensitivity;

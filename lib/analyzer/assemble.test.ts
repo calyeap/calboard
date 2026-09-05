@@ -3,7 +3,6 @@ import Decimal from "decimal.js";
 import { assembleAnalysisResult } from "./assemble";
 import { MSFT_FIXTURE } from "./fixtures/msft";
 import { OKLO_FIXTURE } from "./fixtures/oklo";
-import { computeImpliedReturnOnNewCapital } from "./modules/reinvestmentRonic";
 import { computeUnitExitBreakEvenPrice } from "./modules/preRevenue";
 import { windowMedian, windowRange, worstSingleYearDecline } from "./marginMath";
 
@@ -84,8 +83,9 @@ describe("assembleAnalysisResult — MSFT fixture", () => {
     closeTo(cashOnly.dividedBy(nopat), 0.66, 0.001);
   });
 
-  it("M5's implied-return-on-new-capital diagnostic reproduces the mock's 20.9% (computed separately — no AnalysisResult field exists for it; see assemble.ts's own contract-gap note)", () => {
-    const diagnostic = computeImpliedReturnOnNewCapital(MSFT_FIXTURE.impliedReturnOnNewCapital!);
+  it("the ASSEMBLED result's diagnostics.impliedReturnOnNewCapital reproduces the mock's 20.9% (V4) — not computed-and-discarded, present in the actual AnalysisResult", () => {
+    const diagnostic = result.diagnostics.impliedReturnOnNewCapital;
+    expect(diagnostic.period).toBe("current fiscal year (year-over-year)");
     expect(diagnostic.value.suppressed).toBe(false);
     if (diagnostic.value.suppressed) return;
     closeTo(diagnostic.value.value, 0.209, 0.001);
@@ -162,6 +162,14 @@ describe("assembleAnalysisResult — OKLO fixture", () => {
     expect(result.diagnostics.multiples.peTrailing.suppressed).toBe(true);
     expect(result.diagnostics.multiples.evToEbit.suppressed).toBe(true);
     expect(result.diagnostics.multiples.priceToBook.suppressed).toBe(true);
+  });
+
+  it("diagnostics.impliedReturnOnNewCapital is present (never an absent field) and correctly INCOMPLETE — no per-unit NOPAT history pre-revenue", () => {
+    const diagnostic = result.diagnostics.impliedReturnOnNewCapital;
+    expect(diagnostic).toBeDefined();
+    expect(diagnostic.period).toBe("current fiscal year (year-over-year)");
+    expect(diagnostic.value.suppressed).toBe(true);
+    if (diagnostic.value.suppressed) expect(diagnostic.value.state).toBe("INCOMPLETE");
   });
 
   it("the reverse-DCF grid is not run for this profile — all nine cells INCOMPLETE", () => {

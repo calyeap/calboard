@@ -32,13 +32,15 @@ import type { FactRecord, SourcedValue } from "../types";
 // disclosed derived numbers exactly, not an independent re-acquisition of
 // Microsoft's real financials.
 //
-// ONE DISCREPANCY FOUND IN THE FROZEN MOCK ITSELF, not corrected here:
-// Section D's text says margin "median 38.0%" but Section E's own grid row
-// heads (and this fixture's — and reverseDcf.test.ts's — median of 41.8%)
-// show median=41.8%, stress=38.0%. The two are transposed in Section D's
-// prose. 41.8% is used throughout this fixture because it is corroborated
-// by TWO independent sources (Section E's grid and the already-accepted
-// golden test), against Section D's single, apparently mislabelled line.
+// RULED ERRATUM in the frozen mock's own prose (not a live ambiguity):
+// Section D's Quick Read text says margin "median 38.0%", but the grid
+// (Section E's own row heads), the frozen design, and the already-accepted
+// M7 reference behaviour all agree: 41.8% is the ten-year/window median
+// and 38.0% is the stress level. Section D's sentence is a typo, ruled as
+// such — not reproduced here, and not treated as an unresolved financial-
+// definition question. The frozen mock file itself is left untouched
+// (hash-stable); this comment is the erratum's record, in implementation/
+// test context rather than in the frozen artefact.
 
 // --- margin history: 10-year series reproducing the mock's own summary
 // stats exactly (current 46.8% = max, range 21.4pt, median 41.8pt, worst
