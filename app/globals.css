@@ -1718,6 +1718,76 @@ h6 {
   color: var(--muted);
   font-weight: 600;
 }
+.cb-analyzer .hframe .sub2 {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0 0 18px;
+}
+.cb-analyzer .rangebar {
+  position: relative;
+  height: 2px;
+  background: var(--hairline);
+  margin: 34px 0 10px;
+}
+.cb-analyzer .rangebar .dot {
+  position: absolute;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.cb-analyzer .rangebar .lab {
+  position: absolute;
+  top: -30px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.cb-analyzer .rangeends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 20px;
+  font-weight: 600;
+}
+.cb-analyzer .inference {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--hairline);
+  display: inline-block;
+  margin-top: 16px;
+}
+.cb-analyzer .drivers {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 12px;
+}
+.cb-analyzer .dist {
+  border-top: 1px solid var(--hairline);
+}
+.cb-analyzer .dist .r {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.cb-analyzer .dist .r .lbl {
+  color: var(--muted);
+  font-size: 12px;
+  max-width: 24ch;
+}
+.cb-analyzer .dist .r b {
+  font-size: 17px;
+}
+.cb-analyzer .floor {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--muted);
+}
 .cb-analyzer .pi {
   display: flex;
   justify-content: space-between;
@@ -1792,11 +1862,16 @@ h6 {
 .cb-analyzer .disclose summary {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--ink);
   cursor: pointer;
-  padding: 8px 0;
+  border-bottom: 0;
+  padding: 9px 0;
+  min-height: 38px;
+  transition: color 0.12s ease-out;
 }
 .cb-analyzer .disclose summary::-webkit-details-marker {
   display: none;
@@ -1806,8 +1881,13 @@ h6 {
 }
 .cb-analyzer .disclose summary::before {
   content: "\25B8";
+  flex: 0 0 auto;
   font-size: 11px;
   color: var(--muted);
+  transition:
+    transform 0.12s ease-out,
+    color 0.12s ease-out;
+  line-height: 1;
 }
 .cb-analyzer .disclose[open] summary::before {
   content: "\25BE";
@@ -1815,6 +1895,19 @@ h6 {
 .cb-analyzer .disclose summary .lbl {
   border-bottom: 1px solid var(--line-strong);
   padding-bottom: 1px;
+}
+.cb-analyzer .disclose summary:hover {
+  color: var(--ink);
+}
+.cb-analyzer .disclose summary:hover::before {
+  color: var(--ink);
+}
+.cb-analyzer .disclose summary:hover .lbl {
+  border-bottom-color: var(--ink);
+}
+.cb-analyzer .disclose summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
 }
 .cb-analyzer .disclose .body {
   font-size: 12px;

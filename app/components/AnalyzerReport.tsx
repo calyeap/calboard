@@ -1,5 +1,6 @@
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import Decimal from "decimal.js";
+import { formatUsd } from "@/lib/formatUsd";
 import { QuickRead } from "./QuickRead";
 import type {
   AnalysisResult,
@@ -7,6 +8,7 @@ import type {
   Figure,
   ProvenanceTokens,
   ReverseDcfCell,
+  SuccessDefinitionRow,
   SuppressedValue,
 } from "@/lib/analyzer/types";
 
@@ -52,6 +54,68 @@ function formatRange(range: { low: Decimal; high: Decimal }): string {
   return range.low.equals(range.high) ? `$${num(range.low)}` : `$${num(range.low)} - $${num(range.high)}`;
 }
 
+// B3's smaller-batch item: large dollar figures (funding-stack lines,
+// dilution) were rendering raw — "$-15800000" — instead of Calboard's own
+// house currency format. Reuses the same formatUsd() the Dashboard and
+// Holdings tables already use (lib/formatUsd.ts), so this is a formatting
+// fix, not a new convention: thousands separators, and the negative sign
+// outside the currency symbol rather than between "$" and the digits.
+function formatDollarSigned(v: Decimal): string {
+  return v.isNegative() ? `−$${formatUsd(v.abs())}` : `$${formatUsd(v)}`;
+}
+
+// Finance acronyms that read correctly only in full caps — applied after
+// splitting, and independently to any bare occurrence, so both
+// "fiveYearDeltaNopat" and a lone "nopat" come out as "NOPAT".
+const CAUSE_ACRONYMS = new Set([
+  "nopat",
+  "nwc",
+  "rou",
+  "ronic",
+  "ev",
+  "pvgo",
+  "cagr",
+  "ttm",
+  "fcf",
+  "sbc",
+  "roic",
+  "wc",
+]);
+
+// B3 (defect class also fixed in Section J last pass) — a suppressed
+// value's `cause` string is module-authored and names its own missing
+// REQUIRED input(s) by their internal camelCase field name (§4.2's own
+// input lists). This is the one place that translation happens for every
+// rendered cause, so the class cannot recur as new modules/sections are
+// built — no calculation, gate, threshold or field changes; this only
+// reformats a string already in the Analysis Result.
+function humanizeCause(cause: string): string {
+  const withSpacedWords = cause.replace(/\b[a-z][a-zA-Z0-9]*\b/g, (token) => {
+    if (!/[A-Z]/.test(token)) {
+      // No internal camel hump — still translate a bare acronym
+      // ("nopat" -> "NOPAT"), leave ordinary words ("capex") untouched.
+      return CAUSE_ACRONYMS.has(token) ? token.toUpperCase() : token;
+    }
+    const words = token.split(/(?=[A-Z])/).map((w) => w.toLowerCase());
+    return words.map((w) => (CAUSE_ACRONYMS.has(w) ? w.toUpperCase() : w)).join(" ");
+  });
+  return withSpacedWords;
+}
+
+// Same defect class as humanizeCause above, confirmed against both frozen
+// mocks (neither shows a "§" or "Appendix" citation anywhere as rendered
+// text): policy.ts's calibration notes are internal documentation and
+// carry spec/appendix/requirement-ID citations inline — e.g. "(§7.1,
+// §10.4)", "(Appendix B)", "(I16)" — that were never meant as report copy.
+// Strips only the parenthetical citation itself, keeping the surrounding
+// sentence (which is genuine, already-computed calibration content).
+function stripInternalCitations(text: string): string {
+  return text
+    .replace(/\s*\([^)]*(?:§|Appendix|\bI\d+\b)[^)]*\)/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 const DEFAULT_PROVENANCE: ProvenanceTokens = {
   sourceClass: "PRIMARY",
   extractionType: "DETERMINISTIC/STRUCTURED",
@@ -84,11 +148,27 @@ function ProvenanceMarks({ tokens }: { tokens: ProvenanceTokens }) {
   );
 }
 
+// §17.12 disclosure component — restored (defect B7). One mechanism used
+// wherever this interaction appears in the report body: visible chevron,
+// entire row is the click target, sentence-case label. Text is ported
+// verbatim from the frozen mock's own working examples; nothing here is a
+// new explanation invented for a section the mock doesn't cover.
+function Disclosure({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <details className="disclose">
+      <summary>
+        <span className="lbl">{label}</span>
+      </summary>
+      <div className="body">{children}</div>
+    </details>
+  );
+}
+
 function StateBlock({ figure }: { figure: SuppressedValue }) {
   return (
     <div className="state">
       <span className="name">{figure.state}</span>
-      <span className="cause">{figure.cause}</span>
+      <span className="cause">{humanizeCause(figure.cause)}</span>
     </div>
   );
 }
@@ -125,7 +205,7 @@ function ReverseDcfCellView({ cell }: { cell: ReverseDcfCell }) {
     return (
       <div className="cell suppressed">
         <span className="name">{cell.fiveYearGrowth.state}</span>
-        <span className="cause">{cell.fiveYearGrowth.cause}</span>
+        <span className="cause">{humanizeCause(cell.fiveYearGrowth.cause)}</span>
       </div>
     );
   }
@@ -180,7 +260,7 @@ interface ProvisionalRow {
 // (§10.6's "every PROVISIONAL threshold" means every one actually
 // exercised, not the full policy-wide list regardless of relevance).
 function buildProvisionalRegister(result: AnalysisResult): ProvisionalRow[] {
-  const { policy, preRevenue, states } = result;
+  const { policy, preRevenue, states, gates } = result;
   const c = policy.constants;
   const rows: ProvisionalRow[] = [];
 
@@ -189,27 +269,42 @@ function buildProvisionalRegister(result: AnalysisResult): ProvisionalRow[] {
       key: "preRevenueConstructionLeadYears",
       label: `Construction lead fixed at ${c.preRevenueConstructionLeadYears} years — PROVISIONAL`,
       impact: "first-order",
-      detail: policy.provisionalLabels.preRevenueConstructionLeadYears ?? "",
+      detail: stripInternalCitations(policy.provisionalLabels.preRevenueConstructionLeadYears ?? ""),
     });
   } else {
     rows.push({
       key: "terminalRoicPremium",
       label: `Terminal ROIC = r + ${points(c.terminalRoicPremium)} percentage points — PROVISIONAL`,
       impact: "assumed for every company",
-      detail: policy.provisionalLabels.terminalRoicPremium ?? "",
+      detail: stripInternalCitations(policy.provisionalLabels.terminalRoicPremium ?? ""),
     });
     rows.push({
       key: "gate0InterestIncomeOverRevenueThreshold",
       label: `Gate 0 interest-income test > ${pct(c.gate0InterestIncomeOverRevenueThreshold, 0)} of revenue — PROVISIONAL`,
       impact: "no observations",
-      detail: policy.provisionalLabels.gate0InterestIncomeOverRevenueThreshold ?? "",
+      detail: stripInternalCitations(policy.provisionalLabels.gate0InterestIncomeOverRevenueThreshold ?? ""),
     });
     rows.push({
       key: "runRateSequentialGrowthTrigger",
       label: `Run-rate sequential trigger ~${pct(c.runRateSequentialGrowthTrigger, 0)} — PROVISIONAL`,
       impact: "calibrated on one company",
-      detail: policy.provisionalLabels.runRateSequentialGrowthTrigger ?? "",
+      detail: stripInternalCitations(policy.provisionalLabels.runRateSequentialGrowthTrigger ?? ""),
     });
+    // Restored (defect B6) — triggerAMarginProximityPoints and
+    // triggerAWindowRangePoints are real PolicyConstants fields already in
+    // the Analysis Result; only surfaced here once the trigger they gate
+    // has actually fired for this run (same "only when exercised" curation
+    // rule as leveredCostOfEquityCap above).
+    if (gates.triggerA.fired || gates.triggerB.fired) {
+      rows.push({
+        key: "triggerAThresholds",
+        label: `Trigger A thresholds — ${points(c.triggerAMarginProximityPoints)} points of window maximum, ${points(
+          c.triggerAWindowRangePoints
+        )}-point window range`,
+        impact: "red-team judgment",
+        detail: "Provisional — no observations behind either threshold.",
+      });
+    }
   }
 
   const anyRateCapped =
@@ -220,7 +315,7 @@ function buildProvisionalRegister(result: AnalysisResult): ProvisionalRow[] {
       key: "leveredCostOfEquityCap",
       label: `Levered cost-of-equity cap at ${pct(c.leveredCostOfEquityCap, 0)} — PROVISIONAL`,
       impact: "binds on one or more cases",
-      detail: policy.provisionalLabels.leveredCostOfEquityCap ?? "",
+      detail: stripInternalCitations(policy.provisionalLabels.leveredCostOfEquityCap ?? ""),
     });
   }
 
@@ -250,6 +345,17 @@ function buildProvisionalRegister(result: AnalysisResult): ProvisionalRow[] {
 
 export function AnalyzerReport({ result }: { result: AnalysisResult }) {
   const { gates, states, diagnostics, priceImplied, scenarios, scenarioOutputs, fairValueRange, preRevenue } = result;
+
+  // Section H's right column restates the r = 8%, current-margin cell —
+  // the same cell Section E's own base case reads from.
+  const baseRateCell = priceImplied.reverseDcfGrid.find((c) => c.marginLevel === "current" && c.rate === 0.08);
+  // Purely a marker position on the range bar, clamped to the bar's own
+  // 0-100 extent — priceLocationWithinRange itself is the already-computed
+  // field (confirmed correct; B1 is isolated to weightedDistribution).
+  const weightedPositionPct =
+    fairValueRange.kind === "range"
+      ? Math.min(100, Math.max(0, scenarioOutputs.priceLocationWithinRange.mul(100).toNumber()))
+      : 0;
 
   return (
     <div className="layout">
@@ -307,6 +413,21 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
               )}
             </div>
           </div>
+          {/* Placement judgment call (report-back, B7): the mock nests this
+              disclosure inside Section A's own interpretive "why it
+              matters" narrative, which does not exist in this build yet
+              (that prose requires Milestone 8's interpretation layer, per
+              this file's own top-of-file note). Its text is fully generic
+              policy configuration, not company-specific, so it is placed
+              here at the end of Section A rather than skipped — the
+              concept it explains (the fixed 8/10/12% rate grid) is read by
+              Section D's RONIC ladder and Section E's grid alike. */}
+          <Disclosure label="What is a discount rate?">
+            The rate used to convert future cash into today&apos;s money. A higher rate means future cash is worth
+            less today, so it produces a lower valuation and demands more growth to justify a given price. Calboard
+            runs every company at 8%, 10% and 12% from policy configuration — the rate is never chosen per company
+            and never chosen by the interpretation layer.
+          </Disclosure>
         </section>
 
         {/* ============ B ============ */}
@@ -411,10 +532,7 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
             </thead>
             <tbody>
               <tr>
-                <td>
-                  Reinvestment, RONIC (5yr)
-                  <div className="sub">§7.2 M5</div>
-                </td>
+                <td>Reinvestment, RONIC (5yr)</td>
                 <td>
                   {diagnostics.reinvestmentRonic.ronic.suppressed ? (
                     <StateBlock figure={diagnostics.reinvestmentRonic.ronic} />
@@ -433,17 +551,14 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
               <tr>
                 <td>
                   Implied return on new capital
-                  <div className="sub">§5.4/§11.4 — current fiscal year, year-over-year</div>
+                  <div className="sub">current fiscal year, year-over-year</div>
                 </td>
                 <td>
                   <FigureValue figure={diagnostics.impliedReturnOnNewCapital.value} format={pct} />
                 </td>
               </tr>
               <tr>
-                <td>
-                  Margin history
-                  <div className="sub">§7.2 M3</div>
-                </td>
+                <td>Margin history</td>
                 <td>
                   {diagnostics.marginHistory.suppressed ? (
                     <StateBlock figure={diagnostics.marginHistory} />
@@ -461,7 +576,7 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
               <tr>
                 <td>
                   FCF yield + growth
-                  <div className="sub">§7.2 M11 · conditional output</div>
+                  <div className="sub">conditional output</div>
                 </td>
                 <td className={diagnostics.fcfYieldGrowth.precondition === "PRECONDITION FAILED" ? "state" : undefined}>
                   {diagnostics.fcfYieldGrowth.precondition === "PRECONDITION FAILED" ? (
@@ -476,10 +591,7 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
                 </td>
               </tr>
               <tr>
-                <td>
-                  Run-rate comparison
-                  <div className="sub">§7.2 M12</div>
-                </td>
+                <td>Run-rate comparison</td>
                 <td>
                   <span className="v">{diagnostics.runRate.seasonalityTestResult}</span>
                   {diagnostics.runRate.ttm !== null && <div className="sub">TTM {num(diagnostics.runRate.ttm, 0)}</div>}
@@ -494,6 +606,23 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
               </tr>
             </tbody>
           </table>
+
+          {(gates.triggerA.fired || gates.triggerB.fired) && (
+            <Disclosure label="Why one flag fired and the other did not">
+              {/* Ported verbatim from mock-report-msft.html's own disclosure
+                  — its generic, definitional sentences only. The mock's
+                  closing two sentences are Microsoft-specific narrative
+                  ("Microsoft fires the first and not the second. A
+                  software company..."), which this component cannot repeat
+                  verbatim for any other company without misstating it, and
+                  inventing a paraphrase is exactly what this restoration is
+                  not supposed to do (report-back). */}
+              Two tests are evaluated separately because they make different claims. <b>Margin at historical high</b>{" "}
+              is a description: the current margin is at or near the window maximum and the window is wide.{" "}
+              <b>Cyclical</b> is a claim about the business: it requires an actual single-year margin collapse in the
+              record.
+            </Disclosure>
+          )}
 
           {/* Pre-revenue (M16) presentation stays IN Section D, matching
               the approved OKLO mock's own structure: three repeated
@@ -572,7 +701,7 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
                   <tr>
                     <td>Dilution required (back-loaded reference)</td>
                     <td>
-                      <span className="v">${num(preRevenue.dilutionRequired, 0)}</span>
+                      <span className="v">{formatDollarSigned(preRevenue.dilutionRequired)}</span>
                     </td>
                   </tr>
                 </tbody>
@@ -611,13 +740,19 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
                             <span className="v">{debt?.line === "project_debt" ? `${pct(debt.shareOfCapex, 0)} of capex` : "—"}</span>
                           </td>
                           <td>
-                            <span className="v">{prepay?.line === "customer_prepayments" ? `$${num(prepay.amount, 0)}` : "—"}</span>
+                            <span className="v">
+                              {prepay?.line === "customer_prepayments" ? formatDollarSigned(prepay.amount) : "—"}
+                            </span>
                           </td>
                           <td>
-                            <span className="v">{ocf?.line === "retained_operating_cash_flow" ? `$${num(ocf.amount, 0)}` : "—"}</span>
+                            <span className="v">
+                              {ocf?.line === "retained_operating_cash_flow" ? formatDollarSigned(ocf.amount) : "—"}
+                            </span>
                           </td>
                           <td>
-                            <span className="v">{equity?.line === "new_equity" ? `$${num(equity.amount, 0)}` : "—"}</span>
+                            <span className="v">
+                              {equity?.line === "new_equity" ? formatDollarSigned(equity.amount) : "—"}
+                            </span>
                           </td>
                         </tr>
                       );
@@ -636,6 +771,27 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
             <span className="k">Diagnostic reverse DCF · 3 margin levels x 3 rates</span>
           </div>
           <hr />
+          <Disclosure label="What is a reverse DCF, and why nine cells?">
+            A normal discounted-cash-flow model takes your growth assumption and produces a value. A reverse DCF
+            takes the market&apos;s value — the price — and produces the growth assumption it implies. It removes
+            the step where the analyst&apos;s own optimism enters the arithmetic. Nine cells because two things must
+            be varied that materially change the answer: the discount rate (8%, 10%, 12%) and the profit margin
+            being projected (current, ten-year median, a stress level). One cell would hide how sensitive the answer
+            is to both.
+          </Disclosure>
+          <Disclosure label="See calculation — PVGO">
+            Steady-state EV = median-margin NOPAT ÷ discount rate. PVGO = current EV − steady-state EV, EV to EV. The
+            PVGO share is that difference over current EV.{" "}
+            {priceImplied.nopatGap !== null &&
+              "Because trigger A or B fired, PVGO is also shown on current NOPAT beside median-margin NOPAT, and the gap between them is printed — a margin at its own historical high makes the two materially different."}
+          </Disclosure>
+          <Disclosure label="What is PVGO?">
+            Present Value of Growth Opportunities. Split the company&apos;s value in two: what it would be worth if
+            it simply carried on at its current profit level forever, and everything above that. The second part is
+            PVGO — the share of today&apos;s price that is a bet on growth that has not happened yet. A high share
+            is not a warning by itself; it means the valuation is more sensitive to whether growth and returns on
+            new investment hold up.
+          </Disclosure>
           <div className="grid">
             <div></div>
             <div className="colhead">r = 8%</div>
@@ -804,49 +960,149 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
           {fairValueRange.kind === "suppressed" ? (
             <div className="state">
               <span className="name">{fairValueRange.state}</span>
-              <span className="cause">{fairValueRange.cause}</span>
+              <span className="cause">{humanizeCause(fairValueRange.cause)}</span>
             </div>
           ) : fairValueRange.kind === "pre-revenue-distribution" ? (
             <div className="hframe">
               <div>
                 <h3>Distribution summary</h3>
-                <div className="pi">
-                  <span className="lbl">Failure (cash floor)</span>
-                  <b>${num(fairValueRange.failure)}</b>
+                <p className="sub2">What you assume · not compressed to bounds</p>
+                <div className="dist">
+                  <div className="r">
+                    <span className="lbl">Failure</span>
+                    <b>${num(fairValueRange.failure)}</b>
+                  </div>
+                  <div className="r">
+                    <span className="lbl">Success as commonly described</span>
+                    <b>{formatRange(fairValueRange.successAsCommonlyDescribed)}</b>
+                  </div>
+                  <div className="r">
+                    <span className="lbl">Success as the price requires</span>
+                    <b>${num(fairValueRange.successAsPriceRequires)}</b>
+                  </div>
                 </div>
-                <div className="pi">
-                  <span className="lbl">Success as commonly described</span>
-                  <b>{formatRange(fairValueRange.successAsCommonlyDescribed)}</b>
-                </div>
-                <div className="pi" style={{ borderBottom: 0 }}>
-                  <span className="lbl">Success as the price requires</span>
-                  <b>${num(fairValueRange.successAsPriceRequires)}</b>
-                </div>
+                <p className="floor">Cash floor ${num(fairValueRange.cashFloor)} per current share.</p>
+                <span className="inference">Inference</span>
+                {/* No "driven by" line here — unlike the range variant,
+                    FairValueRange's pre-revenue-distribution member carries
+                    no drivingInputs field to restate (types.ts). The mock's
+                    "capacity ramp shape · capex per unit of capacity · exit
+                    multiple assumption" line has no Analysis Result field
+                    behind it; omitted rather than invented (report-back). */}
               </div>
               <div>
-                <h3>Cash floor</h3>
-                <p className="note">${num(fairValueRange.cashFloor)} per current share.</p>
+                <h3>What the price assumes</h3>
+                <p className="sub2">Restated from Section E</p>
+                {preRevenue &&
+                  preRevenue.successDefinitions
+                    .filter(
+                      (d): d is SuccessDefinitionRow & { state: { kind: "probability"; probability: Decimal } } =>
+                        d.state.kind === "probability"
+                    )
+                    .map((d, i) => (
+                      <div className="pi" key={i}>
+                        <span className="lbl">Implied probability, {d.definition}</span>
+                        <b>{pct(d.state.probability, 0)}</b>
+                      </div>
+                    ))}
+                {preRevenue && (
+                  <div className="pi">
+                    <span className="lbl">Success definitions returning a state</span>
+                    <b>
+                      {preRevenue.successDefinitions.filter((d) => d.state.kind !== "probability").length} of{" "}
+                      {preRevenue.successDefinitions.length}
+                    </b>
+                  </div>
+                )}
+                {preRevenue && (
+                  <div className="pi" style={{ borderBottom: 0 }}>
+                    <span className="lbl">Dilution required (back-loaded reference)</span>
+                    <b>{formatDollarSigned(preRevenue.dilutionRequired)}</b>
+                  </div>
+                )}
+                <p className="note" style={{ marginTop: "14px" }}>
+                  The range says what you assume; the diagnostics say what the market assumes. Neither is shown
+                  alone.
+                </p>
               </div>
             </div>
           ) : (
             <div className="hframe">
               <div>
                 <h3>Fair-value range</h3>
-                <div className="pi">
-                  <span className="lbl">Bear</span>
-                  <b>${num(fairValueRange.bear, 0)}</b>
+                <p className="sub2">What you assume</p>
+                <div className="rangebar">
+                  <span className="lab" style={{ left: 0 }}>
+                    Bear
+                  </span>
+                  <span className="lab" style={{ right: 0 }}>
+                    Bull
+                  </span>
+                  <span
+                    className="lab"
+                    style={{ left: `${weightedPositionPct}%`, transform: "translateX(-50%)" }}
+                  >
+                    Weighted
+                  </span>
+                  <span className="dot" style={{ left: `${weightedPositionPct}%` }} />
                 </div>
-                <div className="pi" style={{ borderBottom: 0 }}>
-                  <span className="lbl">Bull</span>
-                  <b>${num(fairValueRange.bull, 0)}</b>
+                <div className="rangeends">
+                  <span>${num(fairValueRange.bear, 0)}</span>
+                  <span>${num(fairValueRange.bull, 0)}</span>
                 </div>
+                <span className="inference">Inference</span>
+                <p className="drivers">Driven by: {fairValueRange.drivingInputs.join(" · ")}.</p>
                 {fairValueRange.scenarioLabelsWarning && (
                   <div className="warn">Trigger A or B has fired. The bounds are scenario labels, not confidence bounds.</div>
                 )}
               </div>
               <div>
-                <h3>Driven by</h3>
-                <p className="note">{fairValueRange.drivingInputs.join(" · ")}</p>
+                <h3>What the price assumes</h3>
+                <p className="sub2">Restated from Section E</p>
+                {baseRateCell && (
+                  <>
+                    <div className="pi">
+                      <span className="lbl">Implied growth, yrs 1-5 at r = 8%</span>
+                      {baseRateCell.fiveYearGrowth.suppressed ? (
+                        <b>{baseRateCell.fiveYearGrowth.state}</b>
+                      ) : (
+                        <b>{pct(baseRateCell.fiveYearGrowth.value)}</b>
+                      )}
+                    </div>
+                    <div className="pi">
+                      <span className="lbl">Equivalent ten-year CAGR</span>
+                      {baseRateCell.tenYearCagr.suppressed ? (
+                        <b>{baseRateCell.tenYearCagr.state}</b>
+                      ) : (
+                        <b>{pct(baseRateCell.tenYearCagr.value)}</b>
+                      )}
+                    </div>
+                  </>
+                )}
+                {/* "Own ten-year revenue CAGR" (mock) has no Analysis Result
+                    field behind it — no module computes or stores the
+                    company's own historical revenue CAGR anywhere in
+                    DiagnosticsResult or elsewhere in types.ts. Omitted
+                    rather than invented (report-back). */}
+                <div className="pi">
+                  <span className="lbl">PVGO share of EV</span>
+                  <FigureValue figure={priceImplied.pvgoShareOfEv} format={pct} />
+                </div>
+                <div className="pi">
+                  <span className="lbl">RONIC</span>
+                  <FigureValue figure={diagnostics.impliedReturnOnNewCapital.value} format={pct} />
+                </div>
+                <div className="pi" style={{ borderBottom: 0 }}>
+                  <span className="lbl">Reverse-DCF cells returning a state</span>
+                  <b>
+                    {priceImplied.reverseDcfGrid.filter((c) => c.fiveYearGrowth.suppressed).length} of{" "}
+                    {priceImplied.reverseDcfGrid.length}
+                  </b>
+                </div>
+                <p className="note" style={{ marginTop: "14px" }}>
+                  The range says what you assume; the diagnostics say what the market assumes. Neither is shown
+                  alone.
+                </p>
               </div>
             </div>
           )}

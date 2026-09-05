@@ -84,6 +84,19 @@ describe("QuickRead — MSFT", () => {
     render(<QuickRead result={result} />);
     expect(screen.getAllByText(/PRECONDITION FAILED/).length).toBeGreaterThan(0);
   });
+
+  it("main finding and 'what today's price requires' are distinct sentences, not a verbatim duplicate (defect B5)", () => {
+    const { container } = render(<QuickRead result={result} />);
+    const items = Array.from(container.querySelectorAll(".qitem"));
+    const mainFinding = items.find((el) => el.querySelector(".k")?.textContent === "Main finding");
+    const priceRequires = items.find((el) => el.querySelector(".k")?.textContent === "What today's price requires");
+    expect(mainFinding).not.toBeUndefined();
+    expect(priceRequires).not.toBeUndefined();
+    expect(mainFinding!.textContent).not.toBe(priceRequires!.textContent);
+    // Mechanics-first framing: leads with the five-year figure, not the
+    // ten-year figure the main finding leads with.
+    expect(priceRequires!.querySelector(".t")?.textContent).toMatch(/^18\.5% revenue growth for five years/);
+  });
 });
 
 describe("QuickRead — OKLO", () => {

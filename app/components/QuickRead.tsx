@@ -418,7 +418,19 @@ function buildQuickRead(result: AnalysisResult): QuickReadItem[] {
     },
     {
       label: "What today's price requires",
-      body: <p className="t">{growthLine} <SecLink id="E">Section E</SecLink></p>,
+      body:
+        cleanCell && !cleanCell.fiveYearGrowth.suppressed && !cleanCell.tenYearCagr.suppressed ? (
+          <p className="t">
+            {formatPct(cleanCell.fiveYearGrowth.value)} revenue growth for five years at r ={" "}
+            {formatPct(new Decimal(cleanCell.rate), 0)}, equivalent to {formatPct(cleanCell.tenYearCagr.value)} over
+            ten. <SecLink id="E">Section E</SecLink>
+          </p>
+        ) : (
+          <p className="t">
+            No cell in the reverse-DCF grid resolves to a usable growth figure at this run's inputs.{" "}
+            <SecLink id="E">Section E</SecLink>
+          </p>
+        ),
     },
     {
       label: "What supports the case",

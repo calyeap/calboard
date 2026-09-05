@@ -38,7 +38,10 @@ describe("AnalyzerReport — MSFT", () => {
   it("shows the M5 implied-return-on-new-capital diagnostic at 20.9%, present in Section D (not silently discarded)", () => {
     render(<AnalyzerReport result={result} />);
     expect(screen.getByText(/Implied return on new capital/)).not.toBeNull();
-    expect(screen.getByText("20.9%")).not.toBeNull();
+    // Section H's restored right column (defect B2) legitimately echoes
+    // this same RONIC figure — duplication across the report is expected,
+    // not a defect (same principle as the MSFT DEGENERATE test above).
+    expect(screen.getAllByText("20.9%").length).toBeGreaterThan(0);
   });
 
   it("shows PRECONDITION FAILED for FCF yield + growth, matching the mock", () => {
@@ -110,9 +113,11 @@ describe("AnalyzerReport — OKLO", () => {
     const sectionD = container.querySelector("section#D") as HTMLElement;
     expect(within(sectionD).getAllByText("THIS SUCCESS IS WORTH LESS THAN FAILURE")).toHaveLength(2);
     // Scoped to each definition's own table row — "25%" alone also
-    // legitimately appears elsewhere (Section G's price-location figure).
-    const def3Row = screen.getByText(/Definition 3/).closest("tr");
-    const def4Row = screen.getByText(/Definition 4/).closest("tr");
+    // legitimately appears elsewhere (Section G's price-location figure,
+    // and now Section H's restored right column also names each
+    // probability-bearing definition, defect B2).
+    const def3Row = within(sectionD).getByText(/Definition 3/).closest("tr");
+    const def4Row = within(sectionD).getByText(/Definition 4/).closest("tr");
     expect(def3Row?.textContent).toContain("40%");
     expect(def4Row?.textContent).toContain("25%");
   });
@@ -166,5 +171,98 @@ describe("AnalyzerReport — OKLO", () => {
     for (const row of Array.from(rows)) {
       expect(row.querySelector("td:nth-child(2) .v")?.textContent).not.toBe("");
     }
+  });
+});
+
+// Second-pass IA audit (2026-09-05) — B2, B3, B6, B7.
+describe("AnalyzerReport — Section H two-column frame (defect B2)", () => {
+  it("MSFT: renders both columns — driving inputs and the weighted marker moved into the left column, the right column restated from Section E, never shown alone", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    const { container } = render(<AnalyzerReport result={result} />);
+    const sectionH = container.querySelector("section#H") as HTMLElement;
+    expect(within(sectionH).getByText(/Driven by:/)).not.toBeNull();
+    expect(within(sectionH).getByText("Inference")).not.toBeNull();
+    expect(within(sectionH).getByText("Weighted")).not.toBeNull();
+    expect(within(sectionH).getByText("What the price assumes")).not.toBeNull();
+    expect(within(sectionH).getByText(/Restated from Section E/)).not.toBeNull();
+    expect(within(sectionH).getByText(/PVGO share of EV/)).not.toBeNull();
+    expect(within(sectionH).getByText(/Reverse-DCF cells returning a state/)).not.toBeNull();
+    // The header tag no longer sits above a range shown alone.
+    expect(within(sectionH).getByText("Never shown alone")).not.toBeNull();
+  });
+
+  it("OKLO: renders the pre-revenue distribution summary alongside a restated right column, not the old bare Cash floor box", () => {
+    const result = assembleAnalysisResult(OKLO_FIXTURE);
+    const { container } = render(<AnalyzerReport result={result} />);
+    const sectionH = container.querySelector("section#H") as HTMLElement;
+    expect(within(sectionH).getByText("What the price assumes")).not.toBeNull();
+    expect(within(sectionH).queryByText("Cash floor")).toBeNull();
+    expect(within(sectionH).getByText(/Success definitions returning a state/)).not.toBeNull();
+    expect(within(sectionH).getByText(/Dilution required/)).not.toBeNull();
+    expect(within(sectionH).getByText("Inference")).not.toBeNull();
+  });
+});
+
+describe("AnalyzerReport — camelCase humanized in state causes (defect B3)", () => {
+  it("OKLO: Section D and E cause text is plain English, never a raw camelCase field name", () => {
+    const result = assembleAnalysisResult(OKLO_FIXTURE);
+    const { container } = render(<AnalyzerReport result={result} />);
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/fiveYearDeltaNopat|fiveYearDeltaInvestedCapital|financeLeaseRouAdditions|depreciationAndAmortization|deltaNwc|baseYearRevenue|targetEnterpriseValue|currentMargin|medianMarginNopat/);
+    expect(text).toMatch(/five year delta NOPAT/);
+    expect(text).toMatch(/finance lease ROU additions/);
+    expect(text).toMatch(/depreciation and amortization/);
+    expect(text).toMatch(/delta NWC/);
+    expect(text).toMatch(/base year revenue/);
+    expect(text).toMatch(/target enterprise value/);
+  });
+});
+
+describe("AnalyzerReport — Section J detail text has no leaked spec/appendix citations", () => {
+  it("MSFT: no '§' or 'Appendix' citation renders inside Section J, same defect class as B3", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    const { container } = render(<AnalyzerReport result={result} />);
+    const section = container.querySelector("section#J") as HTMLElement;
+    expect(section.textContent).not.toMatch(/§|Appendix/);
+  });
+});
+
+describe("AnalyzerReport — Section J Trigger A row restored (defect B6)", () => {
+  it("MSFT: shows the Trigger A thresholds row, derived from real PolicyConstants fields, when trigger A or B fired", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    expect(result.gates.triggerA.fired || result.gates.triggerB.fired).toBe(true);
+    render(<AnalyzerReport result={result} />);
+    expect(screen.getByText(/Trigger A thresholds — 2 points of window maximum, 15-point window range/)).not.toBeNull();
+  });
+
+  it("OKLO's five-row register is unchanged — no Trigger A row for the pre-revenue profile", () => {
+    const result = assembleAnalysisResult(OKLO_FIXTURE);
+    const { container } = render(<AnalyzerReport result={result} />);
+    const section = container.querySelector("section#J") as HTMLElement;
+    expect(section.textContent).not.toMatch(/Trigger A thresholds/);
+    expect(section.querySelectorAll("tbody tr")).toHaveLength(5);
+  });
+});
+
+describe("AnalyzerReport — §17.12 disclosure component restored in the report body (defect B7)", () => {
+  it("renders working <details> disclosures in Sections A and E, verbatim from the frozen mock, entire row clickable", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    const { container } = render(<AnalyzerReport result={result} />);
+    const disclosures = container.querySelectorAll("details.disclose");
+    expect(disclosures.length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText("What is a discount rate?")).not.toBeNull();
+    expect(screen.getByText("What is a reverse DCF, and why nine cells?")).not.toBeNull();
+    expect(screen.getByText("See calculation — PVGO")).not.toBeNull();
+    expect(screen.getByText("What is PVGO?")).not.toBeNull();
+    for (const d of Array.from(disclosures)) {
+      expect(d.querySelector("summary")).not.toBeNull();
+      expect(d.querySelector(".body")).not.toBeNull();
+    }
+  });
+
+  it("shows the Section D flag-distinction disclosure only when trigger A or B actually fired", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    render(<AnalyzerReport result={result} />);
+    expect(screen.getByText("Why one flag fired and the other did not")).not.toBeNull();
   });
 });
