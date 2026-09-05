@@ -21,10 +21,14 @@ import type {
 // statements is empty until the AI layer — Milestone 8 — exists), that
 // narrative is simply omitted rather than invented.
 //
-// NOT INCLUDED (out of Milestone 6's scope): the ultrawide/mobile
-// responsive breakpoints from the design mocks (V1.5), and Sections I/I2's
-// real content (empty until Milestone 8's interpretation/challenger calls
-// exist — the section headers still render, honestly empty).
+// NOT INCLUDED YET (this checkpoint is desktop-only, one width): the
+// ultrawide/mobile responsive breakpoints from the design mocks. Required
+// before v1 acceptance regardless — Milestone 9 (full responsive/
+// accessibility/acceptance validation) covers it, still inside this build;
+// V1.5 is a separate, later hardening pass, not the first implementation.
+// Also not included: Sections I/I2's real content (empty until Milestone
+// 8's interpretation/challenger calls exist — the section headers still
+// render, honestly empty).
 
 function pct(value: Decimal, dp = 1): string {
   return `${value.mul(100).toFixed(dp)}%`;
@@ -32,6 +36,22 @@ function pct(value: Decimal, dp = 1): string {
 
 function num(value: Decimal, dp = 2): string {
   return value.toFixed(dp);
+}
+
+// "Success as commonly described" — restated directly from
+// preRevenue.successDefinitions (which already preserves every qualifying
+// value) rather than FairValueRange.successAsCommonlyDescribed, whose
+// single-Decimal shape cannot represent a range. See assemble.ts's own
+// note on this schema/design gap (the approved OKLO mock shows "$31-$48",
+// not one number, for this same concept). Purely a restatement of
+// already-computed vSuccess figures — no new calculation.
+function successAsCommonlyDescribedRange(preRevenue: AnalysisResult["preRevenue"]): string {
+  if (!preRevenue) return "—";
+  const qualifying = preRevenue.successDefinitions.filter((d) => d.vSuccess.greaterThan(d.vFail)).map((d) => d.vSuccess);
+  if (qualifying.length === 0) return "none";
+  const min = qualifying.reduce((m, v) => (v.lessThan(m) ? v : m));
+  const max = qualifying.reduce((m, v) => (v.greaterThan(m) ? v : m));
+  return min.equals(max) ? `$${num(min)}` : `$${num(min)} - $${num(max)}`;
 }
 
 const DEFAULT_PROVENANCE: ProvenanceTokens = {
@@ -614,7 +634,7 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
                 </div>
                 <div className="pi">
                   <span className="lbl">Success as commonly described</span>
-                  <b>${num(fairValueRange.successAsCommonlyDescribed)}</b>
+                  <b>{successAsCommonlyDescribedRange(preRevenue)}</b>
                 </div>
                 <div className="pi" style={{ borderBottom: 0 }}>
                   <span className="lbl">Success as the price requires</span>
@@ -800,9 +820,7 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
               </div>
               <div>
                 <span className="lb">Success as described</span>
-                <span className="fig">
-                  {fairValueRange.kind === "pre-revenue-distribution" ? `$${num(fairValueRange.successAsCommonlyDescribed)}` : "—"}
-                </span>
+                <span className="fig">{successAsCommonlyDescribedRange(preRevenue)}</span>
               </div>
               <div className="cur">
                 <span className="lb">Current price</span>

@@ -75,6 +75,11 @@ describe("AnalyzerReport — OKLO", () => {
     expect(screen.queryByText("Fair-value range")).toBeNull();
   });
 
+  it("shows 'success as commonly described' as the full $31.00-$48.00 range (both qualifying definitions), never a single arbitrarily-chosen value", () => {
+    render(<AnalyzerReport result={result} />);
+    expect(screen.getAllByText("$31.00 - $48.00").length).toBeGreaterThan(0);
+  });
+
   it("renders all four success definitions with definitions 1-2 correctly stating worth-less-than-failure, 3-4 with real probabilities", () => {
     render(<AnalyzerReport result={result} />);
     expect(screen.getAllByText("THIS SUCCESS IS WORTH LESS THAN FAILURE")).toHaveLength(2);

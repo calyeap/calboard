@@ -1417,11 +1417,17 @@ h6 {
    exactly; --tint is the one Analyzer-only token (suppression fill), since
    Dashboard and Holdings have no suppression concept.
 
-   DELIBERATELY NOT INCLUDED HERE: the mocks' ultrawide (Quick Read as a
-   third column) and mobile (stacked records, restacked grid) breakpoints.
-   Full responsive/accessibility hardening is V1.5 scope, done after v1
-   validation + merge (per the Progress Board) — this pass is a single,
-   reasonable desktop width only. */
+   DELIBERATELY NOT INCLUDED HERE YET: the mocks' ultrawide (Quick Read as
+   a third column) and mobile (stacked records, restacked grid) breakpoints
+   — this Milestone 6 checkpoint is a single, reasonable desktop width
+   only. This is NOT the same thing as "responsive is V1.5 work" — v1's own
+   approved responsive behaviour is required before v1 acceptance and is
+   covered by Milestone 9 (full responsive/accessibility/acceptance
+   validation, per the Progress Board), still part of THIS build. V1.5 is
+   a separate, later, bounded UX-HARDENING pass that begins only after v1
+   validation + merge — it is not the first implementation of any
+   responsive behaviour. Do not start V1.5 to close this gap; Milestone 9
+   does. */
 .cb-analyzer {
   --ground: #F2EEE5;
   --ink: #1F1C17;

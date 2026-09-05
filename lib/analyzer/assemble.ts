@@ -301,14 +301,38 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
   });
 
   // --- §10 H — fair-value range ------------------------------------------
+  // SCHEMA NOTE (not resolved here — see the checkpoint that raised it):
+  // FairValueRange's pre-revenue branch exposes ONE Decimal for
+  // `successAsCommonlyDescribed`, but the approved OKLO design mock
+  // (design2/mock-report-oklo.html, hash-verified) explicitly shows this
+  // as a RANGE twice — "$31-$48" (lines 306, 683) — not a single number.
+  // Neither the frozen spec nor the methodology defines a rule for
+  // collapsing multiple qualifying success values into this one field; the
+  // mock itself never collapses them. This is a genuine schema/design
+  // representation gap, not a resolved contract requirement.
+  //
+  // Populated with the LOWEST qualifying success value (the "conservative"
+  // case, matching how the mock itself repeatedly labels the back-loaded
+  // 8GW case "the reference" — mock-report-oklo.html: "Definition 3... the
+  // conservative case, and the reference") rather than the highest, since
+  // nothing in the frozen source favours the higher figure. This single
+  // value is NOT what drives the report's own "success as commonly
+  // described" line, though — AnalyzerReport.tsx reads the full
+  // successDefinitions array directly for that, which already preserves
+  // every qualifying value (both $31 and $48), so this field's own
+  // single-value limitation is routed around rather than papered over.
+  const qualifyingSuccessValues = fixture.preRevenue?.successDefinitions
+    .filter((d) => d.vSuccess.greaterThan(d.vFail))
+    .map((d) => d.vSuccess);
   const fairValueRange: AnalysisResult["fairValueRange"] =
     fixture.preRevenue !== null
       ? {
           kind: "pre-revenue-distribution",
           failure: fixture.preRevenue.cashPerShare,
-          successAsCommonlyDescribed: fixture.preRevenue.successDefinitions
-            .filter((d) => d.vSuccess.greaterThan(d.vFail))
-            .reduce((max, d) => (d.vSuccess.greaterThan(max) ? d.vSuccess : max), new Decimal(0)),
+          successAsCommonlyDescribed:
+            qualifyingSuccessValues && qualifyingSuccessValues.length > 0
+              ? qualifyingSuccessValues.reduce((min, v) => (v.lessThan(min) ? v : min))
+              : fixture.preRevenue.cashPerShare,
           successAsPriceRequires: fixture.price.value,
           cashFloor: fixture.preRevenue.cashPerShare,
         }
