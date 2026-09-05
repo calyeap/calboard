@@ -25,18 +25,34 @@ import type { Figure, FundingRamp, FundingStackLine, SuccessDefinitionState } fr
 // one is exactly what was asked NOT to be done.
 //
 // CONSTRUCTION-TIMING CORRECTION: capex is spent at the unit's
-// capitalisation date (year 0 for this per-unit test); the first
-// operating cash flow arrives `constructionLeadYears` later. Both dates
-// are already defined by, and must match, the funding stack this module
-// also computes (`FundingStackYearParams.constructionLeadYears` — every
-// unit is capitalised `constructionLeadYears` before it comes into
-// service, §7.2 M16). This function takes the same parameter rather than
-// its own assumption, so the two halves of this module cannot silently
-// disagree about the lag. The perpetuity value of the (still perpetual,
-// still constant) contribution margin is discounted back from its actual
-// start date to the capex date by (1+requiredReturn)^(−constructionLeadYears)
-// before comparing to capex — the ONLY change from the undiscounted
-// version; the perpetuity itself is untouched.
+// capitalisation date (t=0 for this per-unit test); the first operating
+// cash flow arrives `constructionLeadYears` later (t=constructionLeadYears),
+// per the funding stack's own convention (`FundingStackYearParams.
+// constructionLeadYears` — every unit is capitalised `constructionLeadYears`
+// before it comes into service and its arrival year already carries a
+// full year of contribution, §7.2 M16; verified directly against that
+// function's cash-flow dates, not assumed). This function takes the same
+// parameter rather than its own assumption, so the two halves of this
+// module cannot silently disagree about the lag.
+//
+// EXPONENT, verified by independent term-by-term summation (not algebra
+// alone) against those exact dates: the discount factor is
+// (1+requiredReturn)^(−(constructionLeadYears−1)), NOT
+// (1+requiredReturn)^(−constructionLeadYears). The reason for the "−1":
+// `contribution ÷ requiredReturn` is the ORDINARY perpetuity formula,
+// which is already valued one period BEFORE its first payment — that
+// timing assumption is baked into the fraction itself. The first payment
+// is at t=constructionLeadYears, so contribution÷requiredReturn is
+// already sitting at t=(constructionLeadYears−1); only the remaining
+// (constructionLeadYears−1) periods need to be bridged to reach the capex
+// date at t=0. A first, uncorrected version of this fix used the full
+// constructionLeadYears as the exponent, double-counting one period —
+// confirmed wrong by direct summation (826.446 vs. the true 909.091 at
+// contribution=100, requiredReturn=10%, lead=2) before being corrected
+// here. Do NOT clamp this exponent at zero: at zero lead the unit's first
+// cash flow lands AT the capex date itself (a perpetuity DUE), which is
+// genuinely worth (1+requiredReturn) MORE than the ordinary-perpetuity
+// figure — the exponent is legitimately +1 in that case, not 0.
 //
 // This is a NECESSARY, not sufficient, per-unit screen. Passing it does
 // not prove the project is viable — it only means this one unit's
@@ -55,9 +71,9 @@ export function computeUnitEconomicsBreakeven(
   }
 
   const annualContribution = revenuePerUnit.minus(operatingCostPerUnit);
-  const perpetuityValueAtServiceStart = annualContribution.dividedBy(requiredReturn);
-  const discountFactor = new Decimal(1).plus(requiredReturn).pow(-constructionLeadYears);
-  const perpetuityValueAtCapexDate = perpetuityValueAtServiceStart.mul(discountFactor);
+  const perpetuityValueOneYearBeforeFirstPayment = annualContribution.dividedBy(requiredReturn);
+  const discountFactor = new Decimal(1).plus(requiredReturn).pow(-(constructionLeadYears - 1));
+  const perpetuityValueAtCapexDate = perpetuityValueOneYearBeforeFirstPayment.mul(discountFactor);
 
   if (perpetuityValueAtCapexDate.lessThanOrEqualTo(capexPerUnit)) {
     return suppressedValue(
