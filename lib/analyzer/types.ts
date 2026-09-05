@@ -65,6 +65,18 @@ export interface ProvenanceTokens {
   verificationState: VerificationState;
 }
 
+// A single fact-derived input value paired with its own provenance, so a
+// calculation module can both use the number and fold its provenance into
+// the module's combined output qualification (lib/analyzer/provenance.ts's
+// combineProvenance). Every M1–M16 module input is shaped as
+// `SourcedValue<T> | null` per field — null meaning that REQUIRED input is
+// missing, which the module resolves to INCOMPLETE (§5.1) rather than
+// computing on partial data.
+export interface SourcedValue<T> {
+  value: T;
+  provenance: ProvenanceTokens;
+}
+
 export type ProvenanceQualifier = "SECONDARY" | "UNVERIFIED" | "AI-EXTRACTED";
 
 export type AnalyticQualifier =
@@ -267,17 +279,27 @@ export interface ScenarioSet {
 // §7.2 — deterministic diagnostic modules (M1–M14)
 // ---------------------------------------------------------------------------
 
-export interface EnterpriseValueBridge {
+export interface EnterpriseValueBreakdown {
   marketCap: Decimal;
   totalDebt: Decimal;
   financeLeaseLiabilities: Decimal;
   cashAndMarketableDebtSecurities: Decimal;
   nonOperatingEquityInvestmentsAtBook: Decimal;
-  enterpriseValue: Figure<Decimal>;
-  // Memo only — operating leases stay excluded from the bridge itself
-  // (§3.5).
-  operatingLeaseInclusiveNetDebtMemo: Decimal;
+  // Carried at book value in both directions (§3.5). The direction of the
+  // likely error is descriptive context beside the figure, not a second
+  // computed number — null when there is nothing non-operating to carry.
+  nonOperatingInvestmentsErrorDirection: "understates" | "overstates" | null;
+  enterpriseValue: Decimal;
 }
+
+// A Figure, not a bag of always-present raw fields: M1 is "INCOMPLETE if
+// any REQUIRED input missing" (§7.2), and a missing shares-outstanding or
+// debt figure means there is no EV breakdown to show at all, not a struct
+// with some fields silently absent. The operating-lease-inclusive net-debt
+// ratio is deliberately NOT part of this bridge — §3.5 places that memo in
+// the leverage test's own display only (see LeverageResult in gates.ts),
+// not in the EV bridge module.
+export type EnterpriseValueBridge = Figure<EnterpriseValueBreakdown>;
 
 export interface MultiplesResult {
   peTrailing: Figure<Decimal>;
@@ -300,8 +322,13 @@ export interface MultiplesResult {
   ownHistoryPercentile: Figure<Decimal>;
 }
 
-export interface MarginHistoryResult {
+export interface MarginHistoryBreakdown {
   currentMargin: Decimal;
+  // The ACTUAL window used — never described as ten-year unless it is
+  // (§6.2). Range, median and worst-change below are computed over this
+  // same window, whatever its length; a genuinely short window is labelled
+  // honestly, not suppressed (M3 always runs — §6.2: "margin diagnostics
+  // still run" even under HISTORY INSUFFICIENT).
   windowYears: number;
   range: Decimal;
   median: Decimal;
@@ -309,15 +336,29 @@ export interface MarginHistoryResult {
   fiftyTwoWeekRange: [Decimal, Decimal];
 }
 
+// Figure-wrapped like the EV bridge: INCOMPLETE if there is no margin
+// history or 52-week range at all to compute over (M3 has no REQUIRED-input
+// list of its own in §4.2, but an empty input set is the same "nothing to
+// show" case as any other missing-REQUIRED-input module).
+export type MarginHistoryResult = Figure<MarginHistoryBreakdown>;
+
+// Each of the three definitions is its own Figure, not one shared
+// suppression state: V8 (removing finance-lease ROU additions) cascades to
+// INCOMPLETE on unleveredFcf and fcfAfterLeaseFundedCapacity specifically,
+// but NOT on cashFcf — cash FCF's own inputs are OCF and cash capex only,
+// so it is unaffected by a missing lease figure (§7.2 M4, §11.8).
 export interface FcfResult {
-  cashFcf: Decimal;
-  fcfAfterLeaseFundedCapacity: Decimal;
-  unleveredFcf: Decimal;
-  sbc: Decimal;
-  workingCapitalSwing: Decimal;
+  cashFcf: Figure<Decimal>;
+  fcfAfterLeaseFundedCapacity: Figure<Decimal>;
+  unleveredFcf: Figure<Decimal>;
+  // Shown separately alongside the three definitions (§3.5); OPTIONAL to
+  // the definitions themselves (they never use it directly) but REQUIRED
+  // for fcfYield.cashFcfLessSbc below.
+  sbc: Decimal | null;
+  workingCapitalSwing: Decimal | null;
   // Both shown always; the SBC-adjusted figure is the one compared to the
   // required return (I6).
-  fcfYield: { cashFcf: Decimal; cashFcfLessSbc: Decimal };
+  fcfYield: { cashFcf: Figure<Decimal>; cashFcfLessSbc: Figure<Decimal> };
 }
 
 export type DiscountRate = 0.08 | 0.1 | 0.12;
@@ -331,10 +372,16 @@ export type RonicLadderState =
   | "CLEAN";
 
 export interface ReinvestmentRonicResult {
-  reinvestment: Decimal;
-  // Evaluated per grid cell, not once per company — "the rate in that cell"
-  // differs across 8/10/12% (§7.2 M5).
-  ronicByCell: { rate: DiscountRate; state: RonicLadderState; value: Decimal | null }[];
+  reinvestment: Figure<Decimal>;
+  // Suppressed as a whole (INCOMPLETE) only when the five-year NOPAT/
+  // invested-capital deltas themselves are missing. Otherwise always
+  // exactly three cells, evaluated per grid cell rather than once per
+  // company — "the rate in that cell" differs across 8/10/12%, so the same
+  // company can be CLEAN at 8% and LOW RONIC at 10% and 12% (§7.2 M5). The
+  // RONIC NOT MEANINGFUL state is rate-independent (it fires from ΔNOPAT
+  // or Δinvested-capital alone) and so appears identically on all three
+  // cells when it fires.
+  ronic: Figure<{ cells: { rate: DiscountRate; state: RonicLadderState; value: Decimal | null }[] }>;
   capitalLight: boolean;
   workingCapitalIntensity: Decimal | null;
   lagBiasDirection: "conservative" | "generous";
@@ -415,6 +462,11 @@ export interface PriceImplied {
   steadyStateEv: Figure<Decimal>;
   pvgo: Figure<Decimal>;
   pvgoShareOfEv: Figure<Decimal>;
+  // Non-null only where trigger A or B has fired — "both current and
+  // median-margin are shown with the gap called out" (§7.2 M6). Otherwise
+  // steady-state EV is computed from median-margin NOPAT silently, with no
+  // separate gap display.
+  nopatGap: { current: Decimal; medianMargin: Decimal } | null;
   // Nine cells: three margin levels × three rates.
   reverseDcfGrid: ReverseDcfCell[];
   impliedExitMultiple: { value: Figure<Decimal>; dividesMetric: string };

@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { POLICY } from "./policy";
+import { windowMax, windowRange, worstSingleYearDecline } from "./marginMath";
 import type { Gate0Result, Gate1Result, LeverageResult, OverrideRecord, TriggerResult } from "./types";
 
 // §6 — company classification and gates. Every function here is pure and
@@ -199,7 +200,7 @@ export function evaluateLeverage(input: LeverageInput): LeverageResult {
 // §6.4 — triggers A and B, evaluated separately
 // ---------------------------------------------------------------------------
 
-export interface MarginHistoryInput {
+export interface TriggerMarginInput {
   // Chronological order, oldest first, current year last. Whether the
   // window is trusted at all (HISTORY INSUFFICIENT vs SHORT HISTORY vs
   // full) is Gate 1's concern, not this function's — it evaluates whatever
@@ -211,12 +212,11 @@ export interface MarginHistoryInput {
 // points of the window max, AND the window's range exceeds 15 points. A
 // description, not a claim about the business (§6.4) — firing alone implies
 // nothing about cyclicality.
-export function evaluateTriggerA(input: MarginHistoryInput): TriggerResult {
+export function evaluateTriggerA(input: TriggerMarginInput): TriggerResult {
   const margins = input.yearlyOperatingMargins;
   const current = margins[margins.length - 1];
-  const max = Decimal.max(...margins);
-  const min = Decimal.min(...margins);
-  const range = max.minus(min);
+  const max = windowMax(margins);
+  const range = windowRange(margins);
 
   const nearMax = current.greaterThanOrEqualTo(max.minus(POLICY.triggerAMarginProximityPoints));
   const wideRange = range.greaterThan(POLICY.triggerAWindowRangePoints);
@@ -232,17 +232,8 @@ export function evaluateTriggerA(input: MarginHistoryInput): TriggerResult {
 // more than 10 points within the available window. A claim about the
 // business, requiring an *observed* decline — a short window in which none
 // was observed is absence of evidence, not evidence of absence (§6.2, §6.4).
-export function evaluateTriggerB(input: MarginHistoryInput): TriggerResult {
-  const margins = input.yearlyOperatingMargins;
-  let worstDecline = new Decimal(0);
-
-  for (let i = 0; i < margins.length - 1; i++) {
-    const decline = margins[i].minus(margins[i + 1]);
-    if (decline.greaterThan(worstDecline)) {
-      worstDecline = decline;
-    }
-  }
-
+export function evaluateTriggerB(input: TriggerMarginInput): TriggerResult {
+  const worstDecline = worstSingleYearDecline(input.yearlyOperatingMargins);
   const fired = worstDecline.greaterThan(POLICY.triggerBDeclinePoints);
 
   return {
