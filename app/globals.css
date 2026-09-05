@@ -1830,6 +1830,63 @@ h6 {
 .cb-analyzer .disclose .body li {
   margin-bottom: 6px;
 }
+
+/* ---------- Quick Read items (§17.16) — always visible, no disclosure --
+   Eight fixed items, one component. Same class names as the frozen mocks'
+   own .quickread aside so this in-flow section and a future wide-mode
+   third column (not built in this checkpoint — see the carve-out) can
+   share styling without renaming anything later. */
+.cb-analyzer .qitem {
+  padding: 0 0 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--hairline);
+  max-width: 68ch;
+}
+.cb-analyzer .qitem:last-child {
+  border-bottom: 0;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.cb-analyzer .qitem > .k {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+.cb-analyzer .qitem .t {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 0;
+}
+.cb-analyzer .qitem a {
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line-strong);
+}
+.cb-analyzer .qitem a:hover {
+  border-bottom-color: var(--ink);
+}
+.cb-analyzer .qitem ul {
+  margin: 0;
+  padding-left: 16px;
+}
+.cb-analyzer .qitem li {
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+.cb-analyzer .qlead {
+  font-size: 15px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--ink);
+  margin: 0;
+}
+
 @media (max-width: 720px) {
   .cb-analyzer .finding dl {
     grid-template-columns: 1fr;

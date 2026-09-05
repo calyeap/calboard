@@ -36,6 +36,10 @@ function pct(value: Decimal, dp = 1): string {
   return `${value.mul(100).toFixed(dp)}%`;
 }
 
+function points(value: Decimal): string {
+  return value.mul(100).toFixed(0);
+}
+
 function num(value: Decimal, dp = 2): string {
   return value.toFixed(dp);
 }
@@ -154,8 +158,98 @@ function ReverseDcfCellView({ cell }: { cell: ReverseDcfCell }) {
   );
 }
 
+interface ProvisionalRow {
+  key: string;
+  label: string;
+  impact: string;
+  detail: string;
+}
+
+// Section J (§10.6, defects 4-6) — every row restates a field already in
+// the AnalysisResult: the constant's own value (result.policy.constants,
+// for the plain-English label with units — never the raw PolicyConstants
+// key), its calibration note (result.policy.provisionalLabels, for the
+// detail line) and, where a row's relevance depends on this particular
+// run, an already-computed existence check (never a "N of M" count — that
+// pattern is reserved for outside Quick Read; here it is fine because
+// Section A's own manifest already prints counts like "4 of 9").
+//
+// Curated, not a blanket dump of every PolicyConstants key: a threshold
+// whose diagnostic did not run for this profile is not "in force" for this
+// analysis, so it does not belong in this run's disclosure register
+// (§10.6's "every PROVISIONAL threshold" means every one actually
+// exercised, not the full policy-wide list regardless of relevance).
+function buildProvisionalRegister(result: AnalysisResult): ProvisionalRow[] {
+  const { policy, preRevenue, states } = result;
+  const c = policy.constants;
+  const rows: ProvisionalRow[] = [];
+
+  if (preRevenue !== null) {
+    rows.push({
+      key: "preRevenueConstructionLeadYears",
+      label: `Construction lead fixed at ${c.preRevenueConstructionLeadYears} years — PROVISIONAL`,
+      impact: "first-order",
+      detail: policy.provisionalLabels.preRevenueConstructionLeadYears ?? "",
+    });
+  } else {
+    rows.push({
+      key: "terminalRoicPremium",
+      label: `Terminal ROIC = r + ${points(c.terminalRoicPremium)} percentage points — PROVISIONAL`,
+      impact: "assumed for every company",
+      detail: policy.provisionalLabels.terminalRoicPremium ?? "",
+    });
+    rows.push({
+      key: "gate0InterestIncomeOverRevenueThreshold",
+      label: `Gate 0 interest-income test > ${pct(c.gate0InterestIncomeOverRevenueThreshold, 0)} of revenue — PROVISIONAL`,
+      impact: "no observations",
+      detail: policy.provisionalLabels.gate0InterestIncomeOverRevenueThreshold ?? "",
+    });
+    rows.push({
+      key: "runRateSequentialGrowthTrigger",
+      label: `Run-rate sequential trigger ~${pct(c.runRateSequentialGrowthTrigger, 0)} — PROVISIONAL`,
+      impact: "calibrated on one company",
+      detail: policy.provisionalLabels.runRateSequentialGrowthTrigger ?? "",
+    });
+  }
+
+  const anyRateCapped =
+    (preRevenue !== null && preRevenue.successDefinitions.some((d) => d.rateCapped)) ||
+    states.qualifying.some((q) => q.flag === "RATE CAPPED — VALUE IS AN UPPER BOUND");
+  if (anyRateCapped) {
+    rows.push({
+      key: "leveredCostOfEquityCap",
+      label: `Levered cost-of-equity cap at ${pct(c.leveredCostOfEquityCap, 0)} — PROVISIONAL`,
+      impact: "binds on one or more cases",
+      detail: policy.provisionalLabels.leveredCostOfEquityCap ?? "",
+    });
+  }
+
+  rows.push({
+    key: "gate1Thresholds",
+    label: `Gate 1 thresholds — <${c.gate1HistoryInsufficientYears} / ${c.gate1HistoryInsufficientYears}-${c.gate1ShortHistoryYears} filed years — PROVISIONAL`,
+    impact: "no observations",
+    detail: "Direction of error is suppression.",
+  });
+
+  rows.push({
+    key: "undefinedConstants",
+    label: "Undefined policy constants, configured for this run",
+    impact: String(Object.keys(policy.undefinedConstants).length),
+    detail: "NOPAT tax rate · stress margin level · pre-revenue unlevered rate · project-debt cost",
+  });
+
+  rows.push({
+    key: "namedUnmodelledRisks",
+    label: "Named unmodelled risks",
+    impact: "debt availability",
+    detail: "Debt share is removed from the sensitivity table — value-neutral by construction.",
+  });
+
+  return rows;
+}
+
 export function AnalyzerReport({ result }: { result: AnalysisResult }) {
-  const { gates, states, diagnostics, priceImplied, scenarios, scenarioOutputs, fairValueRange, preRevenue, policy } = result;
+  const { gates, states, diagnostics, priceImplied, scenarios, scenarioOutputs, fairValueRange, preRevenue } = result;
 
   return (
     <div className="layout">
@@ -798,23 +892,19 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
             <span className="k">Always expanded</span>
           </div>
           <hr />
-          <dl className="jreg">
-            {Object.entries(policy.provisionalLabels).map(([key, label]) => (
-              <div key={key}>
-                <dt>{key} — PROVISIONAL</dt>
-                <dd>{label}</dd>
-              </div>
-            ))}
-            <div>
-              <dt>Undefined policy constants, configured for this run</dt>
-              <dd>
-                NOPAT tax rate {policy.undefinedConstants.nopatTaxRate !== null ? pct(policy.undefinedConstants.nopatTaxRate) : "unconfigured"} · stress
-                margin level {policy.undefinedConstants.stressMarginLevel !== null ? pct(policy.undefinedConstants.stressMarginLevel) : "unconfigured"} ·
-                pre-revenue unlevered rate {policy.undefinedConstants.preRevenueUnleveredRate !== null ? pct(policy.undefinedConstants.preRevenueUnleveredRate) : "unconfigured"} · project-debt cost{" "}
-                {policy.undefinedConstants.projectDebtCost !== null ? pct(policy.undefinedConstants.projectDebtCost) : "unconfigured"}
-              </dd>
-            </div>
-          </dl>
+          <table className="t">
+            <tbody>
+              {buildProvisionalRegister(result).map((row) => (
+                <tr key={row.key}>
+                  <td>{row.label}</td>
+                  <td>
+                    <span className="v">{row.impact}</span>
+                    <div className="sub">{row.detail}</div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
 
 

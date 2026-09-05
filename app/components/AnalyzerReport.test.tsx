@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
-import { render, cleanup, screen } from "@testing-library/react";
+import { render, cleanup, screen, within } from "@testing-library/react";
 import { AnalyzerReport } from "./AnalyzerReport";
 import { assembleAnalysisResult } from "@/lib/analyzer/assemble";
 import { MSFT_FIXTURE } from "@/lib/analyzer/fixtures/msft";
@@ -64,6 +64,19 @@ describe("AnalyzerReport — MSFT", () => {
     const ids = Array.from(container.querySelectorAll("main > section")).map((el) => el.id);
     expect(ids).toEqual(["quickread", "A", "B", "C", "D", "E", "F", "G", "H", "I", "I2", "J", "atglance"]);
   });
+
+  it("Section J shows plain-English labels with units, never a raw PolicyConstants key (defect 4)", () => {
+    render(<AnalyzerReport result={result} />);
+    expect(screen.getByText(/Terminal ROIC = r \+ 3 percentage points — PROVISIONAL/)).not.toBeNull();
+    expect(screen.getByText(/Gate 1 thresholds — <5 \/ 5-9 filed years — PROVISIONAL/)).not.toBeNull();
+    expect(screen.queryByText(/terminalRoicPremium|gate1HistoryInsufficientYears/)).toBeNull();
+  });
+
+  it("Section J omits pre-revenue-only thresholds for the mature profile (defect 6 curation, the other direction)", () => {
+    const { container } = render(<AnalyzerReport result={result} />);
+    const section = container.querySelector("section#J") as HTMLElement;
+    expect(section.textContent).not.toMatch(/Construction lead fixed/);
+  });
 });
 
 describe("AnalyzerReport — OKLO", () => {
@@ -89,8 +102,13 @@ describe("AnalyzerReport — OKLO", () => {
   });
 
   it("renders all four success definitions with definitions 1-2 correctly stating worth-less-than-failure, 3-4 with real probabilities", () => {
-    render(<AnalyzerReport result={result} />);
-    expect(screen.getAllByText("THIS SUCCESS IS WORTH LESS THAN FAILURE")).toHaveLength(2);
+    const { container } = render(<AnalyzerReport result={result} />);
+    // Scoped to Section D's own table — Quick Read (restored, defect 1)
+    // legitimately echoes this state inline too, so a document-wide count
+    // is no longer exactly 2; duplication across the report is expected,
+    // not a defect (same principle the MSFT DEGENERATE test above uses).
+    const sectionD = container.querySelector("section#D") as HTMLElement;
+    expect(within(sectionD).getAllByText("THIS SUCCESS IS WORTH LESS THAN FAILURE")).toHaveLength(2);
     // Scoped to each definition's own table row — "25%" alone also
     // legitimately appears elsewhere (Section G's price-location figure).
     const def3Row = screen.getByText(/Definition 3/).closest("tr");
@@ -127,5 +145,26 @@ describe("AnalyzerReport — OKLO", () => {
     render(<AnalyzerReport result={result} />);
     expect(screen.getByText(/company today/)).not.toBeNull();
     expect(screen.getByText(/success-case cash flow is a residual after debt/)).not.toBeNull();
+  });
+
+  it("Section J curates a small, relevant register with plain-English labels and an impact column — never a raw PolicyConstants key, never all nine thresholds regardless of relevance", () => {
+    const { container } = render(<AnalyzerReport result={result} />);
+    const section = container.querySelector("section#J") as HTMLElement;
+    expect(section.querySelector("dl.jreg")).toBeNull();
+    expect(section.textContent).not.toMatch(/gate0InterestIncomeOverRevenueThreshold|gate1HistoryInsufficientYears|terminalRoicPremium|runRateSequentialGrowthTrigger/);
+    // Pre-revenue: construction lead is relevant, terminal-ROIC/gate-0/
+    // run-rate thresholds (reverse-DCF-only) are not.
+    expect(screen.getByText(/Construction lead fixed at 2 years — PROVISIONAL/)).not.toBeNull();
+    expect(section.textContent).not.toMatch(/Terminal ROIC = r \+/);
+    // Row 5 — restored (defect 5): named unmodelled risks, absent before.
+    expect(screen.getByText("Named unmodelled risks")).not.toBeNull();
+    expect(screen.getByText(/debt availability/)).not.toBeNull();
+    // Curation + impact column (defect 6): every row pairs a plain-English
+    // label with an impact figure, not a flat list with no column at all.
+    const rows = section.querySelectorAll("tbody tr");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of Array.from(rows)) {
+      expect(row.querySelector("td:nth-child(2) .v")?.textContent).not.toBe("");
+    }
   });
 });
