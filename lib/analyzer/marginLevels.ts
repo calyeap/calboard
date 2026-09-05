@@ -20,13 +20,22 @@ import type { Figure, Gate1Result } from "./types";
 // "stress" level itself is one of §7.1's four undefined LATER policy
 // constants. This is not a contradiction in the frozen contract — §7.1
 // explicitly defers this value and requires it be surfaced as
-// configuration rather than guessed. Until Command Center configures it,
-// any cell that specifically needs the stress margin level returns
-// INCOMPLETE, naming the reason. Current and median levels are unaffected.
+// configuration rather than guessed.
+//
+// `configuredStressMarginLevel` is that configuration surface: null (the
+// default — see UNDEFINED_POLICY_CONSTANTS.stressMarginLevel) means
+// Command Center has not set a value, and the stress cell returns
+// INCOMPLETE, naming the reason. A run that supplies a real Decimal here
+// (an acceptance fixture reproducing a validated reference case, or a
+// production run once the constant is genuinely configured) gets a
+// computed stress margin instead — an unconfigured run stays incomplete,
+// but nothing stops a caller that HAS a configured value from using it.
+// Current and median levels are unaffected either way.
 export function resolveMarginLevels(
   currentMargin: Decimal,
   median: Decimal,
-  gate1State: Gate1Result["state"]
+  gate1State: Gate1Result["state"],
+  configuredStressMarginLevel: Decimal | null = null
 ): { current: Decimal; median: Decimal; stress: Figure<Decimal> } {
   if (gate1State === "HISTORY INSUFFICIENT") {
     const [quarterReduction, halfReduction] = POLICY.historyInsufficientStressMarginRelativeReductions;
@@ -40,9 +49,12 @@ export function resolveMarginLevels(
   return {
     current: currentMargin,
     median,
-    stress: suppressedValue(
-      "INCOMPLETE",
-      "stress margin level is an unconfigured policy constant (§7.1, recorded as LATER) — Command Center has not set a value"
-    ),
+    stress:
+      configuredStressMarginLevel !== null
+        ? computedValue(configuredStressMarginLevel, CLEAN_PROVENANCE)
+        : suppressedValue(
+            "INCOMPLETE",
+            "stress margin level is an unconfigured policy constant (§7.1, recorded as LATER) — Command Center has not set a value"
+          ),
   };
 }

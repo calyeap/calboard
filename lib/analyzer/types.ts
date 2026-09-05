@@ -617,15 +617,19 @@ export interface PolicyConstants {
   fcfYieldGrowthPreconditionBand: [Decimal, Decimal];
 }
 
-// The four constants the register records as LATER/undefined (§7.1). Kept
-// as an explicit null-valued type, not a guessed number, so every module
-// that would consume one is forced to handle "unset" rather than silently
-// picking a value.
+// The four constants the register records as LATER/undefined (§7.1).
+// Typed as `Decimal | null`, defaulting to null in policy.ts, rather than
+// a guessed number — the frozen spec requires these be "explicit
+// configuration... not buried as literals in code," so a run must be able
+// to SUPPLY a configured value (e.g. an acceptance fixture reproducing a
+// validated reference case) without that value ever becoming a silent
+// code default for every other run. Every module consuming one of these
+// is forced to handle "unset" (null) explicitly.
 export interface UndefinedPolicyConstants {
-  nopatTaxRate: null;
-  stressMarginLevel: null;
-  preRevenueUnleveredRate: null;
-  projectDebtCost: null;
+  nopatTaxRate: Decimal | null;
+  stressMarginLevel: Decimal | null;
+  preRevenueUnleveredRate: Decimal | null;
+  projectDebtCost: Decimal | null;
 }
 
 // ---------------------------------------------------------------------------

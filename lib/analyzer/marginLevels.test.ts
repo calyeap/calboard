@@ -38,4 +38,20 @@ describe("resolveMarginLevels", () => {
     // "median" slot must be the policy substitute (0.15), not that value.
     expect(result.median.toString()).toBe("0.15");
   });
+
+  it("uses an explicitly configured stress margin level instead of INCOMPLETE when one is supplied", () => {
+    const result = resolveMarginLevels(new Decimal("0.468"), new Decimal("0.418"), null, new Decimal("0.38"));
+    expect(result.stress.suppressed).toBe(false);
+    if (!result.stress.suppressed) {
+      expect(result.stress.value.toString()).toBe("0.38");
+    }
+  });
+
+  it("an explicitly configured value has no effect under HISTORY INSUFFICIENT — the substitute triad still governs", () => {
+    const result = resolveMarginLevels(new Decimal("0.2"), new Decimal("0.15"), "HISTORY INSUFFICIENT", new Decimal("0.38"));
+    expect(result.stress.suppressed).toBe(false);
+    if (!result.stress.suppressed) {
+      expect(result.stress.value.toString()).toBe("0.1"); // still the policy substitute, not 0.38
+    }
+  });
 });

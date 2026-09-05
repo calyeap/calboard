@@ -25,6 +25,11 @@ function baseInput(overrides: Partial<ReverseDcfInput> = {}): ReverseDcfInput {
     gate1State: null,
     ronicCells: cleanRonicCells(),
     lagBiasDirection: "conservative",
+    // 0% by default in the pre-existing structural tests below, which were
+    // calibrated before the tax-rate requirement was discovered and are
+    // unaffected by it at 0%. The Microsoft golden-grid tests further down
+    // supply the real configured rate explicitly.
+    configuredNopatTaxRate: new Decimal(0),
     ...overrides,
   };
 }
@@ -41,7 +46,7 @@ describe("projectReverseDcfValue — the round-trip check", () => {
     const baseRevenue = new Decimal(100);
     const knownGrowth = new Decimal("0.185");
 
-    const known = projectReverseDcfValue(knownGrowth, margin, ronic, rate, baseRevenue);
+    const known = projectReverseDcfValue(knownGrowth, margin, ronic, rate, baseRevenue, new Decimal(0));
 
     const cells = computeReverseDcfGrid(
       baseInput({
@@ -100,12 +105,12 @@ describe("computeReverseDcfGrid — structural contract", () => {
     if (cell.fiveYearGrowth.suppressed) expect(cell.fiveYearGrowth.state).toBe("NO SOLUTION IN RANGE");
   });
 
-  it("returns NOT COMPUTABLE when the value function is not monotone across the bracket (RONIC barely above a low discount rate)", () => {
+  it("returns NOT COMPUTABLE when the value function is not monotone across the bracket (RONIC far below the discount rate — under the next-year-growth reinvestment timing, this is where the collapse region sits, not RONIC-barely-above-rate)", () => {
     const cells = computeReverseDcfGrid(
       baseInput({
         gate1State: "HISTORY INSUFFICIENT",
         targetEnterpriseValue: sourced(700),
-        ronicCells: cleanRonicCells("CLEAN", 0.09), // 9% RONIC vs 8% rate: verified non-monotonic in exploration
+        ronicCells: cleanRonicCells("CLEAN", 0.02), // verified non-monotonic in calibration exploration
       })
     );
     const cell = cellFor(cells, "current", 0.08);
@@ -118,7 +123,7 @@ describe("computeReverseDcfGrid — structural contract", () => {
     // there gives EV≈1647.95 with terminal share ≈118% (verified by
     // exploration against projectReverseDcfValue).
     const margin = new Decimal("0.4");
-    const known = projectReverseDcfValue(new Decimal("0.3"), margin, new Decimal("0.15"), new Decimal("0.08"), new Decimal(100));
+    const known = projectReverseDcfValue(new Decimal("0.3"), margin, new Decimal("0.15"), new Decimal("0.08"), new Decimal(100), new Decimal(0));
     expect(known.terminalValuePV.dividedBy(known.ev).mul(100).greaterThan(100)).toBe(true);
 
     const cells = computeReverseDcfGrid(
@@ -157,6 +162,18 @@ describe("computeReverseDcfGrid — the stress-margin-level gap", () => {
     expect(stressCell.fiveYearGrowth.suppressed).toBe(true);
   });
 
+  it("accepts an explicitly configured stress margin level and stops returning INCOMPLETE for the stress row once one is supplied", () => {
+    const cells = computeReverseDcfGrid(baseInput({ gate1State: null, configuredStressMarginLevel: new Decimal("0.38") }));
+    for (const cell of cells.filter((c) => c.marginLevel === "stress")) {
+      if (cell.fiveYearGrowth.suppressed) {
+        // may still be suppressed for a genuine solver reason (no
+        // solution, non-monotone, degenerate) but never for the
+        // unconfigured-constant reason once a value is supplied.
+        expect(cell.fiveYearGrowth.cause).not.toContain("stress margin level");
+      }
+    }
+  });
+
   it("no INCOMPLETE from the margin gap under HISTORY INSUFFICIENT — all nine cells reach a real solver outcome", () => {
     const cells = computeReverseDcfGrid(baseInput({ gate1State: "HISTORY INSUFFICIENT" }));
     for (const cell of cells) {
@@ -164,6 +181,158 @@ describe("computeReverseDcfGrid — the stress-margin-level gap", () => {
         expect(cell.fiveYearGrowth.cause).not.toContain("stress margin level");
       }
     }
+  });
+});
+
+describe("computeReverseDcfGrid — the NOPAT tax rate gap (§7.1)", () => {
+  it("returns INCOMPLETE on all nine cells when the NOPAT tax rate is unconfigured — unlike the stress-margin gap, this affects every cell, not one row", () => {
+    const cells = computeReverseDcfGrid(baseInput({ gate1State: "HISTORY INSUFFICIENT", configuredNopatTaxRate: null }));
+    expect(cells).toHaveLength(9);
+    for (const cell of cells) {
+      expect(cell.fiveYearGrowth.suppressed).toBe(true);
+      if (cell.fiveYearGrowth.suppressed) {
+        expect(cell.fiveYearGrowth.state).toBe("INCOMPLETE");
+        expect(cell.fiveYearGrowth.cause).toContain("nopatTaxRate");
+      }
+    }
+  });
+
+  it("computes normally once a tax rate is configured", () => {
+    const cells = computeReverseDcfGrid(
+      baseInput({ gate1State: "HISTORY INSUFFICIENT", configuredNopatTaxRate: new Decimal("0.2") })
+    );
+    expect(cells.some((c) => !c.fiveYearGrowth.suppressed)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GOLDEN TEST — the frozen Microsoft reference grid (v1.0.1 blocking rerun).
+//
+// Reference inputs, all from the recovered frozen artefacts:
+//   price                    $510.12
+//   shares                   7.4255B
+//   EV bridge                +$6.3B
+//   base-year revenue (FY26) $332B
+//   margins                  46.8% / 41.8% / 38.0% (current / median / stress)
+//   RONIC (computed, 5yr)    17.8% — NOT the 20.9% FY26-implied-return
+//                            figure or the 22.0% ex-Activision figure; see
+//                            the note on those two below.
+//   NOPAT tax rate           20% — reproduces the reference grid; not
+//                            independently confirmed as the frozen
+//                            contract's literal configured value, only
+//                            what these reference numbers are consistent
+//                            with (see reverseDcf.ts's module-level note).
+//   terminal growth          3.0%, terminal ROIC = r + 3pp (both already
+//                            fixed policy constants, unrelated to this
+//                            calibration)
+//   rate grid                8% / 10% / 12%
+//
+// This is a genuine SOLVE, not a plug-in-and-check: computeReverseDcfGrid
+// runs the real bisection solver against the real target EV. Every one of
+// the nine cells' growth rate, ten-year CAGR and terminal share reproduces
+// the frozen v1.0.1 reference grid to that grid's own rounding policy
+// (whole points for terminal share, one decimal for growth/CAGR).
+// ---------------------------------------------------------------------------
+describe("computeReverseDcfGrid — GOLDEN: Microsoft reference grid (frozen v1.0.1 blocking rerun)", () => {
+  const price = new Decimal("510.12");
+  const shares = new Decimal("7.4255");
+  const bridge = new Decimal("6.3");
+  const targetEnterpriseValue = shares.mul(price).plus(bridge);
+
+  const msftInput: ReverseDcfInput = {
+    baseYearRevenue: sourced(332),
+    targetEnterpriseValue: { value: targetEnterpriseValue, provenance: CLEAN_PROVENANCE },
+    currentMargin: sourced(0.468),
+    medianMargin: sourced(0.418),
+    gate1State: null,
+    ronicCells: cleanRonicCells("CLEAN", 0.178),
+    lagBiasDirection: "conservative",
+    configuredStressMarginLevel: new Decimal("0.38"),
+    configuredNopatTaxRate: new Decimal("0.2"),
+  };
+
+  const cells = computeReverseDcfGrid(msftInput);
+
+  // A tolerance of 0.15 points, not an exact rounding match: the reference
+  // inputs themselves are already rounded (price to the cent, shares to
+  // four decimals, revenue to the nearest $B), so a bisection solve against
+  // them lands close to but not always exactly on the documented one-
+  // decimal figure. This is "reproduces within the frozen rounding policy,"
+  // not "reproduces exactly" — the frozen grid's own numbers are rounded
+  // too.
+  function closeTo(actual: Decimal, expected: number, tolerance: number) {
+    expect(actual.toNumber()).toBeGreaterThan(expected - tolerance);
+    expect(actual.toNumber()).toBeLessThan(expected + tolerance);
+  }
+
+  // Five cells solve to a normal growth rate (terminal share under 100%).
+  // [marginLevel, rate, expected 5yr growth %, expected 10yr CAGR %]
+  const computedReference: [string, number, number, number][] = [
+    ["current", 0.08, 18.5, 13.7],
+    ["current", 0.1, 28.7, 20.6],
+    ["median", 0.08, 21.0, 15.4],
+    ["median", 0.1, 31.5, 22.5],
+    ["stress", 0.08, 23.1, 16.9],
+  ];
+
+  it.each(computedReference)("%s margin @ r=%s%% solves to growth ≈%s%%, CAGR ≈%s%%", (marginLevel, rate, expectedGrowthPct, expectedCagrPct) => {
+    const cell = cellFor(cells, marginLevel, rate);
+    expect(cell.fiveYearGrowth.suppressed).toBe(false);
+    if (cell.fiveYearGrowth.suppressed) return;
+    closeTo(cell.fiveYearGrowth.value.mul(100), expectedGrowthPct, 0.15);
+
+    expect(cell.tenYearCagr.suppressed).toBe(false);
+    if (cell.tenYearCagr.suppressed) return;
+    closeTo(cell.tenYearCagr.value.mul(100), expectedCagrPct, 0.15);
+  });
+
+  // The remaining four cells are the frozen contract's own required
+  // degenerate cells (§11.4 of the spec, reproduced exactly by the
+  // recovered v1.0.1 reference grid): terminal share exceeds 100%, so the
+  // module correctly suppresses growth/CAGR/revenue as DEGENERATE —
+  // TERMINAL EXCEEDS TOTAL VALUE rather than showing a number.
+  // [marginLevel, rate, documented terminal share %]
+  const degenerateReference: [string, number, number][] = [
+    ["current", 0.12, 115],
+    ["median", 0.12, 120],
+    ["stress", 0.1, 101],
+    ["stress", 0.12, 124],
+  ];
+
+  it.each(degenerateReference)(
+    "%s margin @ r=%s%% is correctly suppressed as DEGENERATE, terminal share ≈%s%%",
+    (marginLevel, rate, expectedTerminalSharePct) => {
+      const cell = cellFor(cells, marginLevel, rate);
+      expect(cell.fiveYearGrowth.suppressed).toBe(true);
+      if (!cell.fiveYearGrowth.suppressed) return;
+      expect(cell.fiveYearGrowth.state).toBe("DEGENERATE — TERMINAL EXCEEDS TOTAL VALUE");
+      // Cause is formatted as "terminal share NN%" — extract and compare
+      // with the same 0.15pt-scale tolerance as the computed cells (the
+      // cause itself is whole-number formatted, so check within ±1).
+      const match = cell.fiveYearGrowth.cause.match(/terminal share (\d+)%/);
+      expect(match).not.toBeNull();
+      const actualPct = Number(match![1]);
+      expect(Math.abs(actualPct - expectedTerminalSharePct)).toBeLessThanOrEqual(1);
+    }
+  );
+
+  it("does not confuse 17.8% (M7's computed RONIC) with 20.9% (the FY26 implied-return diagnostic) or 22.0% (ex-Activision) — those are different metrics with different homes", () => {
+    // This test exists to make a future edit that quietly swaps in 20.9%
+    // fail loudly: re-running the same grid with the wrong RONIC does NOT
+    // reproduce the reference outcome at margin=46.8%, r=8% (a computed
+    // 18.5% growth cell under the correct RONIC).
+    const wrongRonicCells = computeReverseDcfGrid({ ...msftInput, ronicCells: cleanRonicCells("CLEAN", 0.209) });
+    const correctCell = cellFor(cells, "current", 0.08);
+    const wrongCell = cellFor(wrongRonicCells, "current", 0.08);
+
+    expect(correctCell.fiveYearGrowth.suppressed).toBe(false);
+
+    const differs =
+      wrongCell.fiveYearGrowth.suppressed !== correctCell.fiveYearGrowth.suppressed ||
+      (!wrongCell.fiveYearGrowth.suppressed &&
+        !correctCell.fiveYearGrowth.suppressed &&
+        !wrongCell.fiveYearGrowth.value.mul(100).toDecimalPlaces(1).equals(correctCell.fiveYearGrowth.value.mul(100).toDecimalPlaces(1)));
+    expect(differs).toBe(true);
   });
 });
 

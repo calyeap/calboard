@@ -20,22 +20,45 @@ import type {
 // path shape (§7.1): constant growth 1–5, linear fade to 3% terminal
 // growth by year 10, terminal thereafter.
 //
-// VALUATION CONVENTION — a modeling decision, not pinned down letter-by-
-// letter in the frozen spec, so it is recorded here rather than left
-// implicit. The spec fixes the *concept* precisely (value-driver
-// reinvestment via RONIC, Gordon-growth terminal value using terminal FCF
-// = terminal NOPAT × (1 − g ÷ terminal ROIC), §7.2 M8) but not every
-// time-indexing choice. This implementation uses the standard convention:
-// FCF_t = NOPAT_t × (1 − g_t ÷ RONIC), where g_t is the growth rate
-// realised IN year t (this year's reinvestment funds this year's own
-// growth, the common simplification in this style of model). Reproducing
-// the exact Microsoft/OKLO mock figures against this convention is a
-// dedicated calibration task, not yet performed — this module is verified
-// here against the spec's STRUCTURAL requirements (all three of five-year
-// growth/ten-year CAGR/year-10 revenue always together, the three
-// degenerate solver states, the RONIC NOT MEANINGFUL cascade, the
-// undefined stress-margin-level gap), not against literal reproduction of
-// the mocks' numbers.
+// VALUATION CONVENTION — calibrated against the recovered frozen v1.0.1
+// blocking-rerun reference grid (the Microsoft 3×3 case) and locked with
+// golden tests in reverseDcf.test.ts. Two points that are NOT obvious from
+// the spec's prose alone and must not be "corrected" back to the more
+// common textbook form without re-breaking the calibration:
+//
+// 1. REINVESTMENT TIMING — next period's growth, not this period's own.
+//    Reinvestment_t = NOPAT_t × g_(t+1) ÷ RONIC
+//    FCFF_t         = NOPAT_t − Reinvestment_t
+//    i.e. year t's cash flow funds year (t+1)'s growth. This is the
+//    opposite of the more commonly seen "FCF_t = NOPAT_t × (1 − g_t ÷
+//    RONIC)" convention (this year's own growth) — that version was tried
+//    first here and did NOT reproduce the reference grid; the g_(t+1)
+//    version reproduces all nine reference cells' growth rates, 10-year
+//    CAGRs and terminal shares to the frozen rounding policy. For year 10
+//    specifically, g_11 = terminal growth (3%) — the reinvestment that
+//    funds the transition into the terminal period.
+//
+// 2. NOPAT TAX RATE — required, not optional, for this module specifically.
+//    NOPAT_t = Revenue_t × margin × (1 − nopatTaxRate)
+//    "margin" here is the same operating margin used throughout (Trigger
+//    A/B, M3) — M7 is the one place that converts it to a forward NOPAT
+//    projection, and that conversion needs §7.1's undefined "NOPAT tax
+//    rate" policy constant. M5's and M6's NOPAT inputs are historical/
+//    current facts supplied externally and never go through this
+//    conversion, which is why they are unaffected by this constant. An
+//    effective rate of 20% reproduces the reference grid (a plausible,
+//    round figure — not confirmed as the frozen contract's literal
+//    configured value, just what the recovered reference numbers are
+//    consistent with). Terminal share is invariant to this rate (a
+//    uniform NOPAT scaling cancels out of the terminal/explicit ratio),
+//    but the *absolute* target EV a given growth rate reaches is not, so
+//    getting the tax rate right matters for solving the correct growth
+//    rate even though it would not matter for a terminal-share-only check.
+//
+// Terminal construction (unchanged from the original implementation, and
+// was never the source of the earlier mismatch): terminal FCF = terminal
+// NOPAT × (1 − terminal growth ÷ terminal ROIC), terminal ROIC = rate + 3pp
+// (I16), discounted from year 10 (§7.2 M8).
 
 // Calibration note: a wider bracket (explored up to +300%) crosses a real
 // reinvestment-collapse region for ANY finite RONIC — once g exceeds RONIC
@@ -67,13 +90,30 @@ export interface ReverseDcfInput {
   // margin-level-dependent).
   ronicCells: { rate: DiscountRate; state: RonicLadderState; value: Decimal | null }[];
   lagBiasDirection: "conservative" | "generous";
+  // §7.1's undefined "stress margin level" policy constant, threaded
+  // through explicitly (UNDEFINED_POLICY_CONSTANTS.stressMarginLevel).
+  // Defaults to null — an unconfigured run's "stress" cells stay
+  // INCOMPLETE — but an acceptance fixture reproducing a validated
+  // reference case (or a production run once Command Center configures
+  // the constant) can supply a real value here.
+  configuredStressMarginLevel?: Decimal | null;
+  // §7.1's undefined "NOPAT tax rate" policy constant
+  // (UNDEFINED_POLICY_CONSTANTS.nopatTaxRate). Required to convert this
+  // module's projected operating margin into projected NOPAT — unlike the
+  // stress margin level, this affects EVERY cell in the grid, not just one
+  // row, so an unconfigured run (null, the default) returns INCOMPLETE on
+  // all nine cells rather than a subset.
+  configuredNopatTaxRate?: Decimal | null;
 }
 
 export function computeReverseDcfGrid(input: ReverseDcfInput): ReverseDcfCell[] {
+  const nopatTaxRate = input.configuredNopatTaxRate ?? null;
+
   const missingBase = [
     input.baseYearRevenue === null ? "baseYearRevenue" : null,
     input.targetEnterpriseValue === null ? "targetEnterpriseValue" : null,
     input.currentMargin === null ? "currentMargin" : null,
+    nopatTaxRate === null ? "nopatTaxRate (§7.1, unconfigured policy constant)" : null,
   ].filter((f): f is string => f !== null);
 
   const marginLevels: { level: MarginLevel; value: Figure<Decimal> }[] =
@@ -97,7 +137,8 @@ export function computeReverseDcfGrid(input: ReverseDcfInput): ReverseDcfCell[] 
           ronicCell ?? { rate: rateLiteral, state: "RONIC NOT MEANINGFUL", value: null },
           missingBase.length > 0 ? null : (input.baseYearRevenue as SourcedValue<Decimal>),
           missingBase.length > 0 ? null : (input.targetEnterpriseValue as SourcedValue<Decimal>),
-          input.lagBiasDirection
+          input.lagBiasDirection,
+          nopatTaxRate as Decimal // guaranteed non-null when missingBase is empty
         )
       );
     }
@@ -108,7 +149,7 @@ export function computeReverseDcfGrid(input: ReverseDcfInput): ReverseDcfCell[] 
 function buildMarginLevelList(input: ReverseDcfInput): { level: MarginLevel; value: Figure<Decimal> }[] {
   const current = (input.currentMargin as SourcedValue<Decimal>).value;
   const median = input.medianMargin?.value ?? current;
-  const resolved = resolveMarginLevels(current, median, input.gate1State);
+  const resolved = resolveMarginLevels(current, median, input.gate1State, input.configuredStressMarginLevel ?? null);
   return [
     { level: "current", value: computedValue(resolved.current, CLEAN_PROVENANCE) },
     { level: "median", value: computedValue(resolved.median, CLEAN_PROVENANCE) },
@@ -123,7 +164,12 @@ function computeSingleCell(
   ronicCell: { rate: DiscountRate; state: RonicLadderState; value: Decimal | null },
   baseYearRevenue: SourcedValue<Decimal> | null,
   targetEnterpriseValue: SourcedValue<Decimal> | null,
-  lagBiasDirection: "conservative" | "generous"
+  lagBiasDirection: "conservative" | "generous",
+  // Guaranteed non-null whenever this branch is actually reached — the
+  // caller sets every marginFigure to a suppressed INCOMPLETE (short-
+  // circuiting before this value is ever read) when the tax rate itself
+  // is unconfigured.
+  nopatTaxRate: Decimal | null
 ): ReverseDcfCell {
   if (marginFigure.suppressed) {
     return {
@@ -174,7 +220,8 @@ function computeSingleCell(
     new Decimal(rate),
     ronicValue,
     baseYearRevenue.value,
-    targetEnterpriseValue.value
+    targetEnterpriseValue.value,
+    nopatTaxRate as Decimal
   );
 
   if (solveResult.kind === "no-solution") {
@@ -246,6 +293,17 @@ export interface ReverseDcfProjection {
   year10Revenue: Decimal;
 }
 
+// Growth realised IN year t: constant for years 1-5, linear fade to
+// terminal growth over years 6-10, terminal growth beyond (§7.1 path
+// shape). Shared by the explicit-period loop (this year's own growth,
+// used for the revenue path) and the reinvestment calculation (NEXT
+// year's growth, per the calibrated convention below).
+function growthAt(t: number, growth: Decimal, terminalGrowth: Decimal): Decimal {
+  if (t <= 5) return growth;
+  if (t <= 10) return growth.minus(growth.minus(terminalGrowth).mul(t - 5).dividedBy(5));
+  return terminalGrowth;
+}
+
 // Exported for testing (round-trip solver verification: project at a known
 // growth rate, feed its EV back in as the solver's target, confirm the
 // solver recovers the same growth rate) and for a later "show calculation"
@@ -256,25 +314,36 @@ export function projectReverseDcfValue(
   margin: Decimal,
   ronic: Decimal,
   rate: Decimal,
-  baseRevenue: Decimal
+  baseRevenue: Decimal,
+  nopatTaxRate: Decimal
 ): ReverseDcfProjection {
   const terminalGrowth = POLICY.terminalGrowth;
   const discountFactorBase = new Decimal(1).plus(rate);
+  const afterTax = new Decimal(1).minus(nopatTaxRate);
 
+  const revenues: Decimal[] = [baseRevenue];
   let revenue = baseRevenue;
-  let pvSum = new Decimal(0);
-
   for (let t = 1; t <= 10; t++) {
-    const growthT = t <= 5 ? growth : growth.minus(growth.minus(terminalGrowth).mul(t - 5).dividedBy(5));
-    revenue = revenue.mul(new Decimal(1).plus(growthT));
-    const nopat = revenue.mul(margin);
-    // Value-driver formula: reinvestment rate = this year's growth / RONIC.
-    const fcf = nopat.mul(new Decimal(1).minus(growthT.dividedBy(ronic)));
-    pvSum = pvSum.plus(fcf.dividedBy(discountFactorBase.pow(t)));
+    revenue = revenue.mul(new Decimal(1).plus(growthAt(t, growth, terminalGrowth)));
+    revenues.push(revenue);
   }
 
-  const year10Revenue = revenue;
-  const terminalNopat = year10Revenue.mul(new Decimal(1).plus(terminalGrowth)).mul(margin);
+  let pvSum = new Decimal(0);
+  for (let t = 1; t <= 10; t++) {
+    const nopat = revenues[t].mul(margin).mul(afterTax);
+    // Calibrated convention (see the module-level note above): year t's
+    // cash flow funds year (t+1)'s growth — reinvestment is keyed to NEXT
+    // period's growth rate, not this period's own. For t=10, g_11 is
+    // terminal growth (3%).
+    const nextGrowth = growthAt(t + 1, growth, terminalGrowth);
+    const reinvestment = nopat.mul(nextGrowth).dividedBy(ronic);
+    const fcff = nopat.minus(reinvestment);
+    pvSum = pvSum.plus(fcff.dividedBy(discountFactorBase.pow(t)));
+  }
+
+  const year10Revenue = revenues[10];
+  const nopat10 = year10Revenue.mul(margin).mul(afterTax);
+  const terminalNopat = nopat10.mul(new Decimal(1).plus(terminalGrowth));
   const terminalRoic = rate.plus(POLICY.terminalRoicPremium);
   // §7.2 M8: terminal FCF = terminal NOPAT × (1 − g ÷ terminal ROIC), never
   // final-year FCF × (1+g).
@@ -298,14 +367,15 @@ function solveImpliedGrowth(
   rate: Decimal,
   ronic: Decimal,
   baseRevenue: Decimal,
-  targetEnterpriseValue: Decimal
+  targetEnterpriseValue: Decimal,
+  nopatTaxRate: Decimal
 ): SolveResult {
   const samples: Decimal[] = [];
   for (let i = 0; i <= MONOTONICITY_SAMPLE_COUNT; i++) {
     const g = GROWTH_SEARCH_LO.plus(
       GROWTH_SEARCH_HI.minus(GROWTH_SEARCH_LO).mul(i).dividedBy(MONOTONICITY_SAMPLE_COUNT)
     );
-    samples.push(projectReverseDcfValue(g, margin, ronic, rate, baseRevenue).ev);
+    samples.push(projectReverseDcfValue(g, margin, ronic, rate, baseRevenue, nopatTaxRate).ev);
   }
 
   let increasing = true;
@@ -332,7 +402,7 @@ function solveImpliedGrowth(
   let hi = GROWTH_SEARCH_HI;
   for (let iter = 0; iter < BISECTION_ITERATIONS; iter++) {
     const mid = lo.plus(hi.minus(lo).dividedBy(2));
-    const midDiff = projectReverseDcfValue(mid, margin, ronic, rate, baseRevenue).ev.minus(targetEnterpriseValue);
+    const midDiff = projectReverseDcfValue(mid, margin, ronic, rate, baseRevenue, nopatTaxRate).ev.minus(targetEnterpriseValue);
     const loBranchIsPositive = increasing ? loDiff.greaterThan(0) : loDiff.lessThan(0);
     const midIsSameSignAsLo = increasing
       ? (midDiff.greaterThan(0)) === loBranchIsPositive
@@ -345,7 +415,7 @@ function solveImpliedGrowth(
   }
 
   const solvedGrowth = lo.plus(hi).dividedBy(2);
-  const finalProjection = projectReverseDcfValue(solvedGrowth, margin, ronic, rate, baseRevenue);
+  const finalProjection = projectReverseDcfValue(solvedGrowth, margin, ronic, rate, baseRevenue, nopatTaxRate);
   const terminalSharePercent = finalProjection.terminalValuePV.dividedBy(finalProjection.ev).mul(100);
 
   if (terminalSharePercent.greaterThan(100)) {
