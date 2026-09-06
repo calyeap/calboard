@@ -196,12 +196,14 @@ main{grid-area:main;min-width:0}
 .finding,.finding dl,.note,.jreg,.caveat{max-width:72ch}
 table.t,.grid,.hframe,.stackrow{max-width:none}
 
-/* WIDE / ULTRAWIDE — Quick Read becomes a third column. */
+/* WIDE / ULTRAWIDE — rail plus report, the same two-column composition as
+   Standard. Quick Read stays in the main reading flow at every width; there is
+   no sticky third column (§17.15, §17.16). The extra width goes to analytical
+   content — the prose measure does not move. */
 @media (min-width:1600px){
   .cb-topbar{max-width:1900px;padding:24px 40px 0}
-  .layout{grid-template-columns:200px minmax(0,1fr) 360px;
-    grid-template-areas:"rail main quick";max-width:1900px;gap:56px;padding:40px 40px 120px}
-  .quickread{position:sticky;top:40px;align-self:start;max-height:calc(100vh - 80px);overflow:auto}
+  .layout{grid-template-columns:200px minmax(0,1fr);
+    grid-template-areas:"rail quick" "rail main";max-width:1900px;gap:56px;padding:40px 40px 120px}
 }
 /* COMPACT — single column, Quick Read first in the document. */
 @media (max-width:1024px){
