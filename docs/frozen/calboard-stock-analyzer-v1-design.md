@@ -1,10 +1,10 @@
 # CALBOARD STOCK ANALYZER v1 — INTERACTION AND SCREEN DESIGN
 
-**Status:** DESIGN COMPLETE, COMPREHENSION REVISION APPLIED — returns to Command Center for approval. Nothing goes to BUILD until that approval exists.
+**Status:** DESIGN APPROVED — Command Center, 5 September 2026. M6 was built and shipped against it. This document is the re-frozen post-M6 contract, re-frozen 6 September 2026 and superseding the pre-M6 freeze: it records what shipped. A disagreement between this document and the build is a defect to be raised, not drift for a later session to correct on its own judgment.
 
 **Date:** 5 September 2026. Comprehension and learning revision, same date.
 
-**Revision note.** A bounded amendment followed, covering the workspace width model, Quick Read, dark-mode rendered inspection and a proposed closing recap — §17.15 to §17.17, and the CC-gated proposal in §18. It changed no methodology, no calculation, no state and no ruling. The closing recap is **not approved scope**.
+**Revision note.** A bounded amendment followed, covering the workspace width model, Quick Read, dark-mode rendered inspection and a closing recap — §17.15 to §17.17, and CC-1 in §18. It changed no methodology, no calculation, no state and no ruling. The closing recap was **approved by Command Center on 5 September 2026** as CC-1A and CC-1B; the §10.2 ordering amendment it required is recorded in §10.
 
 A cross-site consistency pass followed, reconciling the Analyzer onto the shipped Calboard token set, adding dark mode and the shared top bar, fixing the disclosure affordance, and recording the navigation scaling rule — §17.11 to §17.14. It changed no methodology, no calculation, no report ordering, no state and no ruling.
 
@@ -429,7 +429,7 @@ Where a table mixes types in one column, the type prints as a fourth token in th
 
 ## 10. FIXED REPORT ORDERING
 
-Sections A–J render in the §10.2 order, always, with none reordered and none dropped. Where a section has nothing to show, it renders its state — a section is never absent.
+Sections A–J and the closing *Investment case — at a glance* render in the §10.2 order, always, with none reordered and none dropped. Where a section has nothing to show, it renders its state — a section is never absent.
 
 ```
 A   Header and states          company · ticker · price + timestamp · profile
@@ -449,6 +449,12 @@ H   Fair-value range           see 10.2 below
 I   Interpretation [C]
 I2  Challenger findings        alongside, never reconciled
 J   Provisional and unmodelled register
+    Investment case            closing restatement · CC-1, approved 5 Sep 2026
+    — at a glance              renders only from members already in the Analysis
+                               Result: scenarios · price_implied · states ·
+                               challenger · facts. No new calculation, no new [C]
+                               call, no new state, no new figure. Pre-revenue keeps
+                               the §10.4 distribution form
 ```
 
 ### 10.1 Scroll, not tabs
@@ -947,15 +953,15 @@ Canonical state, flag and provenance names keep their required casing; the funct
 
 The report is laid out against available window width, not a notional "desktop" canvas. A half-ultrawide window is a substantial workspace and must not be treated as a laptop.
 
-**Reading width and analytical width are separate constraints.** Prose is capped at `72ch` — measured at 687px in every mode from 1024px upward, so the measure never stretches. Analytical content is not capped and uses the column: fact tables, provenance tables, the reverse-DCF grid, scenario tables and the fair-value frame.
+**Reading width and analytical width are separate constraints.** Prose is capped at `72ch` in every mode from 1024px upward, so the measure never stretches. The cap is stated in `ch` and asserts no pixel equivalent — that equivalent moves with the type scale, so pinning one here would go stale. Analytical content is not capped and uses the column: fact tables, provenance tables, the reverse-DCF grid, scenario tables and the fair-value frame.
 
 | Mode | Window | Composition | Main column | Prose |
 |---|---|---|---|---|
 | Compact | ≤1024px | Quick Read → rail → report, single column. Grid areas `"quick" "rail" "main"` | 320–976px | fills |
-| Standard | 1024–1600px | rail │ report, Quick Read in flow above | 976–1164px | 687px |
-| Wide | ≥1600px | rail │ report │ Quick Read | 1008–1148px | 687px |
+| Standard | 1024–1600px | rail │ report, Quick Read in flow above | 976–1164px | `72ch` |
+| Wide | ≥1600px | rail │ report, Quick Read in flow above | ≥1164px | `72ch` |
 
-The main column narrows slightly from 1164px at 1440 to 1008px at 1760 because the third column takes 360px. That is the deliberate trade — parallel context is worth more than the width it costs, and the prose measure does not move either way.
+**There is no third column at any width.** An earlier pass specified a sticky 360px Quick Read column at ≥1600px, which narrowed the main column from 1164px to 1008px as the window grew. It was rejected in user testing and must not return. The main column therefore never narrows as width increases: it continues past 1164px, and the additional width goes to analytical content — fact tables, provenance tables, the reverse-DCF grid, scenario tables and the fair-value frame. Prose stays at the `72ch` measure in every mode, so the extra width is never spent on the measure.
 
 **Chrome shares the content grid.** The top bar's max-width and padding track the layout at every mode, so the wordmark aligns with the section rail. They were on different grids until this pass.
 
@@ -971,12 +977,13 @@ The main column narrows slightly from 1164px at 1440 to 1008px at 1760 because t
 **One component, two compositions.** Identical content in both; only placement changes.
 
 ```
-WIDE (≥1600)                     STANDARD / COMPACT
-rail │ report │ Quick Read        Quick Read
-             (sticky)            ↓ report
+COMPACT (≤1024)          STANDARD / WIDE (≥1024)
+Quick Read               rail │ Quick Read
+↓ rail                        │ ↓ report
+↓ report
 ```
 
-The product must not make important information conditional on owning an ultrawide monitor.
+Quick Read stays in the main reading flow at every width. It is never a sticky side column, and there is no width at which it moves out of the flow — the product must not make important information conditional on owning an ultrawide monitor.
 
 **Contents — eight items, capped:**
 
@@ -1015,7 +1022,7 @@ The surface got easier to consume. **No analytical depth was removed to achieve 
 
 | # | Item | The design's reading | Consequence if rejected |
 |---|---|---|---|
-| **CC-1** | **CC-GATED NARROW AMENDMENT — proposed, not approved.** A closing section *Investment case — at a glance* after §10.2 section J | Renders only from members already in the Analysis Result: `scenarios`, `price_implied`, `states`, `challenger`, `facts`. No new calculation, no new [C] call, no new state, no new figure. Pre-revenue reports omit the bear/base/bull strip and keep the §10.3 distribution summary | **Requires an explicit §10.2 ordering amendment.** §10.2 fixes the section list and order; adding a section changes that contract. Also affects Quick Read, which places restated content above section A in compact and standard modes. Command Center must rule on both. Rendered in the mocks behind a visible CC-gated marker so it can be judged, and must not be read as approved |
+| **CC-1** | **APPROVED — Command Center, 5 September 2026, as CC-1A and CC-1B.** A closing section *Investment case — at a glance* after §10.2 section J | Renders only from members already in the Analysis Result: `scenarios`, `price_implied`, `states`, `challenger`, `facts`. No new calculation, no new [C] call, no new state, no new figure. Pre-revenue reports omit the bear/base/bull strip and keep the §10.3 distribution summary | **Approved, so the §10.2 ordering amendment is made.** §10.2 fixed the section list and order; the closing section is now recorded in the §10 ordering block after J. The CC-gated markers are removed from both report mocks — this is approved scope. Had it been rejected, §10.2 would have stood unchanged and the section would not render |
 | **R1** | §10.3 "next to the price-implied diagnostics" vs §10.2 order E…F…G…H | Section H is a two-column frame restating the price-implied summary beside the range | Only alternative is reordering §10.2, which the brief forbids. This is the resolution or the spec has a genuine internal conflict |
 | **R2** | No extraction type exists for a human-entered figure | Step 2 offers **Confirm / Cannot verify** only. No manual correction. The human selects, never types a figure | Rejecting this requires a third extraction type — a spec change. v1 is stricter than an analyst will expect: one bad feed value stalls the run |
 | **R3** | §9.4's twelve flags as one list | Split into provenance (3, underline) and analytic (9, tick rule) with different mechanisms | Twelve identical treatments make the propagated provenance labels as loud as the computed analytic ones, and the page becomes unreadable |
@@ -1078,4 +1085,4 @@ The surface got easier to consume. **No analytical depth was removed to achieve 
 
 **END OF DESIGN**
 
-Returns to Command Center for approval.
+Approved by Command Center, 5 September 2026. Re-frozen post-M6, 6 September 2026.

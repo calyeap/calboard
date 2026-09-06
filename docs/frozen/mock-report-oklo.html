@@ -179,12 +179,14 @@ main{grid-area:main;min-width:0}
 .finding,.finding dl,.note,.jreg,.caveat{max-width:72ch}
 table.t,.grid,.hframe,.stackrow{max-width:none}
 
-/* WIDE / ULTRAWIDE — Quick Read becomes a third column. */
+/* WIDE / ULTRAWIDE — rail plus report, the same two-column composition as
+   Standard. Quick Read stays in the main reading flow at every width; there is
+   no sticky third column (§17.15, §17.16). The extra width goes to analytical
+   content — the prose measure does not move. */
 @media (min-width:1600px){
   .cb-topbar{max-width:1900px;padding:24px 40px 0}
-  .layout{grid-template-columns:200px minmax(0,1fr) 360px;
-    grid-template-areas:"rail main quick";max-width:1900px;gap:56px;padding:40px 40px 120px}
-  .quickread{position:sticky;top:40px;align-self:start;max-height:calc(100vh - 80px);overflow:auto}
+  .layout{grid-template-columns:200px minmax(0,1fr);
+    grid-template-areas:"rail quick" "rail main";max-width:1900px;gap:56px;padding:40px 40px 120px}
 }
 /* COMPACT — single column, Quick Read first in the document. */
 @media (max-width:1024px){
@@ -208,9 +210,7 @@ table.t,.grid,.hframe,.stackrow{max-width:none}
 .qitem li{font-size:13px;line-height:1.5;margin-bottom:4px}
 .qlead{font-size:15px;line-height:1.45;font-weight:500;color:var(--ink);margin:0}
 
-/* ---------- FINAL RECAP — CC-GATED PROPOSAL ---------- */
-.ccgate{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);
-  border:1px solid var(--line-strong);padding:3px 7px;display:inline-block;margin-bottom:14px}
+/* ---------- VALUATION STRIP — QUICK READ HEADER AND FINAL RECAP ---------- */
 .atglance{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--hairline);
   border:1px solid var(--hairline);margin:6px 0 22px}
 .atglance div{background:var(--ground);padding:14px}
@@ -218,6 +218,7 @@ table.t,.grid,.hframe,.stackrow{max-width:none}
   font-weight:600;display:block;margin-bottom:6px}
 .atglance .fig{font-size:19px;font-weight:600}
 .atglance .cur{background:var(--field)}
+.striploc{font-size:12px;color:var(--muted);margin:-14px 0 22px}
 .closing{font-size:15px;line-height:1.5;max-width:72ch;margin:20px 0 0;
   border-left:2px solid var(--ink);padding-left:16px}
 @media (max-width:720px){.atglance{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -285,7 +286,7 @@ table.t,.grid,.hframe,.stackrow{max-width:none}
     <li><span class="k">I</span>Interpretation</li>
     <li><span class="k">I2</span>Challenger</li>
     <li><span class="k">J</span>Provisional register</li>
-    <li><span class="k">★</span>At a glance <em style="font-style:normal;font-size:10px">proposed</em></li>
+    <li><span class="k">★</span>At a glance</li>
   </ol>
 </nav>
 
@@ -293,6 +294,13 @@ table.t,.grid,.hframe,.stackrow{max-width:none}
   <h2>Quick read</h2>
   <p class="qsub">Oklo Inc. · close 4 Sep 2026</p>
   <hr class="qrule">
+
+  <div class="atglance" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <div><span class="lb">Failure — cash floor</span><span class="fig num">$3.10</span></div>
+    <div><span class="lb">Success as described</span><span class="fig num">$31 – $48</span></div>
+    <div class="cur"><span class="lb">Current price</span><span class="fig num">$XX.XX</span></div>
+  </div>
+  <p class="striploc">XX% of the way from failure to success</p>
 
   <div class="qitem">
     <span class="k">Main finding</span>
@@ -723,12 +731,10 @@ table.t,.grid,.hframe,.stackrow{max-width:none}
 </section>
 
 
-<!-- ============ PROPOSED CLOSING SECTION — CC-GATED ============ -->
+<!-- ============ CLOSING SECTION — INVESTMENT CASE AT A GLANCE ============ -->
 <section id="atglance">
-  <div class="sechead"><h2>Investment case — at a glance</h2><span class="k">Proposed closing section</span></div>
+  <div class="sechead"><h2>Investment case — at a glance</h2><span class="k">Synthesis, not a new figure</span></div>
   <hr class="rule">
-  <span class="ccgate">CC-gated — not approved scope. §10.2 ordering amendment required.</span>
-
   <p class="note" style="margin:0 0 18px">No bear / base / bull strip for this company. §10.3 requires the
   pre-revenue range to stay a distribution summary and forbids compressing it to bounds.</p>
 
