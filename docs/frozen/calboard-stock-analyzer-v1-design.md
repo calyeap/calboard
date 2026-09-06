@@ -1,6 +1,6 @@
 # CALBOARD STOCK ANALYZER v1 — INTERACTION AND SCREEN DESIGN
 
-**Status:** DESIGN COMPLETE, COMPREHENSION REVISION APPLIED — returns to Command Center for approval. Nothing goes to BUILD until that approval exists.
+**Status:** DESIGN APPROVED — Command Center, 5 September 2026. M6 was built and shipped against it. This document is the re-frozen post-M6 contract, re-frozen 6 September 2026 and superseding the pre-M6 freeze: it records what shipped. A disagreement between this document and the build is a defect to be raised, not drift for a later session to correct on its own judgment.
 
 **Date:** 5 September 2026. Comprehension and learning revision, same date.
 
@@ -953,15 +953,15 @@ Canonical state, flag and provenance names keep their required casing; the funct
 
 The report is laid out against available window width, not a notional "desktop" canvas. A half-ultrawide window is a substantial workspace and must not be treated as a laptop.
 
-**Reading width and analytical width are separate constraints.** Prose is capped at `72ch` — measured at 687px in every mode from 1024px upward, so the measure never stretches. Analytical content is not capped and uses the column: fact tables, provenance tables, the reverse-DCF grid, scenario tables and the fair-value frame.
+**Reading width and analytical width are separate constraints.** Prose is capped at `72ch` in every mode from 1024px upward, so the measure never stretches. The cap is stated in `ch` and asserts no pixel equivalent — that equivalent moves with the type scale, so pinning one here would go stale. Analytical content is not capped and uses the column: fact tables, provenance tables, the reverse-DCF grid, scenario tables and the fair-value frame.
 
 | Mode | Window | Composition | Main column | Prose |
 |---|---|---|---|---|
 | Compact | ≤1024px | Quick Read → rail → report, single column. Grid areas `"quick" "rail" "main"` | 320–976px | fills |
-| Standard | 1024–1600px | rail │ report, Quick Read in flow above | 976–1164px | 687px |
-| Wide | ≥1600px | rail │ report, Quick Read in flow above | ≥1164px | 687px |
+| Standard | 1024–1600px | rail │ report, Quick Read in flow above | 976–1164px | `72ch` |
+| Wide | ≥1600px | rail │ report, Quick Read in flow above | ≥1164px | `72ch` |
 
-**There is no third column at any width.** An earlier pass specified a sticky 360px Quick Read column at ≥1600px, which narrowed the main column from 1164px to 1008px as the window grew. It was rejected in user testing and must not return. The main column therefore never narrows as width increases: it continues past 1164px, and the additional width goes to analytical content — fact tables, provenance tables, the reverse-DCF grid, scenario tables and the fair-value frame. Prose stays at the 687px measure in every mode, so the extra width is never spent on the measure.
+**There is no third column at any width.** An earlier pass specified a sticky 360px Quick Read column at ≥1600px, which narrowed the main column from 1164px to 1008px as the window grew. It was rejected in user testing and must not return. The main column therefore never narrows as width increases: it continues past 1164px, and the additional width goes to analytical content — fact tables, provenance tables, the reverse-DCF grid, scenario tables and the fair-value frame. Prose stays at the `72ch` measure in every mode, so the extra width is never spent on the measure.
 
 **Chrome shares the content grid.** The top bar's max-width and padding track the layout at every mode, so the wordmark aligns with the section rail. They were on different grids until this pass.
 
@@ -1085,4 +1085,4 @@ The surface got easier to consume. **No analytical depth was removed to achieve 
 
 **END OF DESIGN**
 
-Returns to Command Center for approval.
+Approved by Command Center, 5 September 2026. Re-frozen post-M6, 6 September 2026.
