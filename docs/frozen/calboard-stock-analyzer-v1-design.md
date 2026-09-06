@@ -2,7 +2,9 @@
 
 **Status:** DESIGN APPROVED — Command Center, 5 September 2026. M6 was built and shipped against it. This document is the re-frozen post-M6 contract, re-frozen 6 September 2026 and superseding the pre-M6 freeze: it records what shipped. A disagreement between this document and the build is a defect to be raised, not drift for a later session to correct on its own judgment.
 
-**Date:** 5 September 2026. Comprehension and learning revision, same date.
+**Amendment M7 — DRAFT, pending Command Center approval.** Four changes land in this document and two in `mock-human-steps.html`, as part of an eighteen-change amendment whose other twelve are in the spec. Unlike every revision recorded below, **M7 does change a ruling**: it implements Calvin's recorded override of 6 September 2026 on the no-verdict boundary, which introduces a valuation position to page one and the closing section. It also rules R7 and R8, records Screen 1 as a screen, and renumbers the user flow from nine steps to ten. **§20 is the amendment record.** Until Command Center approves, the pre-amendment text is the operative contract.
+
+**Date:** 5 September 2026. Comprehension and learning revision, same date. Amendment M7 drafted 6 September 2026.
 
 **Revision note.** A bounded amendment followed, covering the workspace width model, Quick Read, dark-mode rendered inspection and a closing recap — §17.15 to §17.17, and CC-1 in §18. It changed no methodology, no calculation, no state and no ruling. The closing recap was **approved by Command Center on 5 September 2026** as CC-1A and CC-1B; the §10.2 ordering amendment it required is recorded in §10.
 
@@ -24,7 +26,7 @@ Companion mocks, to be frozen with this document:
 
 | File | Covers |
 |---|---|
-| `mock-human-steps.html` | Step 2 fact verification, §4.4 judgments, Step 6 profile confirm / override, scenario matrix |
+| `mock-human-steps.html` | Step 2 fact verification, §4.4 judgments, Step 6 profile confirm / override, Step 7 scenario matrix |
 | `mock-report-msft.html` | Report sections A–J, Microsoft four degenerate reverse-DCF cells |
 | `mock-report-oklo.html` | Pre-revenue report, OKLO two worth-less-than-failure rows, funding stack, distribution-summary range |
 
@@ -54,13 +56,14 @@ Three further consequences drive everything below:
 
 ---
 
-## 1. END-TO-END SCREEN FLOW — NINE STEPS, FOUR SCREENS
+## 1. END-TO-END SCREEN FLOW — TEN STEPS, FOUR SCREENS
 
-Nine spec steps map onto four screens and two processing states. Only two screens accept human input, which is the point.
+Ten spec steps map onto four screens and two processing states. **Three screens accept human input.** Screen 1 joined them in amendment M7; it was previously a field that resolved and advanced on its own.
 
 ```
-Screen 1  ENTRY            Step 1   ticker entry + identity resolution
-   │
+Screen 1  ENTRY      ★     Step 1   ticker entry + identity resolution
+   │                                resolved company name shown, analyst confirms
+   │                                HUMAN. No auto-advance. No price rendered.
    │  [processing]         fact acquisition
    ▼
 Screen 2  FACTS      ★     Step 2   per-fact spot-check + §4.4 judgments
@@ -70,26 +73,34 @@ Screen 2  FACTS      ★     Step 2   per-fact spot-check + §4.4 judgments
    │                       Step 5   profile recommendation + triggers A/B
    ▼
 Screen 3  PROFILE    ★     Steps 3–5 results shown read-only at top
-   │                       Step 6   confirm / override + three scenarios
-   │                                HUMAN.
-   │  [processing]         Step 7   deterministic modules M1–M16
-   │                       Step 8   interpretation [C]
-   │                       Step 8b  blind challenger (parallel, isolated payload)
-   │                       Step 9   Analysis Result assembly
+   │                       Step 6   profile confirm / override     HUMAN.
+   │                       Step 7   three analyst scenarios        HUMAN.
+   │  [processing]         Step 8   deterministic modules M1–M16
+   │                       Step 9   interpretation [C]
+   │                       Step 9b  blind challenger (parallel, isolated payload)
+   │                       Step 10  Analysis Result assembly
    ▼
-Screen 4  REPORT           rendering of the Analysis Result, sections A–J
+Screen 4  REPORT           rendering of the Analysis Result, sections A–J,
+                           then the closing Investment case — at a glance
 ```
+
+**Screen 1 is a screen, not a field.** Identity resolution returns the **resolved company name**, and the run commits only when the analyst confirms it is the company they meant. Two consequences the build must not optimise away:
+
+- **No auto-advance.** A ticker that resolves and advances silently puts the analyst three screens into a run against the wrong company, and the cost of discovering it there is a repeated Step 2 — the most expensive screen in the product.
+- **No price on Screen 1.** Price is acquired with the fact set and carries its timestamp. Rendering it at entry would put an unsourced, untimestamped figure on screen before the fact contract applies, and would open the run on the one number the analyst is trying not to anchor to.
+
+**Instrument class is refused here.** A fund, an index, or a currency or crypto pair returns **UNSUPPORTED INSTRUMENT** at resolution (spec §9.3.1). It is a rejection, not a suppressing state: no run opens and no report exists, so it needs an entry-screen treatment rather than a `StateSlot`. That treatment is not specified in this document — see §20.
 
 **Why Steps 3–5 have no screen.** They are software and instantaneous. Giving them a screen would add a click that decides nothing. They render as a read-only computed band at the top of Screen 3, which is where their only human consequence — an override — actually lives.
 
 **The Gate 0 branch.** §2 says Gate 0 failure stops the analysis before Step 5; §6.1 permits a human override. Screen 3 therefore has two entry states:
 
-- **Gates cleared** — full Step 6: profile recommendation, confirm/override, scenarios.
+- **Gates cleared** — full Steps 6 and 7: profile recommendation, confirm/override, then the three scenarios.
 - **Gate 0 halted** — the gate result, its computed inputs, and exactly two controls: *Override Gate 0* or *Stop and view report*. No profile is recommended, no scenario editor is shown. Stopping produces a valid report in which valuation outputs are states (case V7).
 
 **Enforcement of the Step 2 ordering rule.** §2 requires the software to enforce it, not recommend it. The design requirement is explicit: **the gate is server-side.** No calculation module may be reachable by any route, refresh, deep link or API call until every material fact carries a decision. A client-side route guard is a recommendation, not an enforcement, and does not satisfy §2. Screens 3 and 4 redirect to Screen 2 when the run is not spot-check-complete.
 
-**No launch path from Holdings or Dashboard.** Entry is the ticker field on Screen 1 only. A per-holding "Analyze" button would (a) imply portfolio context entering the analyzer, which §1.4 forbids as a boundary rather than a preference, and (b) fail the anti-momentum test by turning the holdings list into a menu of reasons to open the app. *Ruling needed — item R8.*
+**No launch path from Holdings or Dashboard.** Entry is the ticker field on Screen 1 only. A per-holding "Analyze" button would (a) imply portfolio context entering the analyzer, which §1.4 forbids as a boundary rather than a preference, and (b) fail the anti-momentum test by turning the holdings list into a menu of reasons to open the app. **RULED — item R8, 6 September 2026: ticker field only, no launch path from Holdings or Dashboard.** This is settled and is not a default awaiting confirmation.
 
 **The run does not refresh.** A report is an artefact produced at a moment, carrying the price timestamp of that moment. There is no refresh control, no "price has moved since this analysis" indicator, and no re-run-with-same-facts shortcut. The cost of re-running is Step 2 again, and that cost is the anti-momentum mechanism. It must not be optimised away.
 
@@ -99,12 +110,16 @@ Screen 4  REPORT           rendering of the Analysis Result, sections A–J
 
 | Route | Screen | Steps | Human input |
 |---|---|---|---|
-| `/analyzer` | Entry | 1 | ticker |
+| `/analyzer` | Entry | 1 | ticker, then **confirm the resolved company** |
 | `/analyzer/[runId]/facts` | Facts | 2 | per-fact decisions, three judgments |
-| `/analyzer/[runId]/profile` | Profile | 3–5 display, 6 input | confirm/override, scenarios |
-| `/analyzer/[runId]/report` | Report | 7–9 output | none |
+| `/analyzer/[runId]/profile` | Profile | 3–5 display, 6–7 input | confirm/override, then scenarios |
+| `/analyzer/[runId]/report` | Report | 8–10 output | none |
 
-`[runId]` is in the URL so a refresh does not destroy Step 2 work. **There is no index of runs, no history list, no retrieval UI and no listing endpoint.** Lose the URL and the run is gone. This keeps Saved Analysis (§13.1) out of scope while not being hostile to a browser refresh. *Ruling needed — item R7.*
+**`/analyzer` holds no `[runId]` because no run exists yet.** The run is created when the analyst confirms the resolved company, not when the ticker is typed — which is what makes Screen 1 a step rather than a form field. A ticker that fails instrument-class resolution never creates a run at all.
+
+`[runId]` is in the URL so a refresh does not destroy Step 2 work. **There is no index of runs, no history list, no retrieval UI and no listing endpoint.** Lose the URL and the run is gone. This keeps Saved Analysis (§13.1) out of scope while not being hostile to a browser refresh.
+
+**RULED — item R7, 6 September 2026: the run persists server-side, `runId` in the URL, no index, no history list, no listing endpoint. Lose the URL and the run is gone.** Settled, not a default awaiting confirmation. Server-side persistence is what makes the §1 server-side Step 2 gate enforceable; the absence of any listing surface is what keeps it clear of Saved Analysis.
 
 Nav: the analyzer is a peer route in the existing NavBar, not a sub-page of Holdings or Dashboard.
 
@@ -159,7 +174,9 @@ The brief's test: *"A confirm button under a wall of figures satisfies the lette
 
 **3 — No default decision.** The control is a two-way choice with neither side pre-selected: **Confirm** or **Cannot verify**. Advancing requires an act.
 
-**4 — The queue is ordered by risk, not by statement order.** AI-EXTRACTED first, then SECONDARY, then UNVERIFIED, then structured PRIMARY. The four recorded errors were extraction errors; the facts most likely to be wrong get the freshest attention.
+**4 — The queue is ordered by risk, not by statement order.** **AI-EXTRACTED first, then SECONDARY, then UNVERIFIED.** Three tiers, not four: amendment M7 removed the structured-PRIMARY tier, because a fact acquired through a fixed, versioned tag mapping is no longer queued at all (spec §3.8.1). The four recorded errors were extraction errors; what remains in the queue is the population they occurred in, and it gets the whole of the analyst's attention rather than a share of it.
+
+**A fact that is DETERMINISTIC/STRUCTURED but carries no mapping version is still queued** — the exemption is granted by acquisition path, not by label. The queue is shorter than it was; it is not filtered by a name.
 
 **5 — The period is a sentence, not a field.** Above each value: *"This is Microsoft's FY2026 figure, retrieved 4 September 2026."* Two of the four recorded errors were scope or period errors, and a date rendered as a table cell is read as furniture.
 
@@ -175,7 +192,7 @@ So the design offers **Confirm** and **Cannot verify** only.
 
 A fact the analyst knows to be wrong is marked *Cannot verify*. Per §3.8 that leaves the analysis incomplete and its dependent outputs return INCOMPLETE per §5. Fixing it is a **re-acquisition**, not an edit: correct the source or the parse, run again. This is consistent with §3.1 (nothing enters from memory or from an unrecorded derivation) and with §5.1 (an unverifiable figure is never replaced by an estimate).
 
-The general principle, which holds across both human steps: **the human selects; the human never types a figure.** §4.4's three judgments are selections among presented options. Step 6's scenarios are analyst-authored assumptions, not facts, and are explicitly typed — that is a different object and carries type ASSUMPTION.
+The general principle, which holds across the fact-checking steps: **the human selects; the human never types a figure.** §4.4's three judgments are selections among presented options. Step 7's scenarios are analyst-authored assumptions, not facts, and are explicitly typed — that is a different object and carries type ASSUMPTION.
 
 Consequence Command Center should weigh: v1 is stricter than an analyst will expect. A single bad feed value stalls the run. *Ruling needed — item R2.*
 
@@ -213,7 +230,11 @@ Where any fact is *Cannot verify*, continuing is still permitted; the run procee
 
 ---
 
-## 5. STEP 6 — PROFILE CONFIRMATION AND OVERRIDE UX
+## 5. STEPS 6 AND 7 — PROFILE CONFIRMATION, THEN ANALYST SCENARIOS
+
+**Two steps, one screen.** Amendment M7 split the former Step 6 into **Step 6 — profile confirmation** and **Step 7 — analyst scenarios**, because they are two different human jobs: Step 6 is a **judgment** about what kind of company this is, made against evidence already assembled; Step 7 is an act of **authorship**, in which the analyst writes assumptions that did not previously exist.
+
+They remain on Screen 3 and the screen count is unchanged. What changes is that the scenario matrix now sits under its own numbered heading rather than inheriting the profile block's completed feeling — which is the failure mode the split exists to interrupt. The renumber moved no calculation, no gate and no state.
 
 ### 5.1 The gate band (Steps 3–5, read-only)
 
@@ -225,7 +246,7 @@ Three `GateResult` blocks at the top of Screen 3, before any control:
 
 Then **Triggers A and B**, evaluated separately and displayed separately, each with the evidence that fired it. Where A fired without B, the interface states that A alone is not evidence of cyclicality — otherwise the reader supplies the inference themselves.
 
-### 5.2 Profile recommendation
+### 5.2 Step 6 — Profile recommendation
 
 `ProfileEvidence` presents the recommendation **as evidence, not as a pre-checked option**:
 
@@ -252,7 +273,7 @@ Choosing Override opens, in place:
 
 Gate 0 override carries the strongest treatment: the header of section A carries **PROFILE OVERRIDDEN — NOTHING BELOW THIS HAS BEEN VALIDATED** as a persistent band, and the asset-based row's copy states that it has been validated on nothing.
 
-### 5.4 Scenarios
+### 5.4 Step 7 — Scenarios
 
 Three scenarios, authored by the analyst. §10 Step 3 requires drivers set **together**, so the matrix is **driver-major**: one row per driver, three columns (bear · base · bull). Setting one scenario at a time invites incoherent paths, which is the same failure M14 names for two-way sensitivity tables.
 
@@ -452,9 +473,13 @@ J   Provisional and unmodelled register
     Investment case            closing restatement · CC-1, approved 5 Sep 2026
     — at a glance              renders only from members already in the Analysis
                                Result: scenarios · price_implied · states ·
-                               challenger · facts. No new calculation, no new [C]
-                               call, no new state, no new figure. Pre-revenue keeps
-                               the §10.4 distribution form
+                               challenger · facts · trust · position. No new
+                               calculation, no new [C] call, no new state, no new
+                               figure. Carries the CHEAP / FAIR / EXPENSIVE strip
+                               and its action clause (spec §10.6), which render
+                               here and on page one and nowhere else — and not at
+                               all under suppression or UNUSABLE trust.
+                               Pre-revenue keeps the §10.4 distribution form
 ```
 
 ### 10.1 Scroll, not tabs
@@ -512,7 +537,10 @@ The provisional register renders fully expanded, always. Every PROVISIONAL thres
 | Multiple without own-history context | `Figure` in the multiples table requires the percentile or its suppressing state |
 | EV/Revenue standalone | Rendered only paired with the implied margin needed to reach a normal profit multiple |
 | Consensus derived from price | Consensus is an OPTIONAL fact with a source; a derived one has no source record |
-| Verdict, target or recommendation | No component renders one; no copy string contains one |
+| Price target, or a single-number fair value | No component renders one; the range component has no point-value mode |
+| Portfolio action | No copy string contains trim, add, sell or hold. The action clause draws from a fixed entry-side set: start · do not start · wait for a better price |
+| A [C]-authored position | The valuation strip renders only from `position`, computed by [S]. It cannot read `interpretation`, exactly as I2 cannot |
+| A position rendered under suppression | The strip and its action clause share one render guard: a range exists **and** trust is CLEAN or PARTIAL. Failing it, the slot is a `StateSlot` |
 | Counter-case from the interpretation layer | Section I2 renders only `challenger`; it cannot read `interpretation` |
 | AI-extracted fact without a marker | `Figure` refuses to render a material fact without `ProvenanceTokens` |
 | Figure not in the Analysis Result | The renderer takes no literals |
@@ -985,10 +1013,12 @@ Quick Read               rail │ Quick Read
 
 Quick Read stays in the main reading flow at every width. It is never a sticky side column, and there is no width at which it moves out of the flow — the product must not make important information conditional on owning an ultrawide monitor.
 
-**Contents — eight items, capped:**
+**Contents — ten items, capped:**
 
 | Item | Content |
 |---|---|
+| **Valuation strip** | The **CHEAP / FAIR / EXPENSIVE** position, per spec §10.6. One token, no second label beneath it. Renders only where a range exists and trust is CLEAN or PARTIAL; otherwise the slot carries the state |
+| **Position line** | The action clause, per spec §10.6.4. Required figure against achieved figure, then what follows from the gap, in plain sentences — *"The price requires 14% a year. The company has delivered 13.8% over ten years. Not a price to start a position at."* Entry-side only. Never renders when the strip does not |
 | Main finding | The single most important conclusion, in one sentence |
 | Price vs scenarios | Where the price sits relative to meaningful scenario context |
 | What today's price requires | The assumptions the current price makes necessary |
@@ -996,9 +1026,13 @@ Quick Read stays in the main reading flow at every width. It is never a sticky s
 | What worries Calboard | Two or three points maximum |
 | Biggest uncertainty | The variable creating the most spread |
 | Strongest challenger point | From §8.5, unreconciled |
-| Data and model quality | Material suppression, qualification and provenance issues — not the whole register |
+| Data and model quality | Material suppression, qualification and provenance issues — not the whole register. Carries the §9.6 **trust status**: CLEAN · PARTIAL · UNUSABLE |
 
-**Hard limits.** No scores, no ratings, no verdict, no `Quality: 8/10`, no `Risk: Medium`. Concise causal language that explains *why*, never a label that replaces the reasoning. No figure that is not already in the Analysis Result. Quick Read restates; it never computes.
+The valuation strip and the position line lead because they are what the reader came for. They do not displace anything: the eight items below them are unchanged, and the position is a route into the report rather than a substitute for it.
+
+**Hard limits.** No scores, no ratings, no `Quality: 8/10`, no `Risk: Medium`. Concise causal language that explains *why*, never a label that replaces the reasoning. **No figure that is not already in the Analysis Result. Quick Read restates; it never computes** — and under spec §10.7 no number here originates from a model, in the strip, the position line, or any other item.
+
+**On "no verdict".** The frozen text listed *no verdict* among these limits, and amendment M7 removes it rather than leaving it to contradict the strip. What remains prohibited is a **rating** — a score, a grade, or a label standing in for reasoning. The valuation strip is neither: it is a deterministic [S] output with its derivation printed beneath it and its action clause naming the two figures it rests on. **No [C]-authored position may appear here**, and [C] may not vary, soften or hedge the computed one (spec §8.3 limit 1).
 
 Items link to their source section, so it is a route into the report rather than a replacement for it.
 
@@ -1029,8 +1063,8 @@ The surface got easier to consume. **No analytical depth was removed to achieve 
 | **R4** | Default provenance unprinted in derived cells | Full three-token stamp always in section B and Screen 2; non-default tokens only in derived tables | Printing `PRIMARY · DETERMINISTIC/STRUCTURED · VERIFIED` on every cell would be the drowning the brief warns about. Confirm this satisfies A13 and A14 |
 | **R5** | OKLO success-definition row order | Sort by V_success ascending, so worth-less-than-failure rows are not last | Spec is silent. Alternative is definition order, which buries them |
 | **R6** | Where §4.4's three judgments sit | Step 2, after the confirmations, as a distinct band | Spec is silent. Two of the three change figures the confirmations depend on, which is the argument for Step 2 |
-| **R7** | Run persistence | `runId` in the URL so refresh does not destroy Step 2 work. **No index, no history, no listing endpoint** | Borderline against §13.1 Saved Analysis. Zero persistence means a refresh destroys the spot-check, which will produce click-through behaviour on the retry |
-| **R8** | Entry point | Ticker field only. No launch path from Holdings or Dashboard | A per-holding button implies portfolio context (§1.4) and turns the holdings list into a menu of reasons to open the app |
+| **R7** | **RULED — 6 September 2026.** Run persistence | **The run persists server-side, `runId` in the URL, no index, no history list, no listing endpoint. Lose the URL and the run is gone.** Server-side persistence is what makes the §1 server-side Step 2 gate enforceable — a client-held run cannot be gated by the server. The absence of every listing surface is what keeps this clear of Saved Analysis (§13.1) | **Ruled, so the design stands as written.** Recorded in §2. No longer a working default awaiting confirmation |
+| **R8** | **RULED — 6 September 2026.** Entry point | **Ticker field only. No launch path from Holdings or Dashboard.** A per-holding button implies portfolio context (§1.4) and turns the holdings list into a menu of reasons to open the app | **Ruled, so the design stands as written.** Recorded in §1. No longer a working default awaiting confirmation |
 
 **Confirmed absent from the design, deliberately:** any thesis, monitoring, portfolio-fit, saved-analysis, sector, persona, discovery or fear/greed element; any stub, feature flag, placeholder or anticipatory hook for one; any mention of building a WACC or switching to equity cash flows (§13.5); any verdict, target, recommendation or advice framing in any copy string; any crypto path.
 
@@ -1050,7 +1084,7 @@ The surface got easier to consume. **No analytical depth was removed to achieve 
 | 2 | Page/screen architecture | §2 |
 | 3 | Component hierarchy | §3 |
 | 4 | Step 2 fact-verification UX | §4 + `mock-human-steps.html` |
-| 5 | Step 6 profile confirmation/override UX | §5 + `mock-human-steps.html` |
+| 5 | Steps 6 and 7 profile confirmation/override and scenario UX | §5 + `mock-human-steps.html` |
 | 6 | Ten suppressing states | §6 |
 | 7 | Twelve qualifying flags | §7 |
 | 8 | Suppression vs qualification distinction | §8 |
@@ -1066,7 +1100,9 @@ The surface got easier to consume. **No analytical depth was removed to achieve 
 | 18 | UX conflicts with the functional spec | §18 — eight rulings, no STOP |
 | 19 | This handoff | §19 |
 
-**NEEDS ME** — YES. Eight rulings in §18. **R1, R2 and R4 are blocking** — BUILD cannot start without them, because R1 determines a report section's structure, R2 determines what Step 2 can do, and R4 determines what every cell in the report prints. R3, R5, R6, R7 and R8 have working defaults and can be confirmed or reversed after BUILD starts.
+**NEEDS ME** — YES. Eight items in §18, of which **CC-1, R7 and R8 are now ruled** and three remain blocking. **R1, R2 and R4 are blocking** — BUILD cannot start without them, because R1 determines a report section's structure, R2 determines what Step 2 can do, and R4 determines what every cell in the report prints. R3, R5 and R6 have working defaults and can be confirmed or reversed after BUILD starts.
+
+**Amendment M7 additionally needs a ruling this document does not make:** the entry-screen treatment for **UNSUPPORTED INSTRUMENT** (spec §9.3.1). It is a rejection rather than a suppressing state, so it has no `StateSlot` and no place in the §6 vocabulary. See §20.
 
 **STOP CONDITIONS** — none fired. No hash mismatch. No design requires a spec change to be coherent. Every state has a visual treatment that does not change what it means. Nothing required guessing; the eight ambiguities are recorded as rulings rather than resolved silently.
 
@@ -1079,10 +1115,63 @@ The surface got easier to consume. **No analytical depth was removed to achieve 
 - The server-side Step 2 gate. A client-side guard does not satisfy §2.
 - Truncation of any state or flag name. If a layout appears to require it, STOP.
 
-**BUILD RECEIVES** — the frozen functional spec (`1406eb18…`) and this approved design, and not before. Both hashes attach to every new BUILD session and hash verification is BUILD's first action, per existing Calboard gate process.
+**BUILD RECEIVES** — the frozen functional spec `calboard-stock-analyzer-v1-spec.md` and this approved design, both from **`docs/frozen/`**, and not before. Hash verification of the artefacts as they stand in `docs/frozen/` is BUILD's first action, per existing Calboard gate process.
+
+*Amendment M7 replaced a printed spec hash in this paragraph with the file's name and location.* A hash printed inside an **operative instruction** goes stale the moment either artefact is amended, and a stale hash in a gate instruction is worse than no hash: it fails a verification that should pass, or invites someone to edit the recorded value to make the gate green. The directory is the source of truth for what BUILD receives. **The hash recorded at the top of this document stays**, because it is not an instruction — it is a dated record that this design was written against that spec, and that remains true whatever the spec becomes later.
+
+---
+
+## 20. AMENDMENT RECORD — M7
+
+**Status: DRAFT, pending Command Center approval.** Drafted 6 September 2026. The three frozen artefacts were verified byte-exact by SHA-256 before any edit; the hashes are recorded in the spec's §14.1.
+
+Eighteen changes in total. **Four land here, two in `mock-human-steps.html`, twelve in the spec** (spec §14).
+
+### 20.1 The four design changes
+
+| # | Change | Where |
+|---|---|---|
+| 13 | Quick Read gains the **valuation strip** and the **position line**; contents cap goes from eight items to ten; the *no verdict* hard limit is resolved rather than left standing against the strip | §17.16 |
+| 14 | The **printed spec hash in the BUILD RECEIVES instruction** is replaced by a name-and-location reference to `docs/frozen/`. The dated hash record at the head of this document is untouched | §19 |
+| 15 | **R7 and R8 recorded as RULED**, 6 September 2026, and removed from the working-defaults list | §18, §1, §2, §19 |
+| 16 | **Screen 1 exists as a screen.** The screen flow and the route table record identity confirmation, no auto-advance, no price, and instrument-class refusal | §1, §2 |
+
+### 20.2 The two mock changes
+
+| # | Change | Where |
+|---|---|---|
+| 17 | Consequence lines on the profile card and the scenario table, in the register of the Screen 2 fact cards; a Trigger A constraint on the **BULL** column; a note that reinvestment runs opposite to every other row | `mock-human-steps.html`, Screen 3 |
+| 18 | An explicit statement that the scenario cells are **mock illustration, not pre-filled defaults** | `mock-human-steps.html`, Screen 3 |
+
+### 20.3 Consequential edits this amendment made
+
+Not on the numbered list, but required for the numbered changes to be coherent. Recorded so they are visible rather than discovered.
+
+| Where | Edit | Driven by |
+|---|---|---|
+| §1, §2, §4.2, §5, §17.16 heading refs, §19 | The **step renumber** — nine steps to ten, Step 6 split into 6 and 7, old 7/8/8b/9 becoming 8/9/9b/10 | Spec change 7 |
+| §4.1 rule 4 | Queue ordering drops the **structured-PRIMARY tier**; three tiers, not four | Spec change 1 |
+| §10 ordering block | The closing section gains `trust` and `position`, and carries the strip and action clause | Spec change 10 |
+| §10.7 | The single *verdict, target or recommendation* prohibition becomes **four precise rows** — price target, portfolio action, [C]-authored position, position under suppression | Spec change 10 |
+| §5 | An opening note on why 6 and 7 are two steps and still one screen | Spec change 7 |
+| `mock-human-steps.html` | The Screen 3 section head, and the CSS section comment | Spec change 7 |
+| `mock-human-steps.html` | Two statements of the **four-tier queue order** on Screen 2 — in the *What to examine* finding block and in the body copy beneath it — corrected to three tiers plus the exemption. They contradicted §3.8.1 outright once change 1 landed | Spec change 1 |
+
+**No methodology, no calculation, no report-section order and no state vocabulary was changed by this document.** The §6 ten suppressing states and the §7 twelve qualifying flags are untouched, and the three-decoration system is unchanged.
+
+### 20.4 Rulings this amendment needs and does not make
+
+| # | Item | Why it is not resolved here |
+|---|---|---|
+| **R9** | **Entry-screen treatment for UNSUPPORTED INSTRUMENT.** Spec §9.3.1 defines it as a rejection at identity resolution, not a suppressing state. It never reaches a report, so it has no `StateSlot` and no place in the §6 vocabulary | A new visual treatment is beyond the four authorised changes. It belongs with the rest of Screen 1, which M7 has only just made a screen |
+| **R10** | **Verification-state token copy.** §7.1's provenance tokens and §9's disclosure levels print the verification state, whose values the spec renamed to CONFIRMED / NOT CONFIRMED / SPOT-CHECK PENDING / SPOT-CHECK NOT REQUIRED | Mechanical follow-through, but outside changes 13–16 and not to be done silently. Tracked as spec §14.6 F5 |
+| **R11** | **How the tag-exempt fact appears in section B.** SPOT-CHECK NOT REQUIRED is now the common verification state, and no mock renders it | Tracked as spec §14.6 F6 |
+| **R12** | **`SpotCheckProgress` counts "n material facts".** Since change 1 the queue is a subset of the material facts, so the label now overstates what the analyst must decide | A one-word copy change, but it is a §3.2 component contract and belongs with R10's vocabulary pass rather than being made in passing |
+
+**Known stale after this amendment, deliberately not fixed:** `mock-report-msft.html` carries a `Step 6` reference that the renumber makes stale. The report mocks were explicitly out of scope for M7. Tracked as spec §14.6 F1.
 
 ---
 
 **END OF DESIGN**
 
-Approved by Command Center, 5 September 2026. Re-frozen post-M6, 6 September 2026.
+Approved by Command Center, 5 September 2026. Re-frozen post-M6, 6 September 2026. **Amendment M7 drafted 6 September 2026 — DRAFT, pending Command Center approval (§20).**
