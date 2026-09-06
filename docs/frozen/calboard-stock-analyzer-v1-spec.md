@@ -2,7 +2,9 @@
 
 **Status:** DRAFT FOR COMMAND CENTER APPROVAL. Nothing goes to BUILD until that approval exists.
 
-**Date:** 5 September 2026.
+**Amendment M7 — DRAFT, pending Command Center approval.** This document carries the M7 amendment: eighteen changes across this spec, the interaction design and `mock-human-steps.html`, of which twelve land here. The amendment implements **Calvin's recorded override of 6 September 2026** on the no-verdict boundary, together with eleven further changes to Step 1, Step 2, the step numbering, the trust vocabulary and the page-one contract. **§14 is the amendment record.** It lists every change, every reading the amendment had to make, and the follow-ups it deliberately did not fix. Until Command Center approves, the frozen pre-amendment text is the operative contract.
+
+**Date:** 5 September 2026. Amendment M7 drafted 6 September 2026.
 
 **Authority:** written against the frozen v1.0.2 contract. Both source files verified by SHA-256 before this document was started:
 
@@ -33,11 +35,23 @@ Consequently the red team's third recommended validation run (seasonal retailer)
 
 A single-company equity analysis tool. The analyst supplies a ticker; the software acquires facts, runs gates, computes a fixed set of deterministic diagnostics, accepts three analyst-authored scenarios, and returns a structured report describing **what the current price already assumes** alongside **what the analyst assumes**.
 
-The product issues no verdict, no price target and no recommendation. Calvin is the decision-maker. This is the §10 Step 5 boundary and it is load-bearing.
+The product issues **no price target and no portfolio action**. It does issue exactly one deterministic, entry-side valuation position — **CHEAP / FAIR / EXPENSIVE** — with the action clause defined in §10.6. Calvin remains the decision-maker on everything the position does not cover, which is everything except whether this is a price to start at.
+
+**This supersedes the former absolute no-verdict boundary, which does not survive alongside it.** The frozen text read *"The product issues no verdict, no price target and no recommendation… This is the §10 Step 5 boundary and it is load-bearing."* Calvin's recorded override of 6 September 2026 reverses that boundary; §14 records the override and the counter-arguments he heard before making it. What remains of the §10 Step 5 boundary is narrower and still load-bearing:
+
+1. **No price target.** The output is a range, never a point (§10.3, §13.2).
+2. **No portfolio action.** Entry-side only — start / do not start / wait for a better price. Never trim, add or sell, because those need position size and cost basis the analyzer does not have and §1.4 forbids it from receiving.
+3. **Nothing an AI authored.** The position is computed by **[S]** from fields the analyzer already holds (§10.6). The §8.3 limits on **[C]** are unchanged and still forbid [C] from issuing a position, a target or a recommendation of its own.
 
 ### 1.2 Validated scope
 
-v1 has been validated on three companies in three profiles. The software supports exactly those three:
+**v1 analyses listed operating companies only.** This is an instrument-class boundary and it is enforced at identity resolution, before any fact is acquired. A fund, an index, or a currency or crypto pair is **UNSUPPORTED INSTRUMENT** at Step 1 (§2, §9.3.1). It does not resolve, does not open a run, and never reaches Step 2 to fail there on a missing fact set.
+
+The reason is that every method in this document takes a company apart — filings, margins, reinvestment, a capital structure, a share count. None of those objects exist for a fund or a pair, so a run against one cannot fail informatively; it can only fail late and confusingly.
+
+**This narrows the analyzer's use of Calboard's invalid-symbol contract. It does not change that contract, and it does not change the portfolio side, where ETFs remain valid holdings.** The same ticker may be a legitimate holding on the portfolio side and an unsupported instrument here; that is the intended result, not an inconsistency to reconcile.
+
+v1 has been validated on three companies in three profiles. Within the supported instrument class, the software supports exactly those three:
 
 | Profile | Validated on | Primary method |
 |---|---|---|
@@ -66,17 +80,29 @@ Portfolio fit and Portfolio Review are out of scope for v1 (§13.1).
 
 ### 1.5 Single-user, local, not financial advice
 
-Consistent with Calboard generally. No deployment, no multi-user state, no advice framing anywhere in the output copy.
+Consistent with Calboard generally. No deployment, no multi-user state.
+
+**On advice framing.** The frozen text read *"no advice framing anywhere in the output copy"*, and amendment M7 narrows it rather than leaving it to contradict §10.6. The product is a single-user tool Calvin runs for himself; it is not a service, not a publication, and not advice to anyone else. What the output copy may not do is **frame itself as advice to a reader**: no second person telling someone what to do with their money, no suitability language, no risk-profile language, no wording that would read as a recommendation issued to a third party. The §10.6.4 action clause is a statement about **this price against this company's own record** — the form the amendment authorises, and the only form it authorises.
 
 ---
 
 ## 2. USER FLOW
 
-Nine steps. Steps 2 and 6 are the only ones requiring the human; everything else is software.
+Ten steps. Steps 2, 6 and 7 are the only ones requiring the human; everything else is software.
 
-**Step 1 — Ticker entry.** Analyst supplies a ticker. Software resolves instrument identity before anything else, per Calboard's existing invalid-symbol contract. Identity resolution is separate from data availability; an unresolvable ticker is rejected, never force-added.
+**Step 1 — Ticker entry and identity confirmation.** Analyst supplies a ticker. Software resolves instrument identity before anything else, per Calboard's existing invalid-symbol contract. Identity resolution is separate from data availability; an unresolvable ticker is rejected, never force-added.
 
-**Step 2 — Fact acquisition and human spot-check.** Software acquires the fact set per §3, classifies every figure per §4, and presents the **material facts** for human confirmation before any calculation runs. This step is mandatory and cannot be skipped or defaulted. It exists because the realistic failure path for Calboard is deterministic arithmetic on wrong facts (§3.1).
+Two rules govern this step.
+
+**1 — Instrument class is checked at resolution.** Only a **listed operating company** proceeds. A fund, an index, or a currency or crypto pair returns **UNSUPPORTED INSTRUMENT** here (§1.2, §9.3.1) — not at Step 2, and not as a downstream failure on a fact set that was never going to exist. The check narrows this analyzer's use of the invalid-symbol contract and changes neither that contract nor the portfolio side, where ETFs remain valid holdings.
+
+**2 — Step 1 does not auto-advance.** Resolution displays the **resolved company name** and waits. The analyst confirms that this is the company they meant, and the run commits only on that confirmation. A ticker that silently resolves and advances puts the analyst three screens into a run against the wrong company before anything says so, and the cost of discovering it there is a repeated Step 2.
+
+**No price renders on Step 1.** Price is acquired with the fact set and carries its timestamp (§3.4); showing it at entry would put an unsourced, untimestamped figure on screen before the fact contract applies, and would open the run with the number the analyst is trying not to anchor on.
+
+**Step 2 — Fact acquisition and human spot-check.** Software acquires the fact set per §3, classifies every figure per §4, and presents the **queued material facts** for human confirmation before any calculation runs. This step is mandatory and cannot be skipped or defaulted. It exists because the realistic failure path for Calboard is deterministic arithmetic on wrong facts (§3.1).
+
+**Not every material fact is queued.** A fact acquired through a **fixed, versioned tag mapping** is not spot-checked (§3.8.1). What remains in the queue is the AI-extracted set — the population in which all four recorded errors occurred. The exempted facts are covered instead by the deterministic input cross-checks of §3.8.2.
 
 **Step 3 — Gate 0.** Supported profile. On failure the analysis stops before Step 5; facts, arithmetically defined multiples and history diagnostics may display, each carrying the state.
 
@@ -84,17 +110,23 @@ Nine steps. Steps 2 and 6 are the only ones requiring the human; everything else
 
 **Step 5 — Profile recommendation and trigger evaluation.** Software recommends a profile with the facts that drove it, and evaluates triggers A and B separately.
 
-**Step 6 — Analyst confirmation and inputs.** Analyst confirms or overrides the profile; every override, its reason, and the fact that nothing under an overridden gate has been validated are recorded. Analyst then supplies three scenarios per §10 Step 3.
+**Step 6 — Profile confirmation.** Analyst confirms or overrides the recommended profile; every override, its reason, and the fact that nothing under an overridden gate has been validated are recorded.
 
-**Step 7 — Deterministic computation.** The full §7 module set runs. Suppression states from Steps 3–5 apply.
+**Step 7 — Analyst scenarios.** Analyst supplies three scenarios per §10 Step 3, with drivers set together, anchors written down, and a per-scenario share count where financing differs.
 
-**Step 8 — Interpretation.** The [C] layer runs against the computed output only, under the §8 limits.
+> **Why 6 and 7 are two steps.** They were one step and one number in the frozen text, and they are two different human jobs. Step 6 is a judgment about **what kind of company this is** — an act of classification, made against evidence the software has already assembled, whose failure mode is deferring to the recommendation. Step 7 is an act of **authorship**: the analyst writes assumptions that did not previously exist, and its failure mode is incoherent paths across the three columns. Collapsing them under one number let the second inherit the first's completed feeling. Splitting them is a numbering change only — no calculation, no gate and no state moves with it.
 
-**Step 8b — Blind challenger.** A separate call receives the verified fact set and any thesis claims, and **not** the analysis (§8.5). It may run in parallel with Step 8; it may not read Step 8's output.
+**Step 8 — Deterministic computation.** The full §7 module set runs. Suppression states from Steps 3–5 apply.
 
-**Step 9 — Result assembly.** The machine-readable Analysis Result is assembled per §10.0, with the challenger findings merged only after that call has completed. The narrative report is rendered from the result object.
+**Step 9 — Interpretation.** The [C] layer runs against the computed output only, under the §8 limits.
+
+**Step 9b — Blind challenger.** A separate call receives the verified fact set and any thesis claims, and **not** the analysis (§8.5). It may run in parallel with Step 9; it may not read Step 9's output.
+
+**Step 10 — Result assembly.** The machine-readable Analysis Result is assembled per §10.0, with the challenger findings merged only after that call has completed. The narrative report is rendered from the result object.
 
 **Ordering rule:** no calculation module may execute before Step 2 has been completed by a human. The software must enforce this, not merely recommend it.
+
+> **Reading note on two numbering systems.** This document uses "Step *n*" for two different things and they must not be confused. A bare **Step *n*** is a step of this ten-step user flow, and those are the numbers the M7 amendment renumbered. A **§10 Step *n*** is a step of the *methodology's* §10 and belongs to the frozen contract; those numbers are unchanged and must never be renumbered to match this flow. The load-bearing valuation boundary discussed in §1.1 and §8.3 is **§10 Step 5**, the methodology's, not this flow's Step 5.
 
 ---
 
@@ -126,7 +158,7 @@ Every analyzer input fact carries all six of the following as **separate fields*
 | **Source / provenance** | the specific document or feed, identified precisely enough to re-fetch | traceability |
 | **Source class** | PRIMARY / SECONDARY | what kind of document the figure came from |
 | **Extraction type** | DETERMINISTIC/STRUCTURED / AI-EXTRACTED | **how the figure was got out of that document** |
-| **Verification state** | VERIFIED / UNVERIFIED / SPOT-CHECK PENDING | whether a human has confirmed it |
+| **Verification state** | CONFIRMED / NOT CONFIRMED / SPOT-CHECK PENDING / SPOT-CHECK NOT REQUIRED | whether a human has confirmed it |
 | **As-of / period date** | the date or fiscal period the figure describes | when the figure was true |
 | **Retrieval timestamp** | when the figure was acquired, where applicable | staleness |
 
@@ -137,6 +169,17 @@ Every analyzer input fact carries all six of the following as **separate fields*
 **Extraction type — DETERMINISTIC/STRUCTURED** means the figure arrived through a structured feed field, a tagged filing element (XBRL or equivalent), or a deterministic parse whose output is reproducible without a model.
 
 **Extraction type — AI-EXTRACTED** means a model read a document and returned the figure. This includes reading a table out of a PDF, locating a line item in unstructured filing text, and any case where the figure's correctness depends on a model having read correctly.
+
+**Verification state — the four values.** This field answers one question and one only: *has a human confirmed this figure against its source?*
+
+| Value | Meaning |
+|---|---|
+| **CONFIRMED** | A human checked the figure against its source and it matched. Set by a Step 2 *Confirm* decision (§3.8.3) |
+| **NOT CONFIRMED** | A human checked and could not confirm. Set by a Step 2 *Cannot verify* decision, and **always carries a reason code** (§3.8.4) |
+| **SPOT-CHECK PENDING** | Queued for Step 2 and not yet decided. The Step 2 gate is not satisfied while any material fact sits here |
+| **SPOT-CHECK NOT REQUIRED** | Exempt from the queue because the figure came through a fixed, versioned tag mapping (§3.8.1). Not a human confirmation and must never be displayed as one |
+
+**These four names replaced VERIFIED / UNVERIFIED / SPOT-CHECK PENDING in amendment M7, because UNVERIFIED was doing two unrelated jobs.** It named both a verification state here and a propagation state in §5.1, and those are different claims about a figure: *no human has confirmed it* versus *it exists but could not be checked against a source*. **UNVERIFIED now means only the §5.1 propagation state.** See §14 for why the rename fell on this field rather than on §5.
 
 ### 3.2.1 Source class and extraction type are orthogonal — do not collapse them
 
@@ -236,9 +279,68 @@ Mandatory, before any calculation. This is the register's own first recommendati
 
 **Presentation requirement:** each fact is shown with its value and all six fields from §3.2 — type, source, source class, extraction type, verification state, as-of date and retrieval timestamp — and with a direct link or citation sufficient to check it against the source document. The spot-check is not a checkbox on a summary; it is a per-fact confirmation against provenance.
 
-**Behaviour on non-confirmation:** an unconfirmed material fact leaves the analysis in an incomplete state. Dependent outputs return INCOMPLETE per §5. The software does not proceed on unconfirmed material facts.
+**Behaviour on non-confirmation:** a material fact that is NOT CONFIRMED leaves the analysis in an incomplete state. Dependent outputs return INCOMPLETE per §5. The software does not proceed on non-confirmed material facts.
 
 **Why the list above is what it is:** three of the four recorded factual errors (the NVIDIA P/E range, the supply book, the OKLO share count) were in figures of exactly these kinds. The fourth (NRC status) was a qualitative claim, which is why §8 forbids the [C] layer from asserting facts at all.
+
+### 3.8.1 Tagged acquisition, and the one exemption from the queue
+
+**Tagged acquisition is required wherever a tag exists.** Where a figure is available as a tagged filing element under a **fixed, versioned tag mapping** — XBRL or equivalent, with the mapping version recorded on the fact — the software acquires it that way. AI extraction is a **documented fallback**, permitted only where no tag exists for that figure, where the tag is present but unmapped in the version in force, or where the tagged value fails the §3.8.2 cross-checks.
+
+Falling back is not free. **Every fallback is recorded on the fact** with which of those three reasons applied, and **milestone M8 must report which facts fell back and why** — as a list of facts, not a count. A fallback rate that climbs quietly is the failure this record exists to make visible, and a bare number cannot be acted on.
+
+**The exemption.** A fact acquired through a fixed, versioned tag mapping is **not queued** for spot-check. Its verification state is **SPOT-CHECK NOT REQUIRED** (§3.2). What remains in the queue is the AI-extracted set — which is where all four recorded errors occurred, and the reason §3 exists.
+
+**What the exemption rests on, stated plainly so it can be reviewed:** a versioned tag mapping is reproducible without a model, and its failures are systematic rather than per-fact. A mis-mapped tag is wrong for every company at once, and is caught by §3.8.2 and by the mapping's own version review — not by an analyst confirming one figure at a time. Per-fact human attention spent on tagged data buys little, and costs the attention the AI-extracted queue needs. **This is a judgment about where human attention is worth spending. It is not a claim that tagged data is correct.**
+
+**Two guards on the exemption:**
+
+1. **It is granted by acquisition path, never by extraction-type label alone.** A fact marked DETERMINISTIC/STRUCTURED that did **not** come through a fixed, versioned tag mapping — a structured feed field with no tag mapping, or a deterministic parse — is **queued**. Absence of a recorded mapping version is not evidence of one, on the §5.3 fail-closed rule.
+2. **The exemption changes what is queued, not what is carried.** An exempt fact still carries all six §3.2 fields, still displays them, still propagates its labels under §3.3, and still appears in report section B. It is not spot-checked; it is not hidden.
+
+**Consequence for the Step 2 gate:** *spot-check complete* means every **queued** material fact carries a decision. The §2 ordering rule and criterion A1 are otherwise unchanged — no calculation module runs before that.
+
+### 3.8.2 Deterministic input cross-checks — a milestone M8 requirement
+
+The §3.8.1 exemption removes human attention from tagged facts, so the compensating control is deterministic and runs on **every** input, exempt or queued. **[S]**, never [C]. Three families, all reproducible, each producing a state rather than a correction:
+
+| Cross-check | What it tests |
+|---|---|
+| **Footing** | That components sum to their stated total, and that a quantity agrees with itself where it appears more than once in one document — a statement, its note, and the cover page |
+| **Reconciliation against related facts** | That a figure is consistent with the facts it must agree with: the equity bridge reversing exactly (§3.5), cash FCF against its components, the leverage ratio against the debt and cash lines it is built from, and period-over-period continuity where a balance carries forward |
+| **Range sanity** | That a figure lies within the range its own history and its units admit — a margin outside 0–100%, a share count moving by an order of magnitude between periods, a scale error of 10³ or 10⁶ against the prior period |
+
+**A failed cross-check never corrects the figure.** It sets a state on the fact, forces that fact into the Step 2 queue whatever its acquisition path, and — where the fact is REQUIRED — returns INCOMPLETE for its dependents until it is resolved by **re-acquisition**, per §3.1 and §5.1. Nothing here writes a value.
+
+**Milestone M8 reports the cross-check outcome for every input**, pass or fail, alongside the §3.8.1 fallback list. A cross-check suite whose results are not reported is not a control.
+
+### 3.8.3 The two decisions, and the vocabulary they map onto
+
+Step 2 offers exactly **two** decisions and no default. The interface labels are **Confirm** and **Cannot verify**; those literal labels appear in the design and in `mock-human-steps.html`, and this table is the only place they are bound to this document's vocabulary.
+
+| Interface label (design layer) | This document calls it | Verification state set | Gate effect |
+|---|---|---|---|
+| **Confirm** | **confirmation** | CONFIRMED | Counts toward spot-check completion |
+| **Cannot verify** | **non-confirmation** | NOT CONFIRMED, with a §3.8.4 reason code | Counts toward completion; dependents return INCOMPLETE per §5 |
+
+Neither side is pre-selected and there is no third decision. There is deliberately **no control that edits a figure**: a typed value would carry no source, no source class and no extraction type, which is the failure §3.1 exists to prevent. A wrong figure is fixed by **re-acquisition**, never by correction.
+
+### 3.8.4 Reason code on non-confirmation
+
+**A non-confirmation is not complete without a reason code.** The control is a **fixed two-option select** — no free text, no third option, no *other*:
+
+| Reason code | Means |
+|---|---|
+| **CONTRADICTED BY SOURCE** | The analyst found the figure in the source and it does not match |
+| **NOT LOCATED** | The analyst could not find the figure in the source at all |
+
+**Both return INCOMPLETE. The gate does not change.** The two codes do not branch behaviour, do not produce different states, and do not licence proceeding in either case. Step 2 still has exactly two decisions; the code is a required field **of** the *Cannot verify* decision, not a decision of its own.
+
+**Why the codes exist, given that they change nothing downstream:** they separate a **pipeline defect** from an **acquisition gap**, and those need opposite fixes. *Contradicted by source* says the pipeline delivered a wrong figure from a document that holds the right one — a parse, mapping or extraction defect. *Not located* says the pipeline delivered a figure the analyst cannot find at all — a provenance or citation defect. Aggregated across runs the two split into two work queues; recorded as one undifferentiated *cannot verify*, they split into none.
+
+**Why the select is fixed and free text is refused:** a free-text reason is unaggregatable, and an unaggregatable reason cannot drive the fix. This is deliberately the opposite of the §6.3 profile-override reason, which **is** free text precisely because an override is a one-off judgment nobody will ever count. These are counted, so they are coded.
+
+**The code is recorded on the fact** and carried in `facts` (§10.0.1). Milestone M8 reports it alongside the §3.8.1 fallback list.
 
 ---
 
@@ -269,6 +371,7 @@ Implementing this as a single global "required fields" list will produce either 
 | Diagnostic reverse DCF | base-year revenue; RONIC + state; margin levels; policy constants |
 | Own-history percentile | ten years of the relevant multiple on a consistent accounting basis |
 | Pre-revenue module | share count; cash balance; quarterly burn; capex per unit of capacity; capacity ramp; construction lead; project debt share and cost |
+| §10.6 valuation position and action clause | price + timestamp; the scenario range; M7 implied growth; **the achieved-history comparator fact, on the same series and horizon as the implied-growth figure** (§10.6.2). Absent the comparator the gap is INCOMPLETE and the position does not render |
 
 ### 4.3 OPTIONAL inputs
 
@@ -300,6 +403,8 @@ Per I15, three inputs are labelled FACT in the methodology and are not. Software
 
 **INCOMPLETE** — a REQUIRED input for this output is missing. The output returns the state and no number.
 
+> **UNVERIFIED means this and nothing else.** Before amendment M7 the same word also named a value of the §3.2 verification-state field, where it meant *no human has confirmed this figure*. That is a different claim — about whether anyone looked — and it is now called **NOT CONFIRMED** (§3.2). UNVERIFIED is a **propagation state**: a property of the figure and its source, which travels downstream under §5.2. NOT CONFIRMED is a **verification state**: a property of the human review, which gates Step 2 and returns INCOMPLETE for dependents under §3.8. A figure can be UNVERIFIED and CONFIRMED at once — the analyst looked, agreed the figure is what the pipeline says, and agreed it cannot be checked against a source. That combination was unstatable while one word carried both jobs, and it is exactly the combination §3.4 records for the NVIDIA price correction.
+
 ### 5.2 Propagation rules
 
 Per I14: **UNVERIFIED propagates like SECONDARY.** That means the §3.3 rules apply unchanged — transitive, travelling to the point of display, never upgraded by aggregation.
@@ -310,6 +415,8 @@ Per I14: **UNVERIFIED propagates like SECONDARY.** That means the §3.3 rules ap
 | Any REQUIRED input SECONDARY | computed, labelled SECONDARY | yes |
 | Any REQUIRED input UNVERIFIED | computed, labelled UNVERIFIED | yes |
 | Any REQUIRED input AI-EXTRACTED | computed, labelled AI-EXTRACTED | yes |
+| Any REQUIRED input NOT CONFIRMED (§3.8.4) | **INCOMPLETE** | **no** |
+| Any REQUIRED input still SPOT-CHECK PENDING | the run has not passed the Step 2 gate; no module has run | **no** |
 | Any REQUIRED input missing | **INCOMPLETE** | **no** |
 | An OPTIONAL input missing | normal, with the absence displayed | yes |
 
@@ -647,6 +754,8 @@ Retained cash flow is computed after cash operating costs, corporate overhead, i
 
 Deterministic code handles calculations, gates, states and rules. AI interprets, explains, challenges and summarises. **AI does not choose valuation assumptions and does not issue buy/sell decisions.** Calvin is the final decision-maker.
 
+**Amendment M7 did not move this line, and the valuation position does not cross it.** The CHEAP / FAIR / EXPENSIVE position and its action clause (§10.6) are computed by **[S]** from fields the analyzer already holds. They are deterministic, reproducible and auditable — the same inputs always produce the same position. Nothing in §8 is relaxed to make room for them, and an AI-authored headline verdict remains prohibited exactly as before, for the reason recorded in §14: it would be unreproducible and unauditable.
+
 ### 8.2 What [C] does
 
 | Where | Responsibility |
@@ -659,7 +768,7 @@ Deterministic code handles calculations, gates, states and rules. AI interprets,
 
 ### 8.3 Hard limits
 
-1. **No verdict, no target, no recommendation.** (§10 Step 5.) Not softened, not implied, not phrased as a question that carries one.
+1. **[C] issues no verdict, no target and no recommendation.** (§10 Step 5.) Not softened, not implied, not phrased as a question that carries one. The CHEAP / FAIR / EXPENSIVE position and its action clause are **[S]** output computed under §10.6: [C] may **restate** the position in prose under §10.7, and may not author one, vary one, soften one, qualify one, or reason toward one of its own. Where the position is suppressed, [C] reports the state and says nothing in its place — limit 5 applies to the position exactly as it applies to any other suppressed output.
 2. **[C] may cite base rates only from supplied data, never from memory. Otherwise it must say none is available.** (I18.) This is the single most important limit in this section — it is the direct control on the failure path §3 exists to prevent.
 3. **[C] does not supply facts.** It reads the fact set. Any figure in [C] output that is not traceable to the acquired fact set is a defect.
 4. **[C] does not choose assumptions.** Discount band and terminal growth come from policy. Scenarios come from the analyst.
@@ -765,6 +874,20 @@ Five of the six are implemented in v1. Only R4 is deferred, and only because the
 | **SEASONAL — RUN-RATE SUPPRESSED** | §7.2 M12 seasonality test (I4) | the annualised run-rate for revenue, NOPAT, every multiple and the steady-state value |
 | **INCOMPLETE** | missing REQUIRED input (I14) | every dependent output |
 
+### 9.3.1 UNSUPPORTED INSTRUMENT — a rejection, not a suppression
+
+**UNSUPPORTED INSTRUMENT** is deliberately **not** in the §9.3 table, and the distinction is not pedantic.
+
+| | The ten §9.3 states | UNSUPPORTED INSTRUMENT |
+|---|---|---|
+| When | During a run | At Step 1, before a run exists |
+| What it does | Removes an output from a report that still renders | Prevents the run; there is no report |
+| Where it displays | At the point of use, inside the report | On the entry screen, as the reason the ticker was refused |
+
+Trigger: Step 1 identity resolution returns an instrument that is not a **listed operating company** — a fund, an index, or a currency or crypto pair (§1.2, §2).
+
+Consequently the §9.3 table still holds **ten** states, the §9.4 list still holds **twelve** flags, and the design's twenty-two-item state vocabulary is unchanged by this amendment. Criterion B8 is unaffected. UNSUPPORTED INSTRUMENT needs an entry-screen treatment, not a report-cell treatment, and §14 records that as a design follow-up rather than resolving it here.
+
 ### 9.4 Flags that qualify rather than suppress
 
 LOW RONIC — VALUE-DESTROYING GROWTH · INVERTED — HIGHER GROWTH LOWERS VALUE · RONIC CAPPED AT 200% · CAPITAL-LIGHT · SHORT HISTORY · MARGIN AT HISTORICAL HIGH · PEAK EARNINGS · SHAPE MISMATCH · RATE CAPPED — VALUE IS AN UPPER BOUND · SECONDARY · UNVERIFIED · AI-EXTRACTED.
@@ -776,6 +899,30 @@ SEASONAL — RUN-RATE SUPPRESSED is **not** in this list. It suppresses rather t
 **Where any suppressing state is active there is no fair-value range. The state is the output.**
 
 A suppressed output is displayed as its state. It is never displayed as blank, as zero, as "n/a" without the reason, or as a number with a warning glyph. The last of these is specifically prohibited: four Microsoft reverse-DCF cells were printed as numbers with a warning glyph in v1.0.1 and B1 corrected them to states.
+
+---
+
+### 9.6 Trust status — how much of this analysis can be used
+
+One status per run, computed by **[S]**, displayed on page one. Three values, all introduced by amendment M7:
+
+| Status | Meaning |
+|---|---|
+| **CLEAN** | Every output this run produces can be used as it stands |
+| **PARTIAL** | The analysis stands, and named parts of it do not. The status names which |
+| **UNUSABLE** | Not enough of the analysis survived its own states to be used at all |
+
+**Derivation — evaluated in this order, first match wins.** Every input is a state this document already computes; nothing new is measured.
+
+1. **UNUSABLE** — a §9.3 suppressing state removes the fair-value range under §10.3, **or** a REQUIRED input of the range is INCOMPLETE. The range does not render, and neither does the §10.6 position.
+2. **PARTIAL** — the range renders, and any of: a §9.4 qualifying flag is active on the valuation path; a material fact is NOT CONFIRMED; a §3.8.2 cross-check failed; a REQUIRED input of any other output is INCOMPLETE.
+3. **CLEAN** — the range renders and none of the above holds.
+
+**UNUSABLE is a statement about the analysis, not about the investment.** It says this run cannot tell you what the company is worth. It does not say the company is bad, and no copy may let it be read that way.
+
+**The instruction is delivered by behaviour, not by wording.** The third status is named UNUSABLE rather than DO NOT RELY because CLEAN and PARTIAL both answer *how much of this analysis can I use*, and an instruction to the reader would change dimension halfway through a three-item set. Under UNUSABLE the page **refuses to render the range** — which is the instruction, enforced rather than requested.
+
+**Trust status is not gated on the §1.1 override and is v1 regardless of it.** It describes the analysis and asserts nothing about price. Its report-level home is the `trust` member of the Analysis Result (§10.0.1).
 
 ---
 
@@ -805,6 +952,10 @@ A suppressed output is displayed as its state. It is never displayed as blank, a
 | `challenger` | The §8.5 findings, each with its claim reference, evidence reference and what-would-have-to-be-true |
 | `interpretation` | The §8.2 output, with each statement referencing the values it rests on |
 | `policy` | Every policy constant in force for this run, including the four undefined ones (§7.1), and every PROVISIONAL threshold with what it was calibrated on |
+| `trust` | The §9.6 trust status — CLEAN / PARTIAL / UNUSABLE — with the states and facts that determined it |
+| `position` | The §10.6 valuation position and its action clause, with the price, range location and required-versus-achieved gap they were computed from — or the state that replaced them |
+
+**Twelve members.** `trust` and `position` were added by amendment M7; criterion G1 counts twelve accordingly.
 
 #### 10.0.2 Contract rules
 
@@ -842,15 +993,17 @@ The report is ordered so that **what the market assumes** and **what the analyst
 
 **J — Provisional and unmodelled register.** Every PROVISIONAL threshold in use with what it was calibrated on; the four undefined policy constants with their configured values; the named unmodelled risks including debt availability (I10).
 
+**Investment case — at a glance.** The closing restatement approved as CC-1A and CC-1B, renders after J. It restates only members already in the Analysis Result — `scenarios`, `price_implied`, `states`, `challenger`, `facts` — and, per amendment M7, `trust` and `position`. **The §10.6 valuation position and its action clause render here and on page one, and nowhere else.** No new calculation, no new [C] call, no new state and no new figure. Pre-revenue reports omit the bear/base/bull strip and keep the §10.3 distribution summary.
+
 ### 10.3 Fair-value range rules
 
 - **Always a range, never a point.** Bounds = bear and bull scenario values; the probability-weighted value is shown **inside** it, not as the headline
 - **Always labelled INFERENCE**, with the three inputs that drive it named beside it
-- **Always shown next to the price-implied diagnostics from Step 2**
+- **Always shown next to the price-implied diagnostics from §10 Step 2** — the methodology's step, not this document's user flow
 - **Where trigger A or B has fired**, the range carries the warning: *the bounds are scenario labels, not confidence bounds*
 - **Where any suppressing state is active** — UNSUPPORTED PROFILE, LEVERAGE UNSUPPORTED IN v1, or a NOT COMPUTABLE reverse DCF — **there is no fair-value range. The state is the output**
 - **For pre-revenue companies** the range is the distribution summary — failure / success-as-commonly-described / success-as-the-price-requires — plus the cash floor. **Do not compress it to bear/bull bounds**
-- **The range is not a verdict**
+- **The range is not itself a verdict and does not become one.** The §10.6 position is computed *from* the range and the required-versus-achieved gap. It is not a property of the range, never replaces it, and never compresses it: the full range renders, with the position beside it. Where the range does not render, neither does the position
 
 ### 10.4 Required caveat text
 
@@ -865,10 +1018,90 @@ The eight v1 caveats from the register carry display text. Those with fixed word
 - Any multiple presented without its own-history context where that context exists
 - EV/Revenue standalone
 - Any consensus figure derived from the price
-- Any verdict, target or recommendation
+- Any **price target**, and any single-number fair value
+- Any **portfolio action** — trim, add, sell, hold, or any wording implying position size, cost basis or existing exposure
+- A **[C]-authored position**, or [C] prose that varies, softens, hedges or reasons toward one (§8.3 limit 1)
+- The §10.6 **position or its action clause rendered under suppression** — under any §9.3 state, under UNUSABLE trust, or where the range failed
+- A **number originating from the model** anywhere on page one or in the closing section (§10.7)
 - A counter-case produced by the interpretation layer rather than the blind challenger
 - A material AI-extracted fact displayed without a visible extraction-type marker
 - Any figure in the rendered report that is not present in the Analysis Result object
+
+---
+
+### 10.6 The valuation position and its action clause
+
+Authorised by Calvin's recorded override of 6 September 2026 (§1.1, §14). One position per run, computed by **[S]**.
+
+#### 10.6.1 Vocabulary
+
+The three values are **CHEAP · FAIR · EXPENSIVE**. Not bull / bear / hold, for two reasons that are not stylistic:
+
+- **HOLD collides with a portfolio-layer state.** The Investment Methodology's HOLD is an output about a position, requiring position size, cost basis and portfolio context — which §1.4 forbids this analyzer from receiving. Reusing the word would make a one-company statement look like a portfolio one.
+- **Bull and bear are sentiment words for what is arithmetic.** The position is a comparison of price against a computed range and a computed gap. CHEAP / FAIR / EXPENSIVE is price-scoped, one-company, and free of any implied action on its own.
+
+#### 10.6.2 Derivation — deterministic, never a [C] call
+
+Both inputs are fields the analyzer already computes. Nothing new is measured and no model is called.
+
+| Input | Source |
+|---|---|
+| **Price location within the scenario range** | §10.2 section G, already computed and already displayed |
+| **The required-versus-achieved gap** | M7's implied growth — the five-year figure, the ten-year CAGR and year-10 revenue — read against the company's own achieved history on a consistent accounting basis (§3.7) |
+
+**The comparator fact is REQUIRED.** The achieved figure must be a section B fact **on the same series and the same horizon** as the implied-growth figure it is read against. A ten-year implied CAGR is compared to a ten-year achieved CAGR of the same series, on the same accounting basis, or it is not compared at all. Where no such fact exists, the gap is **INCOMPLETE**, and the position and its action clause do not render.
+
+**Bands and the disagreement rule are policy constants**, recorded in `policy` (§10.0.1) and marked **PROVISIONAL** with what they were calibrated on. Two rules are fixed here and are not configuration:
+
+1. **The same inputs always produce the same position.** No per-company adjustment, no override, no model in the path.
+2. **Where the two inputs point in opposite directions the position is FAIR.** Disagreement is not resolved by preferring one input; the neutral value is the honest reading of a genuine split, and it fails toward saying less.
+
+**Why deterministic and not an AI call, recorded because it will be asked again:** an AI-authored headline verdict would be unreproducible and unauditable. Two runs on identical inputs could differ, and neither could be traced. That is the failure §3 exists to prevent, applied to the loudest sentence in the report.
+
+#### 10.6.3 It never renders under suppression
+
+The position renders only where **both** hold:
+
+- a valuation range exists (§10.3), **and**
+- trust status is **CLEAN** or **PARTIAL** (§9.6).
+
+Under **UNUSABLE**, under any §9.3 suppressing state, or where the range failed, the slot shows **the state** — not a position, not a hedge, not a softened verdict, not an empty frame. OKLO with nine of nine reverse-DCF cells failed must say the model has nothing to say, and must say it in that slot rather than leaving the reader to infer it from an absence.
+
+#### 10.6.4 The action clause
+
+**The label alone is not the deliverable.** Beneath the position, page one states the required figure against the achieved figure and what follows from the gap, in plain sentences:
+
+> The price requires 14% a year. The company has delivered 13.8% over ten years. Not a price to start a position at.
+
+**Form rules:**
+
+- Plain sentences. **Never a second all-caps token** beneath the first — the position carries the only label in the block.
+- The required figure and the achieved figure are both **named and shown**, never summarised as "above" or "below".
+- Both numbers come from the Analysis Result by substitution (§10.7). Neither is written by a model.
+
+**ENTRY-SIDE ONLY IN v1.** The clause may say **start**, **do not start**, or **wait for a better price**. It may never say trim, add, sell or hold — those are statements about a position, and they need the position size and cost basis §1.4 forbids the analyzer from holding. This is a hard boundary, not a default.
+
+**The action clause never renders under suppression**, on the same rule as the position in §10.6.3. It is not rendered separately, and it does not survive a suppressed position.
+
+#### 10.6.5 Decided now, built with milestone M8
+
+The comparator of §10.6.2 requires a section B fact on the same series and horizon as the implied-growth figure, and **that fact may not exist in the current fact set**. Acquiring it is milestone M8 work, alongside §3.8.1 and §3.8.2.
+
+**This is sequencing, not deferral.** The ruling is made, this section is the contract, and M8 builds against it. A later session may not reopen the decision on the grounds that the comparator was not ready.
+
+### 10.7 Page one — how its sentences are produced
+
+Page one carries the position, the action clause and the Quick Read. It is the most-read surface in the product and the one where a fabricated number would do the most damage, so its composition is specified rather than left to the renderer.
+
+**Three rules.**
+
+**1 — Fixed-shape sentences are deterministic templates.** Any sentence whose shape does not vary between companies is a **template with substitution slots**, filled from the Analysis Result. The action clause of §10.6.4 is the worked case: its shape is fixed, and only its figures and its verb change. Templates are [S]. No model is called to produce them, and no model may rewrite one after it is filled.
+
+**2 — Variable prose is a constrained [C] call.** Where the sentence genuinely varies — the main finding, what supports the case, what worries Calboard, the biggest uncertainty — it comes from a **[C]** call under the full §8.3 limits. It restates values already in the result object; it introduces nothing.
+
+**3 — Numbers never originate from the model.** Every figure on page one is **substituted from the Analysis Result**, in both mechanisms. A [C] call may reference a number by its result-object slot; it may not emit a numeral, and a numeral emitted by [C] is a defect rather than a value to be checked. This closes the failure path §10.0.2 rule 3 names, at the surface where it would be least likely to be caught: page one is read first, quoted most, and checked least.
+
+**Consequence for the renderer.** A page-one sentence has exactly two legitimate provenances — a filled template, or a constrained [C] call carrying slot references. There is no third path, and prose assembled by any other route does not render.
 
 ---
 
@@ -992,6 +1225,19 @@ Observable conditions. Each is PASS / FAIL, not a judgment.
 | A12 | A PRIMARY-source fact that was AI-extracted is recorded as PRIMARY **and** AI-EXTRACTED, and is not recorded as either alone |
 | A13 | Every material AI-extracted fact is **visibly distinguishable** in the user-facing output, not only in the underlying record |
 | A14 | Extraction type propagates transitively to the point of display, under the same rules as source class |
+| A15 | A figure available as a tagged filing element is acquired through the fixed, versioned tag mapping, with the mapping version recorded on the fact. AI extraction occurs only on one of the three §3.8.1 fallback conditions |
+| A16 | Milestone M8 reports **which facts** fell back to AI extraction and why, as a list of facts rather than a count |
+| A17 | A tag-mapped fact carries SPOT-CHECK NOT REQUIRED and is not queued; it still carries and displays all six §3.2 fields and still appears in section B |
+| A18 | A DETERMINISTIC/STRUCTURED fact with **no** recorded mapping version is queued, not exempted (fail-closed, §5.3) |
+| A19 | Footing, reconciliation and range-sanity cross-checks run on every input, exempt or queued, and report an outcome for each |
+| A20 | A failed cross-check never rewrites a figure. It sets a state, forces the fact into the queue, and returns INCOMPLETE for REQUIRED dependents until re-acquisition |
+| A21 | Step 2 offers exactly two decisions, neither pre-selected, and no control anywhere edits a figure |
+| A22 | Every *Cannot verify* carries a reason code from a fixed two-option select — CONTRADICTED BY SOURCE or NOT LOCATED. No free text, no third option |
+| A23 | Both reason codes return INCOMPLETE for dependents and neither branches behaviour; the code is recorded on the fact and reported by milestone M8 |
+| A24 | The verification-state field carries CONFIRMED / NOT CONFIRMED / SPOT-CHECK PENDING / SPOT-CHECK NOT REQUIRED. **UNVERIFIED appears nowhere as a verification state**, and only as the §5.1 propagation state |
+| A25 | Step 1 refuses a fund, an index, or a currency or crypto pair with UNSUPPORTED INSTRUMENT at identity resolution, before any fact is acquired. No run is opened |
+| A26 | Step 1 displays the resolved company name and does not auto-advance; the run commits only on the analyst's confirmation |
+| A27 | No price renders on Screen 1 |
 
 ### 12.2 Gates and states
 
@@ -1021,7 +1267,10 @@ Observable conditions. Each is PASS / FAIL, not a judgment.
 
 | # | Criterion |
 |---|---|
-| D1 | No output contains a verdict, price target or recommendation |
+| D1 | No output contains a **price target**, a single-number fair value, or a **portfolio action** (trim / add / sell / hold). The §10.6 position and its entry-side action clause are permitted and are the only exception |
+| D1a | The §10.6 position is computed by [S] and is reproducible: identical inputs produce an identical position, with no model in the derivation path |
+| D1b | The position and its action clause do **not** render under any §9.3 state, under UNUSABLE trust, or where the range failed — the slot shows the state |
+| D1c | The action clause is entry-side only. No copy string anywhere can produce trim, add, sell or hold |
 | D2 | [C] cites no base rate absent from the supplied data, and says none is available where that is the case (I18) |
 | D3 | [C] supplies no facts; every figure in [C] output traces to the fact set |
 | D4 | [C] reports suppressing states without reasoning around them or estimating past them |
@@ -1041,7 +1290,7 @@ Observable conditions. Each is PASS / FAIL, not a judgment.
 
 | # | Criterion |
 |---|---|
-| G1 | v1 returns a versioned machine-readable Analysis Result containing all ten §10.0.1 members |
+| G1 | v1 returns a versioned machine-readable Analysis Result containing all **twelve** §10.0.1 members, `trust` and `position` included |
 | G2 | The narrative report is rendered from the result object; no figure appears in the report that is absent from the object |
 | G3 | Every value in the object carries its states and labels in the same object; a value cannot be read without its qualifications |
 | G4 | Suppressed outputs appear as their state, never as null, absent or zero |
@@ -1080,6 +1329,23 @@ Observable conditions. Each is PASS / FAIL, not a judgment.
 
 ---
 
+### 12.10 Trust status, page one and the step split
+
+| # | Criterion |
+|---|---|
+| K1 | Every run carries exactly one trust status — CLEAN, PARTIAL or UNUSABLE — derived by the §9.6 order, first match wins |
+| K2 | Under UNUSABLE the page **refuses to render the range**. The refusal is behaviour, not a sentence asking the reader to be careful |
+| K3 | No copy anywhere lets UNUSABLE be read as a statement about the company rather than about the analysis |
+| K4 | DO NOT RELY appears nowhere. The third status is UNUSABLE |
+| K5 | Every fixed-shape page-one sentence is a filled template, [S], with no model in its path |
+| K6 | Every variable page-one sentence comes from a constrained [C] call under the full §8.3 limits |
+| K7 | **No number on page one originates from the model.** Every figure is substituted from the Analysis Result; a numeral emitted by [C] is a defect, not a value to be checked |
+| K8 | A page-one sentence has exactly two provenances — filled template or constrained [C] call with slot references. Prose from any other route does not render |
+| K9 | The user flow has **ten** steps. Profile confirmation (6) and analyst scenarios (7) are separately numbered and separately named |
+| K10 | No reference to a methodology **§10 Step *n*** was renumbered by the step split; §10 Step 5 still names the methodology's step |
+
+---
+
 ## 13. OUT OF SCOPE FOR v1
 
 ### 13.1 Excluded by the brief — do not design
@@ -1093,7 +1359,7 @@ Observable conditions. Each is PASS / FAIL, not a judgment.
 - Saved Analysis
 - Fear/greed or contrarian layers
 - Multi-investor or persona voting — including in the §8.5 challenger path, which is one call returning findings, not a panel returning a tally
-- Autonomous trading or recommendations
+- Autonomous trading, and any recommendation beyond the entry-side action clause of §10.6.4
 
 ### 13.1.1 Additionally excluded — settled boundaries
 
@@ -1137,6 +1403,136 @@ Both are the remedies the leverage precondition previously named and no longer o
 
 ---
 
+## 14. AMENDMENT RECORD — M7
+
+**Status: DRAFT, pending Command Center approval.** Drafted 6 September 2026 against the frozen artefacts, whose SHA-256 hashes were verified byte-exact before any edit:
+
+| File | SHA-256 verified before edit |
+|---|---|
+| `calboard-stock-analyzer-v1-spec.md` | `1406eb1860d71f6604ed12e22d8ea7b9a2cc22bc6df5fbbf6248cf6a8b5e56b8` |
+| `calboard-stock-analyzer-v1-design.md` | `31690bde59ac2035f391566ede9ecc2e5871b211805a6c2c03f6083c4f251b56` |
+| `mock-human-steps.html` | `cb2e540e549f159e096aa319b6cd4e13fbc582eff0039ea34a0b45ee3ac67ca1` |
+
+Eighteen changes: **twelve here**, four in the interaction design, two in `mock-human-steps.html`. The design carries its own §20 record.
+
+### 14.1 The 6 September ruling — the authority for changes 10 and 11
+
+Recorded as **Calvin's informed override**. It reverses the no-verdict boundary in this spec and in four Notion pages.
+
+**He heard the counter-arguments and decided to proceed.** The two put to him were that the engine holds no view on whether a company can deliver what its price assumes, and that a real OKLO purchase at roughly $140 is the specific failure the boundary was written to correct. **This is recorded so it is not re-argued.** A later session that rediscovers either objection has not found something new; it has found the reason the override was made deliberately rather than casually.
+
+The ruling's own terms, as implemented:
+
+| Ruling | Where it lands |
+|---|---|
+| Vocabulary is CHEAP / FAIR / EXPENSIVE, not bull / bear / hold — HOLD collides with the Investment Methodology's portfolio-layer state, and bull/bear are sentiment words for arithmetic | §10.6.1 |
+| Derivation is deterministic, from already-computed fields. Not an AI call — an AI-authored verdict would be unreproducible and unauditable | §10.6.2, §8.1, §8.3 limit 1 |
+| It never renders under suppression. Under UNUSABLE, a fired gate or a failed range, the slot shows the state | §10.6.3, §10.5 |
+| Decided now, built with milestone M8, because the comparator fact may not exist yet. Sequencing, not deferral | §10.6.5 |
+| The Quick Read read sentence and the UNUSABLE trust status are **not** verdicts and do not depend on the override. Both are v1 | §9.6, §10.7 |
+| The position carries an action clause. Entry-side only: start / do not start / wait for a better price. Never trim, add or sell | §10.6.4 |
+| Trust vocabulary is CLEAN / PARTIAL / UNUSABLE, all three new. UNUSABLE rather than DO NOT RELY, because an instruction changes dimension halfway through a three-item set | §9.6 |
+
+### 14.2 The twelve spec changes
+
+| # | Change | Sections touched |
+|---|---|---|
+| 1 | Step 2 queue holds the AI-extracted set only; tag-mapped facts are exempt; the four-tier risk ordering loses its structured-primary tier | §2, §3.8.1, §12.1 A17–A18 |
+| 2 | Tagged acquisition required where a tag exists; AI extraction a documented fallback; milestone M8 reports which facts fell back and why | §3.8.1, §12.1 A15–A16 |
+| 3 | Deterministic input cross-checks as a milestone M8 requirement — footing, reconciliation, range sanity | §3.8.2, §12.1 A19–A20 |
+| 4 | Required reason code on non-confirmation, fixed two-option select | §3.8.4, §12.1 A22–A23 |
+| 5 | UNVERIFIED disambiguated — see §14.3 | §3.2, §5.1, §5.2, §12.1 A24 |
+| 6 | Confirm / Cannot verify mapped onto confirmation / non-confirmation | §3.8.3 |
+| 7 | Step 6 split into Step 6 profile confirmation and Step 7 analyst scenarios — see §14.4 | §2, and every reference listed in §14.4 |
+| 8 | Step 1 accepts listed operating companies only; UNSUPPORTED INSTRUMENT at identity resolution | §1.2, §2, §9.3.1, §12.1 A25 |
+| 9 | Step 1 does not auto-advance; resolved name confirmed; no price on Screen 1 | §2, §12.1 A26–A27 |
+| 10 | The valuation position and its action clause; the no-verdict boundary resolved | §1.1, §1.5, §8.1, §8.3, §10.2, §10.3, §10.5, §10.6, §13.1, §12.4 D1–D1c |
+| 11 | Trust vocabulary CLEAN / PARTIAL / UNUSABLE | §9.6, §10.0.1, §12.10 K1–K4 |
+| 12 | Page-one template specification | §10.7, §12.10 K5–K8 |
+
+### 14.3 Change 5 — which sense of UNVERIFIED was renamed, and why
+
+**The two senses.** In the frozen text, UNVERIFIED named two unrelated things:
+
+| Where | Sense | What it claimed |
+|---|---|---|
+| §3.2, verification-state field | **Verification state** | No human has confirmed this figure |
+| §5.1, propagation state | **Propagation state** | The figure exists but could not be checked against a source |
+
+These are different claims. The first is about whether anyone looked; the second is about whether the figure can be checked at all. One name for both made the combination *a human looked, agreed the pipeline's figure, and agreed it is uncheckable* literally unstatable — which is the state §3.4 records for the corrected NVIDIA price.
+
+**The verification-state sense was renamed. UNVERIFIED now means only the §5.1 propagation state.** Three reasons, in order of weight:
+
+1. **The propagation sense is inherited; the verification sense is ours.** *UNVERIFIED propagates like SECONDARY* is caveat-register item **I14**, and the word travels with the frozen contract into §5.2, §9.4's qualifying-flag vocabulary, criterion A4 and the design's three provenance tokens. Renaming it would edit a term this spec inherits rather than owns. The verification-state field is this document's own construction — its third value, SPOT-CHECK PENDING, appears in no upstream document.
+2. **The blast radius is smaller and entirely inside this document's control.** The propagation sense is rendered in every derived cell in the report; the verification sense is rendered on fact cards and in section B.
+3. **The new names fall out of the interface that already exists.** Step 2's two decisions are *Confirm* and *Cannot verify* (§3.8.3), so CONFIRMED and NOT CONFIRMED name exactly what the human did. VERIFIED was renamed to CONFIRMED with it, because leaving VERIFIED beside NOT CONFIRMED would have kept the field internally mismatched.
+
+**A fourth value was added, and it is a consequence of change 1 rather than of change 5:** tag-exempt facts are never queued, so they can be neither CONFIRMED nor SPOT-CHECK PENDING. They carry **SPOT-CHECK NOT REQUIRED**. Recorded here because a reader comparing the field against the frozen text will see four values where the ruling implied three.
+
+### 14.4 Change 7 — every affected reference
+
+Step 6 became two steps. Steps 1–5 are unchanged. The map:
+
+| Frozen | Amended |
+|---|---|
+| Step 6 — Analyst confirmation and inputs | **Step 6 — Profile confirmation** *and* **Step 7 — Analyst scenarios** |
+| Step 7 — Deterministic computation | Step 8 |
+| Step 8 — Interpretation | Step 9 |
+| Step 8b — Blind challenger | Step 9b |
+| Step 9 — Result assembly | Step 10 |
+
+**Every reference changed, by file:**
+
+| File | Reference |
+|---|---|
+| spec | §2 — "Nine steps… Steps 2 and 6" → "Ten steps… Steps 2, 6 and 7" |
+| spec | §2 — the six step definitions above, renamed and renumbered |
+| spec | §12.10 — K9 and K10 added |
+| design | §1 heading — "NINE STEPS, FOUR SCREENS" → "TEN STEPS, FOUR SCREENS" |
+| design | §1 — the screen-flow diagram, Screen 3 and the processing block |
+| design | §2 — route table, `/profile` row and `/report` row |
+| design | header — the `mock-human-steps.html` companion row |
+| design | §4.2 — "Step 6's scenarios" → "Step 7's scenarios" |
+| design | §5 heading — "STEP 6 — PROFILE CONFIRMATION AND OVERRIDE UX" → "STEPS 6 AND 7" |
+| design | §5.4 — retitled to Step 7 |
+| design | §19 — evidence row 5 |
+| `mock-human-steps.html` | the Screen 3 section head "Step 6 — Analyst scenarios" → "Step 7" |
+| `mock-human-steps.html` | the CSS section comment |
+
+**Deliberately not renumbered — the methodology's own steps.** A **§10 Step *n*** belongs to `calboard-valuation-methodology.md` and is part of the frozen contract.
+
+The frozen artefacts carried **thirteen** such references — twelve in the spec (§1.1, §2, §3.2, §3.3, §3.4, §4.4, §5.1, §6, §8.2 twice, §8.3, §10.1) and one in the design (§5.4) — and **not one was renumbered**. Two of the lines carrying them were rewritten by change 10, at §1.1 and §8.3 limit 1; the references inside them are identical to the frozen text. Amendment M7 adds four more, at §1.1, §2, §10.3 and §12.10 K10.
+
+Criterion K10 asserts the rule. The reading note in §2 exists so the next editor does not undo it: the load-bearing boundary of §1.1 is **§10 Step 5**, the methodology's, and it bears no relationship to this flow's Step 5, which is profile recommendation and trigger evaluation.
+
+### 14.5 Readings this amendment had to make
+
+Recorded rather than assumed, in the §18 tradition of the design document. Each is a place the instruction did not fully determine the text.
+
+| # | Reading | Alternative, and why it was not taken |
+|---|---|---|
+| **M7-a** | **The exemption is granted by acquisition path, not by extraction-type label.** The ruling exempts facts acquired through a fixed, versioned tag mapping and says the queue holds AI-extracted facts. §3.2's DETERMINISTIC/STRUCTURED is broader than tag mapping — it also covers structured feed fields and deterministic parses, which have no mapping version. Those are **queued** (§3.8.1 guard 1) | Exempting everything labelled DETERMINISTIC/STRUCTURED would have matched the second sentence more literally and widened the exemption beyond what the first sentence justifies. The fail-closed direction is to queue more, not fewer (§5.3) |
+| **M7-b** | **UNSUPPORTED INSTRUMENT is recorded in §9.3.1, not in the §9.3 table.** It rejects before a run exists rather than suppressing an output inside a report | Adding an eleventh row to §9.3 would have made the design's ten-suppressing-state vocabulary stale and put a state with no report cell into a table of report cells |
+| **M7-c** | **`trust` and `position` are new top-level Analysis Result members**, taking §10.0.1 from ten to twelve; G1 was updated to match | Nesting them inside `states` would have hidden a report-level roll-up among per-output states and left page one with no contract to read from |
+| **M7-d** | **The position's band thresholds and its disagreement rule are PROVISIONAL policy constants** (§10.6.2), recorded in `policy` and calibrated at milestone M8. The mechanism is fixed here; the numbers are not | The ruling fixes the inputs and the determinism, not the cut-points. Inventing thresholds would have frozen numbers with no observations behind them — the failure Appendix B already records for the <5 / 5–9 history thresholds |
+| **M7-e** | **Where the two derivation inputs disagree, the position is FAIR** (§10.6.2 rule 2) | Preferring either input would be an unstated valuation judgment. FAIR fails toward saying less, consistent with §5.3 |
+| **M7-f** | **"M8" in changes 2 and 3 is read as the build milestone, not the §7.2 module.** §7.2's M8 is terminal diagnostics and has nothing to do with acquisition. Every occurrence is written as "milestone M8" so the two cannot be confused | Reading it as module M8 would have put fallback reporting inside terminal-share diagnostics, which is incoherent |
+| **M7-g** | **§1.5's "no advice framing" was narrowed rather than deleted** (§1.5) | Deleting it would have removed a real constraint the override did not touch. Leaving it whole would have left a sentence contradicting §10.6.4, which the instruction forbids |
+
+### 14.6 Found and deliberately not fixed
+
+Out of scope for this amendment. Each is a real defect, recorded so it is not lost and not silently absorbed.
+
+| # | Finding | Why not fixed here |
+|---|---|---|
+| **F1** | **`mock-report-msft.html` contains a stale `Step 6` reference** after change 7's renumber | Explicitly excluded from this amendment's scope. The report mocks are not to be edited |
+| **F2** | **§3.2 says "six distinct fields" and its table lists seven** — type, source, source class, extraction type, verification state, as-of date, retrieval timestamp. §3.8 and §10.0.1 repeat "all six" while listing the same seven. Criterion A11 inherits the error | Pre-existing and untouched by these eighteen changes. It is a counting error rather than a contract error, but A11 is an acceptance criterion and should be corrected deliberately |
+| **F3** | **The module range is inconsistent.** §10.0.1 and §10.2 section D say "M1–M14"; §6.5 and §10.4 cite M16, and the design's flow diagram says "M1–M16" | Pre-existing. Resolving it means confirming how many modules §7.2 defines, which is a spec question this amendment has no authority over |
+| **F4** | **UNSUPPORTED INSTRUMENT has no entry-screen visual treatment.** §9.3.1 defines the state; the design's §6 vocabulary covers report cells, and this state never reaches a report | A new design treatment is beyond changes 13–16. Command Center should rule on it with the rest of Screen 1 |
+| **F5** | **The design's §7.1 provenance tokens and §9 disclosure levels name the verification-state values.** After change 5 they read against a renamed field | The design changes authorised here are 13–16. This is a mechanical follow-through, but it is not in scope and should not be done silently |
+| **F6** | **`mock-human-steps.html` prints `Spot-check pending` on fact-card stamps**, which survives change 5, but the mock shows no tag-exempt fact and so never renders SPOT-CHECK NOT REQUIRED | The mock changes authorised here are 17 and 18. Worth a card in a later pass, since the exempt path is now the common one |
+
+---
 ## APPENDIX — TRACEABILITY
 
 Every requirement in this spec traces to the frozen contract. Where a requirement originates in the caveat register rather than the methodology, the item number is cited inline.

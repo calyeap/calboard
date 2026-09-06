@@ -138,7 +138,7 @@ fieldset.decision legend{font-size:11px;letter-spacing:.08em;text-transform:uppe
 button.primary{font:inherit;font-size:14px;padding:12px 24px;border:1px solid var(--rule);background:var(--tint);color:var(--ink-muted);cursor:not-allowed}
 .continue .reason{font-size:12px;color:var(--ink-muted)}
 
-/* ---------- Step 6 ---------- */
+/* ---------- Steps 6 and 7 ---------- */
 .gateband{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:36px}
 .gate{background:var(--surface);border:1px solid var(--hairline);padding:18px}
 .gate h4{margin:0 0 10px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted);font-weight:600}
@@ -278,7 +278,9 @@ button.primary{font:inherit;font-size:14px;padding:12px 24px;border:1px solid va
     could not — for any reason. There is deliberately no third option and no box to type a corrected figure into.</dd>
     <dt>What to examine</dt>
     <dd>The cards are ordered by risk, not by importance: figures a model read out of a filing come first, then
-    figures from data providers, then unverified ones, then machine-tagged primary data last.</dd>
+    figures from data providers, then unverified ones. Machine-tagged filing data is not in this queue at all —
+    it arrives through a fixed, versioned mapping and is cross-checked by machine instead, so your attention
+    goes to the figures a model had to read.</dd>
   </dl>
   <details class="disclose">
     <summary><span class="lbl">Why can't I just correct a wrong number?</span></summary>
@@ -293,7 +295,8 @@ button.primary{font:inherit;font-size:14px;padding:12px 24px;border:1px solid va
 <p style="margin:0 0 24px;font-size:13px;color:var(--ink-muted);max-width:62ch">
 Every material fact is confirmed individually against its source. There is no bulk control.
 No calculation module can run until the last fact carries a decision — enforced server-side, not by the router.
-Queue order is by risk: AI-extracted first, then secondary, then unverified, then structured primary.
+Queue order is by risk: AI-extracted first, then secondary, then unverified — three tiers.
+Facts acquired through a fixed, versioned tag mapping are not queued at all.
 </p>
 
 <div class="progress">
@@ -503,6 +506,11 @@ Queue order is by risk: AI-extracted first, then secondary, then unverified, the
 <div class="evidence">
   <p class="kicker">Software recommends, with the facts that drove it</p>
   <h3>Mature, profitable, stable FCF</h3>
+  <p class="whythisfact">The profile decides which valuation methods run and which are refused outright.
+  Mature-profitable gets a DCF and a reverse DCF; high-growth gets explicit year-by-year revenue paths
+  instead, and pre-revenue gets none of them. Confirm the wrong one and every number below is computed by a
+  method that does not describe this company — the arithmetic will be correct and the report will look
+  entirely normal.</p>
   <table>
     <tr><td>Revenue scale</td><td>large</td></tr>
     <tr><td>Free cash flow</td><td>positive and stable, 10 years</td></tr>
@@ -536,9 +544,20 @@ Queue order is by risk: AI-extracted first, then secondary, then unverified, the
   </div>
 </div>
 
-<div class="sechead" style="margin-top:44px"><h2>Step 6 — Analyst scenarios</h2>
+<div class="sechead" style="margin-top:44px"><h2>Step 7 — Analyst scenarios</h2>
   <span class="screenlabel">Drivers set together</span></div>
 <hr class="rule">
+
+<p class="whythisfact">These three columns are the only place your own view enters the analysis. Every
+number in the fair-value range is computed from them, so the range is exactly as good as they are — and an
+incoherent column still produces a range that looks no different from a good one. Nothing downstream will
+tell you a column was wrong.</p>
+
+<p class="note"><b>The values below are mock illustration, not pre-filled defaults.</b> The real editor ships
+no numbers: every cell opens empty. The software recommends a profile because it has evidence for one, and it
+has no evidence whatever for an analyst's assumptions — pre-filling these would make the software the author
+of the assumptions the analyst is supposed to write, and would reduce Step 7 to the click-through Step 2
+exists to prevent. The written anchors are shown empty here, which is how every row in this table starts.</p>
 
 <table class="matrix">
   <thead>
@@ -557,10 +576,18 @@ Queue order is by risk: AI-extracted first, then secondary, then unverified, the
       </td>
       <td class="cell" data-sc="Bear"><input class="inset" value="38.0%"></td>
       <td class="cell" data-sc="Base"><input class="inset" value="44.0%"></td>
-      <td class="cell" data-sc="Bull"><input class="inset" value="46.8%"></td>
+      <td class="cell" data-sc="Bull"><input class="inset" value="46.8%">
+        <div class="require">Trigger A fired, and this is the window maximum — 46.8% against a ten-year
+        range of 21.4pt. Holding a historical-high margin for ten years is an assumption, not the neutral
+        choice it looks like. The anchor for this column has to say why it holds.</div>
+      </td>
     </tr>
     <tr>
-      <td class="driver">Reinvestment, % of NOPAT</td>
+      <td class="driver">Reinvestment, % of NOPAT
+        <div class="require">This row runs opposite to every other one. Higher reinvestment is the
+        <em>bear</em> case and lower is the bull, so bear 86% · base 80% · bull 72% is the correct
+        direction — not a transposition to be tidied up.</div>
+      </td>
       <td class="cell" data-sc="Bear"><input class="inset" value="86%"></td>
       <td class="cell" data-sc="Base"><input class="inset" value="80%"></td>
       <td class="cell" data-sc="Bull"><input class="inset" value="72%"></td>
