@@ -1,24 +1,21 @@
-import Link from "next/link";
+import { AnalyzerShell } from "@/app/components/AnalyzerShell";
+import { AnalyzerEntry } from "@/app/components/AnalyzerEntry";
 
-// Milestone 6 — no ticker search/acquisition yet (Milestone 8), so this is
-// a plain index of the two Milestone 5 validation fixtures available to
-// view, not a real analyzer entry point.
-export default function AnalyzerIndexPage() {
+// Screen 1 — the analyzer's entry point (§2 Step 1, design route table).
+//
+// This route holds no [runId] because no run exists yet: the run is created
+// when the analyst confirms the resolved company, which is what makes Screen 1
+// a step rather than a form field (design:121).
+export default async function AnalyzerEntryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ unavailablefixture?: string }>;
+}) {
+  const { unavailablefixture } = await searchParams;
+
   return (
-    <main style={{ padding: "32px 24px", maxWidth: "640px", margin: "0 auto" }}>
-      <h1>Stock Analyzer v1 — fixture reports</h1>
-      <p>
-        No ticker acquisition exists yet (Milestone 8). These two links render the Milestone 5 validation fixtures
-        through the Milestone 6 report renderer.
-      </p>
-      <ul>
-        <li>
-          <Link href="/analyzer/msft">MSFT — mature, profitable, stable FCF</Link>
-        </li>
-        <li>
-          <Link href="/analyzer/oklo">OKLO — pre-revenue / unprofitable</Link>
-        </li>
-      </ul>
-    </main>
+    <AnalyzerShell>
+      <AnalyzerEntry fixtureMissing={unavailablefixture} />
+    </AnalyzerShell>
   );
 }

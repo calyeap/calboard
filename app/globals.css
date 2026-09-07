@@ -2068,3 +2068,456 @@ h6 {
   background: var(--ink);
   transform: translateY(-3px);
 }
+
+/* ===================================================================
+   M7 — HUMAN STEPS (Screens 1, 2 and 3)
+   Scoped under .cb-steps inside .cb-analyzer so the Milestone 6 report
+   renderer's own .state/.note rules are untouched: the entry and
+   spot-check screens use the mocks' geometry, which differs slightly
+   from the report's, and neither should have to win.
+
+   Values are taken from mock-screen1-entry.html and mock-human-steps.html,
+   both frozen. The alias tokens below exist because the mocks address the
+   palette through --paper/--surface/--rule/--ink-muted while .cb-analyzer
+   defines it as --ground/--field/--line-strong/--muted. Aliasing rather
+   than renaming keeps one palette, not two.
+   =================================================================== */
+.cb-analyzer .cb-steps {
+  --paper: var(--ground);
+  --surface: var(--field);
+  --rule: var(--line-strong);
+  --ink-muted: var(--muted);
+}
+.cb-analyzer .cb-steps .wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+.cb-analyzer .cb-steps .entrycol {
+  max-width: 560px;
+  margin: 0 auto;
+}
+.cb-analyzer .cb-steps .sechead {
+  height: 47px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cb-analyzer .cb-steps .sechead h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.cb-analyzer .cb-steps .rule {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 0 0 17px;
+}
+.cb-analyzer .cb-steps .screenlabel {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+/* ---------- state vocabulary: suppression vs open ---------- */
+/* SUPPRESSION replaces the value — a settled answer (UNKNOWN, UNSUPPORTED).
+   OPEN is its deliberate inverse: same geometry, dashed edge, no fill, for
+   UNAVAILABLE, where there is no answer YET rather than no value. */
+.cb-analyzer .cb-steps .state,
+.cb-analyzer .cb-steps .open {
+  padding: 12px 14px;
+  text-align: left;
+  font-feature-settings: "tnum" 0;
+}
+.cb-analyzer .cb-steps .state {
+  background: var(--tint);
+  border-left: 2px solid var(--ink);
+}
+.cb-analyzer .cb-steps .open {
+  background: transparent;
+  border: 1px dashed var(--line-strong);
+}
+.cb-analyzer .cb-steps .state .name,
+.cb-analyzer .cb-steps .open .name {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  display: block;
+}
+.cb-analyzer .cb-steps .state .cause,
+.cb-analyzer .cb-steps .open .cause {
+  font-size: 11px;
+  color: var(--ink-muted);
+  display: block;
+  margin-top: 3px;
+}
+.cb-analyzer .cb-steps .state .plain,
+.cb-analyzer .cb-steps .open .plain {
+  display: block;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+/* ---------- provenance: three fixed slots, never merged ---------- */
+.cb-analyzer .cb-steps .stamp {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin-top: 8px;
+}
+.cb-analyzer .cb-steps .stamp span {
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 1px;
+}
+.cb-analyzer .cb-steps .stamp span.ai {
+  border-bottom: 2px solid var(--ink);
+  color: var(--ink);
+}
+.cb-analyzer .cb-steps .stamp .sep {
+  border: 0;
+  padding: 0 5px;
+}
+
+/* ---------- entry field: one field, no adjacent control ---------- */
+.cb-analyzer .cb-steps .entryfield {
+  margin: 0 0 4px;
+}
+.cb-analyzer .cb-steps .entryfield label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin-bottom: 8px;
+}
+.cb-analyzer .cb-steps .inset {
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  width: 100%;
+  padding: 6px 2px;
+  color: var(--ink);
+}
+.cb-analyzer .cb-steps .inset:focus {
+  outline: none;
+  border-bottom: 2px solid var(--ink);
+}
+.cb-analyzer .cb-steps input.ticker {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.cb-analyzer .cb-steps .helpline {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin: 10px 0 0;
+}
+
+/* ---------- resolved identity ---------- */
+.cb-analyzer .cb-steps .idcard {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  padding: 22px;
+}
+.cb-analyzer .cb-steps .idkicker {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.cb-analyzer .cb-steps .idname {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.25;
+}
+.cb-analyzer .cb-steps .idline {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+.cb-analyzer .cb-steps .idsource {
+  margin-top: 18px;
+  border-top: 1px solid var(--hairline);
+  padding-top: 16px;
+}
+.cb-analyzer .cb-steps .idsource h4 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.cb-analyzer .cb-steps .idsource dl {
+  margin: 0;
+  font-size: 12px;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 9px 18px;
+}
+.cb-analyzer .cb-steps .idsource dt {
+  color: var(--ink-muted);
+}
+.cb-analyzer .cb-steps .idsource dd {
+  margin: 0;
+}
+
+/* ---------- actions ---------- */
+.cb-analyzer .cb-steps .result {
+  margin-top: 26px;
+}
+.cb-analyzer .cb-steps .act {
+  font: inherit;
+  font-size: 14px;
+  padding: 12px 22px;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.cb-analyzer .cb-steps button:disabled {
+  background: var(--tint);
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+.cb-analyzer .cb-steps .continue {
+  margin-top: 26px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.cb-analyzer .cb-steps .continue .reason {
+  font-size: 12px;
+  color: var(--ink-muted);
+  max-width: 44ch;
+}
+.cb-analyzer .cb-steps .note {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-top: 14px;
+  max-width: 62ch;
+}
+.cb-analyzer .cb-steps .whythisfact {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 10px 0 0;
+  max-width: 60ch;
+}
+
+/* ---------- Screen 2: the fact card ---------- */
+/* One fact at a time, full width, with its source beside it. Not a table —
+   table review is what produces click-through (design line 176). */
+.cb-analyzer .cb-steps .factcard {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 32px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.cb-analyzer .cb-steps .factname {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+.cb-analyzer .cb-steps .requiredfor {
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin: 0 0 18px;
+}
+.cb-analyzer .cb-steps .periodline {
+  font-size: 13px;
+  color: var(--ink);
+  margin: 0 0 10px;
+}
+.cb-analyzer .cb-steps .value {
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.cb-analyzer .cb-steps .sourcepane {
+  border-left: 1px solid var(--hairline);
+  padding-left: 24px;
+}
+.cb-analyzer .cb-steps .sourcepane h4 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.cb-analyzer .cb-steps .sourcepane dl {
+  margin: 0;
+  font-size: 12px;
+}
+.cb-analyzer .cb-steps .sourcepane dt {
+  color: var(--ink-muted);
+  margin-top: 9px;
+}
+.cb-analyzer .cb-steps .sourcepane dd {
+  margin: 2px 0 0;
+}
+.cb-analyzer .cb-steps .sourcepane a {
+  color: var(--ink);
+}
+.cb-analyzer .cb-steps .nolink {
+  color: var(--ink-muted);
+}
+
+/* ---------- the two decisions, nothing pre-selected ---------- */
+.cb-analyzer .cb-steps fieldset.decision {
+  border: 0;
+  padding: 0;
+  margin: 22px 0 0;
+}
+.cb-analyzer .cb-steps fieldset.decision legend {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  padding: 0;
+  margin-bottom: 10px;
+}
+.cb-analyzer .cb-steps .choices {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cb-analyzer .cb-steps .choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--rule);
+  padding: 10px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--surface);
+}
+.cb-analyzer .cb-steps .choice input {
+  margin: 0;
+}
+/* Section 3.8.4's fixed two-option select. The mock is silent on this
+   control, so the spec governs: no free text, no third option, no "other". */
+.cb-analyzer .cb-steps .reasoncode {
+  margin-top: 14px;
+}
+.cb-analyzer .cb-steps .reasoncode label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin-bottom: 8px;
+}
+.cb-analyzer .cb-steps .reasoncode select {
+  font: inherit;
+  font-size: 13px;
+  padding: 9px 10px;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
+  min-width: 260px;
+}
+.cb-analyzer .cb-steps .decided {
+  margin-top: 22px;
+  background: var(--tint);
+  border-left: 2px solid var(--ink);
+  padding: 12px 14px;
+}
+.cb-analyzer .cb-steps .decided .name {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  display: block;
+}
+.cb-analyzer .cb-steps .decided .cause {
+  font-size: 11px;
+  color: var(--ink-muted);
+  display: block;
+  margin-top: 3px;
+}
+
+/* ---------- judgments (section 4.4), which R6 places in Step 2 ---------- */
+.cb-analyzer .cb-steps .judgments {
+  margin-top: 44px;
+}
+.cb-analyzer .cb-steps .judgment {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  padding: 22px;
+  margin-bottom: 16px;
+}
+.cb-analyzer .cb-steps .judgment h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.cb-analyzer .cb-steps .judgment .why {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin: 0 0 16px;
+}
+
+/* ---------- Step 6 override ---------- */
+.cb-analyzer .cb-steps .overrideblock {
+  margin-top: 24px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  padding: 24px;
+}
+.cb-analyzer .cb-steps .overrideblock h4 {
+  margin: 0 0 14px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.cb-analyzer .cb-steps .ack {
+  margin-top: 20px;
+  background: var(--tint);
+  border-left: 2px solid var(--ink);
+  padding: 14px 16px;
+}
+.cb-analyzer .cb-steps .ack .name {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 6px;
+}
+.cb-analyzer .cb-steps .ack p {
+  margin: 0;
+  font-size: 13px;
+}
+.cb-analyzer .cb-steps .fieldlabel {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-bottom: 4px;
+}
+.cb-analyzer .cb-steps .errline {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--loss);
+}

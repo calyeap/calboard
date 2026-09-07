@@ -11,22 +11,28 @@ import { getPool } from "../db";
 // written "just for debugging" is how that boundary would quietly go.
 // ---------------------------------------------------------------------------
 
-export type FactDecision = "CONFIRMED" | "NOT CONFIRMED";
-export type ReasonCode = "CONTRADICTED BY SOURCE" | "NOT LOCATED";
-export type ProfileDecision = "CONFIRMED" | "OVERRIDDEN" | "CANNOT JUDGE";
+// The vocabulary lives in ./decisions, which has no server dependency, so
+// client components can render these controls without pulling `pg` into the
+// browser bundle. Re-exported here so existing server-side callers are
+// unaffected by where it is defined.
+import type {
+  FactDecision,
+  ReasonCode,
+  ProfileDecision,
+  JudgmentKey,
+  StoredFactDecision,
+  StoredJudgment,
+} from "./decisions";
 
-export const REASON_CODES: readonly ReasonCode[] = ["CONTRADICTED BY SOURCE", "NOT LOCATED"];
-
-export type JudgmentKey =
-  | "ACCOUNTING-BASIS WINDOW"
-  | "NON-OPERATING INVESTMENTS"
-  | "MEDIAN-MARGIN NOPAT WINDOW";
-
-export const JUDGMENT_KEYS: readonly JudgmentKey[] = [
-  "ACCOUNTING-BASIS WINDOW",
-  "NON-OPERATING INVESTMENTS",
-  "MEDIAN-MARGIN NOPAT WINDOW",
-];
+export { REASON_CODES, JUDGMENT_KEYS } from "./decisions";
+export type {
+  FactDecision,
+  ReasonCode,
+  ProfileDecision,
+  JudgmentKey,
+  StoredFactDecision,
+  StoredJudgment,
+};
 
 export interface AnalyzerRun {
   runId: string;
@@ -39,17 +45,6 @@ export interface AnalyzerRun {
   profileHumanConfirmed: boolean;
 }
 
-export interface StoredFactDecision {
-  factId: string;
-  decision: FactDecision;
-  reasonCode: ReasonCode | null;
-}
-
-export interface StoredJudgment {
-  judgmentKey: JudgmentKey;
-  selection: string;
-  reason: string | null;
-}
 
 /**
  * Creates a run. Called only on confirmation of the resolved company at Step 1
