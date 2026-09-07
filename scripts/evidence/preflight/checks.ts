@@ -100,6 +100,14 @@ export function checkConsoleErrors(target: string, d: ProbeDocument): CheckResul
  * The marker is a string the application itself renders for that state, so a
  * page that loads without reaching the state fails here rather than being
  * captured as though it had.
+ *
+ * Matched case-insensitively. `app/globals.css` uppercases the state-name span
+ * via `text-transform`, and `bodyText` (`document.body.innerText`) reflects
+ * that CSS — so a case-sensitive check would FAIL a known-good build. This
+ * runner is explicitly forbidden from judging appearance/treatment such as a
+ * `text-transform`, and hardcoding the uppercased form would just recreate the
+ * same fragility the moment the design changes that transform. Do not tighten
+ * this back to a case-sensitive comparison.
  */
 export function checkStatesAppeared(
   target: string,
@@ -107,6 +115,6 @@ export function checkStatesAppeared(
   d: ProbeDocument
 ): CheckResult {
   const step = "every requested state appeared";
-  if (d.bodyText.includes(marker)) return pass(step);
+  if (d.bodyText.toLowerCase().includes(marker.toLowerCase())) return pass(step);
   return fail(step, `${target} at ${d.viewport.w}: expected marker not present — "${marker}"`);
 }

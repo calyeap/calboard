@@ -143,4 +143,20 @@ describe("checkStatesAppeared", () => {
     expect(r.status).toBe("FAIL");
     expect(r.detail).toContain("Unsupported");
   });
+
+  it("PASSes when the marker is present but upper-cased by CSS text-transform", () => {
+    // app/globals.css uppercases the state-name span; document.body.innerText
+    // reflects that transform, so the captured bodyText is upper-cased even
+    // though config.ts's STATE_MARKERS stay in their source casing.
+    const d = doc({ bodyText: "UNKNOWN — NO PROVIDER EVIDENCE FOR ZXQY" });
+    const r = checkStatesAppeared("s1-unknown", "Unknown — no provider evidence for ZXQY", d);
+    expect(r.status).toBe("PASS");
+  });
+
+  it("still FAILs when the marker's words are entirely absent, case-insensitivity notwithstanding", () => {
+    const d = doc({ bodyText: "Step 1 — Ticker entry and identity resolution" });
+    const r = checkStatesAppeared("s1-unknown", "Unknown — no provider evidence for ZXQY", d);
+    expect(r.status).toBe("FAIL");
+    expect(r.detail).toContain("Unknown");
+  });
 });

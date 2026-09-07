@@ -115,7 +115,11 @@ export async function driveRun(
         await card.locator('select[name="reasonCode"]').selectOption("CONTRADICTED BY SOURCE");
       }
       await card.locator('button[type="submit"]').click();
-      await page.waitForLoadState("networkidle");
+      // Deterministic per-card wait, not networkidle: this is an in-place
+      // server action (see resolveTicker's doc comment above), and several
+      // cards are on screen, so the wait is scoped to this card's own submit
+      // button re-rendering "Change decision" (FactCard.tsx:192).
+      await card.locator('button[type="submit"]:has-text("Change decision")').waitFor();
     }
 
     // Step 2 must actually be complete, or the profile screen is not reachable
