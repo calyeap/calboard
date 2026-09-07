@@ -2,7 +2,7 @@
 
 **Status:** DESIGN APPROVED — Command Center, 5 September 2026. M6 was built and shipped against it. This document is the re-frozen post-M6 contract, re-frozen 6 September 2026 and superseding the pre-M6 freeze: it records what shipped. A disagreement between this document and the build is a defect to be raised, not drift for a later session to correct on its own judgment.
 
-**Amendment M7 — DRAFT, pending Command Center approval.** Four changes land in this document and two in `mock-human-steps.html`, as part of an eighteen-change amendment whose other twelve are in the spec. Unlike every revision recorded below, **M7 does change a ruling**: it implements Calvin's recorded override of 6 September 2026 on the no-verdict boundary, which introduces a valuation position to page one and the closing section. It also rules R7 and R8, records Screen 1 as a screen, and renumbers the user flow from nine steps to ten. **§20 is the amendment record.** Until Command Center approves, the pre-amendment text is the operative contract.
+**Amendment M7 — APPROVED by Command Center, 7 September 2026.** Four changes land in this document and two in `mock-human-steps.html`, as part of an eighteen-change amendment whose other twelve are in the spec. Unlike every revision recorded below, **M7 does change a ruling**: it implements Calvin's recorded override of 6 September 2026 on the no-verdict boundary, which introduces a valuation position to page one and the closing section. It also rules R7 and R8, records Screen 1 as a screen, and renumbers the user flow from nine steps to ten. **§20 is the amendment record.** **This amended text is the operative contract**, approved 7 September 2026 and further amended the same day by M7-b and M7-c (§20).
 
 **Date:** 5 September 2026. Comprehension and learning revision, same date. Amendment M7 drafted 6 September 2026.
 
@@ -26,6 +26,7 @@ Companion mocks, to be frozen with this document:
 
 | File | Covers |
 |---|---|
+| `mock-screen1-entry.html` | Step 1 entry at `/analyzer`, ticker entry and identity resolution, the four outcomes of the invalid-symbol contract |
 | `mock-human-steps.html` | Step 2 fact verification, §4.4 judgments, Step 6 profile confirm / override, Step 7 scenario matrix |
 | `mock-report-msft.html` | Report sections A–J, Microsoft four degenerate reverse-DCF cells |
 | `mock-report-oklo.html` | Pre-revenue report, OKLO two worth-less-than-failure rows, funding stack, distribution-summary range |
@@ -1132,7 +1133,7 @@ The surface got easier to consume. **No analytical depth was removed to achieve 
 
 ## 20. AMENDMENT RECORD — M7
 
-**Status: DRAFT, pending Command Center approval.** Drafted 6 September 2026. The three frozen artefacts were verified byte-exact by SHA-256 before any edit; the hashes are recorded in the spec's §14.1.
+**Status: APPROVED by Command Center, 7 September 2026.** Drafted 6 September 2026. The three frozen artefacts were verified byte-exact by SHA-256 before any edit; the hashes are recorded in the spec's §14.1.
 
 Eighteen changes in total. **Four land here, two in `mock-human-steps.html`, twelve in the spec** (spec §14).
 
@@ -1174,7 +1175,7 @@ Not on the numbered list, but required for the numbered changes to be coherent. 
 
 | # | Item | Why it is not resolved here |
 |---|---|---|
-| **R9** | **Entry-screen treatment for UNSUPPORTED INSTRUMENT.** Spec §9.3.1 defines it as a rejection at identity resolution, not a suppressing state. It never reaches a report, so it has no `StateSlot` and no place in the §6 vocabulary | A new visual treatment is beyond the four authorised changes. It belongs with the rest of Screen 1, which M7 has only just made a screen |
+| **R9** | **Entry-screen treatment for UNSUPPORTED INSTRUMENT.** Spec §9.3.1 defines it as a rejection at identity resolution, not a suppressing state. It never reaches a report, so it has no `StateSlot` and no place in the §6 vocabulary | **RULED 7 September 2026: approved as rendered in ****`mock-screen1-entry.html`****,** frozen in the same change that added this note. UNSUPPORTED rejects at identity resolution and shows its state with Begin analysis disabled and a stated reason. It gains no `StateSlot`, no §6 entry and no place in the state counts — it never reaches a report |
 | **R10** | **Verification-state token copy.** §7.1's provenance tokens and §9's disclosure levels print the verification state, whose values the spec renamed to CONFIRMED / NOT CONFIRMED / SPOT-CHECK PENDING / SPOT-CHECK NOT REQUIRED | Mechanical follow-through, but outside changes 13–16 and not to be done silently. Tracked as spec §14.6 F5 |
 | **R11** | **How the tag-exempt fact appears in section B.** SPOT-CHECK NOT REQUIRED is now the common verification state, and no mock renders it | Tracked as spec §14.6 F6 |
 | **R12** | **`SpotCheckProgress` counts "n material facts".** Since change 1 the queue is a subset of the material facts, so the label now overstates what the analyst must decide | A one-word copy change, but it is a §3.2 component contract and belongs with R10's vocabulary pass rather than being made in passing |
@@ -1185,4 +1186,4 @@ Not on the numbered list, but required for the numbered changes to be coherent. 
 
 **END OF DESIGN**
 
-Approved by Command Center, 5 September 2026. Re-frozen post-M6, 6 September 2026. **Amendment M7 drafted 6 September 2026 — DRAFT, pending Command Center approval (§20).**
+Approved by Command Center, 5 September 2026. Re-frozen post-M6, 6 September 2026. **Amendment M7 drafted 6 September 2026, approved by Command Center 7 September 2026 (§20). Further amended the same day by M7-b and M7-c.**
