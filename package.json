@@ -9,7 +9,8 @@
     "test": "vitest run",
     "migrate": "tsx scripts/migrate.ts",
     "record-split": "tsx scripts/record-corporate-action.ts",
-    "record-reconciliation": "tsx scripts/record-reconciliation.ts"
+    "record-reconciliation": "tsx scripts/record-reconciliation.ts",
+    "evidence": "tsx scripts/evidence/run.ts"
   },
   "dependencies": {
     "decimal.js": "^10.4.3",
@@ -28,6 +29,7 @@
     "@types/react-dom": "^18.3.0",
     "dotenv": "^16.4.5",
     "jsdom": "^25.0.0",
+    "playwright": "1.63.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
