@@ -2,7 +2,7 @@
 
 **Status:** DRAFT FOR COMMAND CENTER APPROVAL. Nothing goes to BUILD until that approval exists.
 
-**Amendment M7 — DRAFT, pending Command Center approval.** This document carries the M7 amendment: eighteen changes across this spec, the interaction design and `mock-human-steps.html`, of which twelve land here. The amendment implements **Calvin's recorded override of 6 September 2026** on the no-verdict boundary, together with eleven further changes to Step 1, Step 2, the step numbering, the trust vocabulary and the page-one contract. **§14 is the amendment record.** It lists every change, every reading the amendment had to make, and the follow-ups it deliberately did not fix. Until Command Center approves, the frozen pre-amendment text is the operative contract.
+**Amendment M7 — APPROVED by Command Center, 7 September 2026.** This document carries the M7 amendment: eighteen changes across this spec, the interaction design and `mock-human-steps.html`, of which twelve land here. The amendment implements **Calvin's recorded override of 6 September 2026** on the no-verdict boundary, together with eleven further changes to Step 1, Step 2, the step numbering, the trust vocabulary and the page-one contract. **§14 is the amendment record.** It lists every change, every reading the amendment had to make, and the follow-ups it deliberately did not fix. **This amended text is the operative contract.** Command Center approved the amendment on 6 September 2026 and recorded it on the Product Decision Log, but the approval was not written into the artefacts until 7 September. For a day both documents declared themselves not in force while every dispatch assumed they were. Amendments M7-b and M7-c were applied during that window; both stand, and both are recorded in §14.
 
 **Date:** 5 September 2026. Amendment M7 drafted 6 September 2026.
 
@@ -1413,7 +1413,7 @@ Both are the remedies the leverage precondition previously named and no longer o
 
 ## 14. AMENDMENT RECORD — M7
 
-**Status: DRAFT, pending Command Center approval.** Drafted 6 September 2026 against the frozen artefacts, whose SHA-256 hashes were verified byte-exact before any edit:
+**Status: APPROVED by Command Center, 7 September 2026.** Drafted 6 September 2026 against the frozen artefacts, whose SHA-256 hashes were verified byte-exact before any edit:
 
 | File | SHA-256 verified before edit |
 |---|---|
