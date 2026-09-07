@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>console-error</title>
+<style>
+  /* Stands in for the CSS custom property next/font/google's IBM_Plex_Sans
+     sets at runtime (app/layout.tsx: variable: "--font-ibm-plex-sans"). A
+     standalone fixture has no Next.js to supply it, and an unresolved var()
+     invalidates the whole font-family declaration rather than skipping to the
+     next fallback — so without this, .cb-analyzer computes the browser
+     default serif and this fixture would trip checkFont too, not just
+     checkConsoleErrors. */
+  :root { --font-ibm-plex-sans: "IBM Plex Sans"; }
+  body { margin: 0; }
+  .cb-analyzer {
+    font-family: var(--font-ibm-plex-sans), "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .card { width: 100%; box-sizing: border-box; padding: 12px; }
+</style></head>
+<body><div class="cb-analyzer"><div class="card">Fact acquisition and spot-check</div></div>
+<script>console.error("EVIDENCE FIXTURE: deliberate console error");</script></body></html>

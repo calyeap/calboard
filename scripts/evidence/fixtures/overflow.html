@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>overflow</title>
+<style>
+  /* Stands in for the CSS custom property next/font/google's IBM_Plex_Sans
+     sets at runtime (app/layout.tsx: variable: "--font-ibm-plex-sans"). A
+     standalone fixture has no Next.js to supply it, and an unresolved var()
+     invalidates the whole font-family declaration rather than skipping to the
+     next fallback — so without this, .cb-analyzer computes the browser
+     default serif and this fixture would trip checkFont too, not just
+     checkOverflow. */
+  :root { --font-ibm-plex-sans: "IBM Plex Sans"; }
+  body { margin: 0; }
+  .cb-analyzer {
+    font-family: var(--font-ibm-plex-sans), "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    width: 100%; overflow-x: auto;
+  }
+  .card { width: 3000px; padding: 12px; }
+</style></head>
+<body><div class="cb-analyzer"><div class="card">Fact acquisition and spot-check</div></div></body></html>
