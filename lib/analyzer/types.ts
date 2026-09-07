@@ -25,7 +25,18 @@ import Decimal from "decimal.js";
 export type FactType = "FACT" | "ASSUMPTION" | "INFERENCE";
 export type SourceClass = "PRIMARY" | "SECONDARY";
 export type ExtractionType = "DETERMINISTIC/STRUCTURED" | "AI-EXTRACTED";
-export type VerificationState = "VERIFIED" | "UNVERIFIED" | "SPOT-CHECK PENDING";
+// The first three are the M1–M16 values and neither their strings nor their
+// semantics change. M7 adds the three states Step 2 introduces (§3.8.1,
+// §3.8.3): SPOT-CHECK NOT REQUIRED is set on a fact acquired through a fixed,
+// versioned tag mapping, which is shown but never queued; CONFIRMED and
+// NOT CONFIRMED are the two decisions Step 2 offers, and there is no third.
+export type VerificationState =
+  | "VERIFIED"
+  | "UNVERIFIED"
+  | "SPOT-CHECK PENDING"
+  | "SPOT-CHECK NOT REQUIRED"
+  | "CONFIRMED"
+  | "NOT CONFIRMED";
 export type Requiredness = "REQUIRED" | "OPTIONAL";
 
 export interface FactRecord {
@@ -50,6 +61,20 @@ export interface FactRecord {
   // Restatements are retained side by side, never overwritten (§3.4) — both
   // FactRecords stay in the array.
   supersedesFactId: string | null;
+  // M7, §3.8.1. The version of the fixed tag mapping this figure was acquired
+  // through — XBRL or equivalent — or null where it was not acquired that way.
+  //
+  // This field exists because the queue exemption is granted **by acquisition
+  // path, never by extraction-type label alone** (§3.8.1 guard 1). Without it
+  // the only available test would be `extractionType === "DETERMINISTIC/
+  // STRUCTURED"`, which the spec explicitly refuses: a structured feed field
+  // with no tag mapping, or a deterministic parse, is queued like any other.
+  // null therefore means queued, never exempt — "absence of a recorded mapping
+  // version is not evidence of one, on the §5.3 fail-closed rule".
+  //
+  // Unpopulated in M7: the fixtures record null or a fixture mapping version,
+  // and real mapping versions arrive with acquisition at M8.
+  tagMappingVersion: string | null;
 }
 
 // ---------------------------------------------------------------------------

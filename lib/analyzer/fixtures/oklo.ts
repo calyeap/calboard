@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 import { CLEAN_PROVENANCE } from "../provenance";
 import type { CompanyFixture, PreRevenueFixture } from "../assemble";
-import type { FactRecord, SourcedValue } from "../types";
+import type { SourcedValue } from "../types";
 
 // ---------------------------------------------------------------------------
 // Milestone 5 — OKLO validation fixture.
@@ -103,6 +103,10 @@ export const OKLO_FIXTURE: CompanyFixture = {
       asOfDate: "Q2 FY2026",
       retrievalTimestamp: "2026-09-04T16:00:00-04:00",
       supersedesFactId: null,
+      // Neither pre-revenue figure comes through a tag mapping — one is a 10-Q
+      // balance adjusted for burn, the other a cash-flow line — so both are
+      // queued for spot-check (§3.8.1).
+      tagMappingVersion: null,
     },
     {
       id: "quarterly-burn",
@@ -117,8 +121,17 @@ export const OKLO_FIXTURE: CompanyFixture = {
       asOfDate: "Q2 FY2026",
       retrievalTimestamp: "2026-09-04T16:00:00-04:00",
       supersedesFactId: null,
+      // Neither pre-revenue figure comes through a tag mapping — one is a 10-Q
+      // balance adjusted for burn, the other a cash-flow line — so both are
+      // queued for spot-check (§3.8.1).
+      tagMappingVersion: null,
     },
-  ] as FactRecord[],
+  // No `as FactRecord[]` assertion here. It used to carry one, and the
+  // assertion silently suppressed the missing-property error when
+  // tagMappingVersion was added to FactRecord — leaving the field `undefined`
+  // at runtime while the type claimed otherwise. Adding a required field to
+  // FactRecord must break this fixture loudly, not quietly.
+  ],
 
   gate0: {
     sectorClassification: "Utilities",

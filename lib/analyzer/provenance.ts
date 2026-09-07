@@ -30,11 +30,25 @@ export function combineProvenance(...tokens: ProvenanceTokens[]): ProvenanceToke
     : "DETERMINISTIC/STRUCTURED";
 
   let verificationState: VerificationState;
-  if (tokens.some((t) => t.verificationState === "UNVERIFIED")) {
+  if (tokens.some((t) => t.verificationState === "NOT CONFIRMED")) {
+    // M7. Ranked above UNVERIFIED and handled explicitly rather than left to
+    // the final `else`, which would resolve it to VERIFIED — a fail-open on
+    // precisely the fact the analyst said they could not verify, against
+    // §5.3. In a correct run this branch is unreachable: §5 returns INCOMPLETE
+    // for a non-confirmed fact's dependents, so the module never computes and
+    // never combines. It is here because "unreachable" is the assumption
+    // fail-closed exists to stop the code resting on.
+    verificationState = "NOT CONFIRMED";
+  } else if (tokens.some((t) => t.verificationState === "UNVERIFIED")) {
     verificationState = "UNVERIFIED";
   } else if (tokens.some((t) => t.verificationState === "SPOT-CHECK PENDING")) {
     verificationState = "SPOT-CHECK PENDING";
   } else {
+    // VERIFIED, CONFIRMED and SPOT-CHECK NOT REQUIRED all reach here. All
+    // three mean the figure is not carrying a provenance weakness: CONFIRMED
+    // is the analyst having checked it, and SPOT-CHECK NOT REQUIRED is the
+    // §3.8.1 tag-mapping exemption, which changes what is queued rather than
+    // what is carried.
     verificationState = "VERIFIED";
   }
 
