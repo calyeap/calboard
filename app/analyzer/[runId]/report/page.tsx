@@ -61,7 +61,7 @@ export default async function ReportPage({ params }: { params: Promise<{ runId: 
               <span className="cause">
                 The fair-value range below still renders. The valuation position and its action
                 clause do not — an unconfirmed profile would leave the loudest sentence in this
-                report resting on a judgment nobody made (§10.6.3).
+                report resting on a judgment nobody made.
               </span>
             </div>
 

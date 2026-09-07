@@ -168,12 +168,18 @@ export function deriveVerificationState(
   // there is no decision to wait for.
   if (!queued) return "SPOT-CHECK NOT REQUIRED";
 
-  // Queued and undecided. A fact that was already UNVERIFIED at acquisition
-  // stays UNVERIFIED rather than being relabelled SPOT-CHECK PENDING:
-  // combineProvenance ranks UNVERIFIED above SPOT-CHECK PENDING, so keeping it
-  // is the fail-closed direction and never upgrades a weaker state.
-  if (fact.verificationState === "UNVERIFIED") return "UNVERIFIED";
-
+  // Queued and undecided. §3.2 defines SPOT-CHECK PENDING as exactly this —
+  // "queued for Step 2 and not yet decided" — so it is the answer whatever the
+  // fixture wrote at acquisition.
+  //
+  // This branch previously preserved an acquisition-time UNVERIFIED on the
+  // reasoning that it was the fail-closed direction. That was my invention, not
+  // the contract's: §3.2 as amended by M7 records that CONFIRMED /
+  // NOT CONFIRMED / SPOT-CHECK PENDING / SPOT-CHECK NOT REQUIRED *replaced*
+  // VERIFIED and UNVERIFIED on this field precisely because UNVERIFIED was
+  // doing two unrelated jobs, and that "UNVERIFIED now means only the §5.1
+  // propagation state". Keeping it here re-created the ambiguity the amendment
+  // removed.
   return "SPOT-CHECK PENDING";
 }
 

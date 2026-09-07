@@ -1442,6 +1442,14 @@ h6 {
   background: var(--ground);
   color: var(--ink);
   min-height: 100vh;
+  /* The frozen mocks are set in IBM Plex Sans, and every spacing and
+     line-length judgement in them was made against its metrics. The
+     next/font variable is on <html>, but this container never consumed it,
+     so the Analyzer alone rendered in the system stack — a different
+     typeface from the one the design was drawn in. Same declaration as
+     .cb-dash and .holdings-chrome, which have always had it. */
+  font-family: var(--font-ibm-plex-sans), "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-feature-settings: "tnum" 1;
 }
 .cb-analyzer[data-theme="dark"] {
   --ground: #16181A;
@@ -2520,4 +2528,175 @@ h6 {
   margin-top: 12px;
   font-size: 12px;
   color: var(--loss);
+}
+
+/* -------------------------------------------------------------------
+   720px — the project's only breakpoint, and design §16: nothing is moved
+   off-screen at any width.
+
+   The Screen 2 fact card kept its two-column grid with a fixed 340px
+   source pane at 720, so the pane's text ran off the right edge
+   (clientWidth 655 against scrollWidth 691 on MSFT, propagating to
+   .wrap). Both mocks stack at this width instead.
+
+   Every value below is taken verbatim from the frozen mocks —
+   mock-human-steps.html and mock-screen1-entry.html, both at
+   @media (max-width:720px). Nothing here is invented, and nothing is a
+   responsive tier beyond the one breakpoint the mocks define.
+   ------------------------------------------------------------------- */
+@media (max-width: 720px) {
+  .cb-analyzer .cb-steps .wrap {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  /* The fix: one column, and the source pane moves under the value with a
+     rule above it instead of beside it. */
+  .cb-analyzer .cb-steps .factcard {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  .cb-analyzer .cb-steps .sourcepane {
+    border-left: 0;
+    border-top: 1px solid var(--hairline);
+    padding-left: 0;
+    padding-top: 20px;
+  }
+
+  /* The two decisions stack rather than being squeezed side by side. */
+  .cb-analyzer .cb-steps .choices {
+    flex-direction: column;
+  }
+  .cb-analyzer .cb-steps .reasoncode select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  /* Definition lists go single-column so the value is never clipped by a
+     fixed label column. */
+  .cb-analyzer .cb-steps .idsource dl {
+    grid-template-columns: 1fr;
+    gap: 2px 0;
+  }
+  .cb-analyzer .cb-steps .idsource dt {
+    padding-top: 9px;
+  }
+}
+
+/* -------------------------------------------------------------------
+   Comprehension layer (design §17) and the ASSUMPTION token.
+   Values taken verbatim from the frozen mocks.
+   ------------------------------------------------------------------- */
+.cb-analyzer .cb-steps .finding {
+  max-width: 72ch;
+  margin: 0 0 30px;
+}
+.cb-analyzer .cb-steps .finding .lede {
+  font-size: 19px;
+  line-height: 1.42;
+  font-weight: 500;
+  margin: 0 0 18px;
+  letter-spacing: -0.005em;
+}
+.cb-analyzer .cb-steps .finding dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 9px 18px;
+}
+.cb-analyzer .cb-steps .finding dt {
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 600;
+  padding-top: 3px;
+}
+.cb-analyzer .cb-steps .finding dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.cb-analyzer .cb-steps .finding dd b {
+  font-weight: 600;
+}
+
+.cb-analyzer .cb-steps .disclose {
+  margin-top: 16px;
+}
+.cb-analyzer .cb-steps .disclose summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  cursor: pointer;
+  border-bottom: 0;
+  padding: 9px 0;
+  min-height: 38px;
+  transition: color 0.12s ease-out;
+}
+.cb-analyzer .cb-steps .disclose summary::-webkit-details-marker {
+  display: none;
+}
+.cb-analyzer .cb-steps .disclose summary::marker {
+  content: "";
+}
+.cb-analyzer .cb-steps .disclose summary::before {
+  content: "\25B8";
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--muted);
+  transition: transform 0.12s ease-out, color 0.12s ease-out;
+  line-height: 1;
+}
+.cb-analyzer .cb-steps .disclose[open] summary::before {
+  content: "\25BE";
+}
+.cb-analyzer .cb-steps .disclose summary .lbl {
+  border-bottom: 1px solid var(--line-strong);
+  padding-bottom: 1px;
+}
+.cb-analyzer .cb-steps .disclose summary:hover::before {
+  color: var(--ink);
+}
+.cb-analyzer .cb-steps .disclose summary:hover .lbl {
+  border-bottom-color: var(--ink);
+}
+.cb-analyzer .cb-steps .disclose summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.cb-analyzer .cb-steps .disclose .body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink);
+  max-width: 72ch;
+  padding: 0 0 4px 20px;
+}
+
+/* An ASSUMPTION is not prose in the cell — it carries the same underlined
+   token treatment the provenance slots use. */
+.cb-analyzer .cb-steps .typetag {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  border-bottom: 1px solid var(--rule);
+}
+
+@media (max-width: 720px) {
+  .cb-analyzer .cb-steps .finding dl {
+    grid-template-columns: 1fr;
+    gap: 3px 0;
+  }
+  .cb-analyzer .cb-steps .finding dt {
+    padding-top: 12px;
+  }
+  .cb-analyzer .cb-steps .finding .lede {
+    font-size: 17px;
+  }
 }

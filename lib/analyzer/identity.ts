@@ -18,7 +18,7 @@ import { lookupCrypto } from "../marketdata/cryptoSymbols";
 export type AnalyzerIdentityOutcome = "RESOLVED" | "UNKNOWN" | "UNSUPPORTED" | "UNAVAILABLE";
 
 export type AnalyzerIdentity =
-  | { outcome: "RESOLVED"; ticker: string; companyName: string }
+  | { outcome: "RESOLVED"; ticker: string; companyName: string; resolvedAt: string }
   // The ticker resolved to something real that this analyzer does not cover.
   // `instrumentDescription` is what Screen 1 names as the reason for refusal.
   | { outcome: "UNSUPPORTED"; ticker: string; instrumentDescription: string }
@@ -85,6 +85,11 @@ export async function resolveAnalyzerIdentity(
         outcome: "RESOLVED",
         ticker: resolution.symbol,
         companyName: resolution.name,
+        // When the provider answered. Screen 1 shows it so the resolution
+        // carries a timestamp like every other acquired thing (§3.4); it is
+        // recorded here rather than at render, which would timestamp the
+        // page view instead of the answer.
+        resolvedAt: new Date().toISOString(),
       };
 
     case "unsupported":

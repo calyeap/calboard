@@ -25,12 +25,53 @@ export function AnalyzerEntry({ fixtureMissing }: { fixtureMissing?: string }) {
           </div>
           <hr className="rule" />
 
-          <p className="whythisfact">
-            One field, one ticker. Before any data is fetched, the provider is asked a single
-            question — what instrument is this? Identity is settled first, on its own, because
-            every step after this one reads filings, and an instrument with no filings has nothing
-            for them to read.
-          </p>
+          {/* The §17 comprehension layer, absent until the DESIGN gate. Copy is
+              mock-screen1-entry.html's, verbatim — a paraphrase here would be a
+              second voice on a screen the mocks already write. */}
+          <div className="finding">
+            <p className="lede">
+              One field, one ticker. Before any data is fetched, the provider is asked a single
+              question — is this a real instrument of a type this analyzer runs on — and nothing
+              else happens until that has an answer.
+            </p>
+            <dl>
+              <dt>Why it matters</dt>
+              <dd>
+                A ticker that looks right and is not — a typo one letter away from a live symbol, a
+                delisted shell, a foreign listing of a similar name — produces an analysis that is
+                internally coherent and about the wrong company. Resolving identity first is what
+                prevents that, and it is the only thing that happens before the software commits to
+                anything.
+              </dd>
+              <dt>What this does not tell you</dt>
+              <dd>
+                Whether there is usable data behind the symbol. Identity and data availability are
+                separate questions. A symbol can resolve cleanly here and still turn out to have too
+                little filed history to analyse, which is found later and reported as its own state.
+              </dd>
+              <dt>What to examine</dt>
+              <dd>
+                The company name that comes back. Four letters are easy to get wrong and the name is
+                the cheapest place to catch it.
+              </dd>
+            </dl>
+            <details className="disclose">
+              <summary>
+                <span className="lbl">
+                  Why is there no way to continue with a symbol that doesn&rsquo;t resolve?
+                </span>
+              </summary>
+              <div className="body">
+                Because that path once existed elsewhere in Calboard and let an unrecognised symbol
+                into the portfolio. Identity now has no override: no &ldquo;add anyway&rdquo;, no
+                manual instrument entry, no typing a name the provider did not confirm. There is
+                also no autocomplete and no symbol list, because a picker is a catalogue by another
+                name and would quietly become the thing that decides what is real. You type; the
+                provider answers. If the provider cannot be reached, that is treated as no answer
+                rather than as a rejection — the two are shown differently and behave differently.
+              </div>
+            </details>
+          </div>
 
           {/* Resolution fires on blur or Enter. There is deliberately no
               Resolve button: a second control would imply the analyst can
@@ -101,6 +142,11 @@ export function AnalyzerEntry({ fixtureMissing }: { fixtureMissing?: string }) {
                     <dd>EQUITY — supported</dd>
                     <dt>Symbol queried</dt>
                     <dd>{identity.ticker}, exactly as typed</dd>
+                    {/* Resolution had no timestamp until the DESIGN gate. It is
+                        the moment the provider answered, carried on the
+                        identity rather than read from the clock at render. */}
+                    <dt>Resolved at</dt>
+                    <dd>{formatResolvedAt(identity.resolvedAt)}</dd>
                   </dl>
                 </div>
               </div>
@@ -205,4 +251,17 @@ function noteFor(outcome: string): string {
     default:
       return "Nothing has been rejected and nothing has been recorded. Your entry is still in the field. Try again now or later — a failure to reach the provider is never treated as evidence about a symbol.";
   }
+}
+
+/**
+ * The resolution timestamp, in the mock's shape: "4 Sep 2026, 21:04 SGT".
+ * Rendered from the identity's own recorded moment, never from the clock at
+ * render time — that would timestamp the page view rather than the answer.
+ */
+function formatResolvedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const date = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${date}, ${time}`;
 }

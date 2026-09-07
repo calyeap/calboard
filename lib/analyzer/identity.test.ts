@@ -39,11 +39,26 @@ const RESOLVED_MSFT: InstrumentResolution = {
 describe("resolveAnalyzerIdentity — the four Screen 1 states", () => {
   it("RESOLVED for a listed operating company, carrying the company name", async () => {
     const identity = await resolveAnalyzerIdentity("msft", providerReturning(RESOLVED_MSFT));
-    expect(identity).toEqual({
+    expect(identity).toMatchObject({
       outcome: "RESOLVED",
       ticker: "MSFT",
       companyName: "Microsoft Corporation",
     });
+  });
+
+  // Screen 1 shows when the provider answered, so the answer carries a
+  // timestamp rather than the page read one off the clock at render.
+  it("records when resolution happened, as a parseable instant", async () => {
+    const before = Date.now();
+    const identity = await resolveAnalyzerIdentity("MSFT", providerReturning(RESOLVED_MSFT));
+    const after = Date.now();
+
+    expect(identity.outcome).toBe("RESOLVED");
+    if (identity.outcome !== "RESOLVED") return;
+    const at = new Date(identity.resolvedAt).getTime();
+    expect(Number.isNaN(at)).toBe(false);
+    expect(at).toBeGreaterThanOrEqual(before);
+    expect(at).toBeLessThanOrEqual(after);
   });
 
   it("UNKNOWN for a nonsense symbol", async () => {
@@ -158,7 +173,12 @@ describe("resolveAnalyzerIdentity — the four Screen 1 states", () => {
 });
 
 describe("what Screen 1 does with each state", () => {
-  const resolved = { outcome: "RESOLVED", ticker: "MSFT", companyName: "Microsoft" } as const;
+  const resolved = {
+    outcome: "RESOLVED",
+    ticker: "MSFT",
+    companyName: "Microsoft",
+    resolvedAt: "2026-09-04T21:04:00-04:00",
+  } as const;
   const unknown = { outcome: "UNKNOWN", ticker: "ZZQQXX" } as const;
   const unsupported = {
     outcome: "UNSUPPORTED",

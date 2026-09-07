@@ -71,7 +71,7 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
               <p className="whythisfact">
                 These came through a fixed, versioned tag mapping, which is reproducible without a
                 model. They are not spot-checked and they are not hidden — the exemption changes
-                what is queued, not what is carried (§3.8.1).
+                what is queued, not what is carried.
               </p>
               {exempt.map((fact) => (
                 <FactCard

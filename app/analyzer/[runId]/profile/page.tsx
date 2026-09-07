@@ -63,16 +63,29 @@ export default async function ProfilePage({ params }: { params: Promise<{ runId:
           </div>
           <hr className="rule" />
 
+          {/* Amendment M7-c, change C4. The line used to stop at "...the
+              report will look entirely normal", covering only Confirm. C4
+              requires it to cover Override and Cannot judge too — M7-c exists
+              because the profile card did not say what the three answers
+              meant. Wording is the mock's, verbatim. */}
           <p className="whythisfact">
-            The profile selects the primary valuation method. Mature companies get a DCF and a
-            reverse DCF; high-growth gets scenario paths instead; pre-revenue gets none of them.
-            Confirm the wrong one and every number below is computed by a method that does not
-            suit the company — and the report will look entirely normal.
+            The profile decides which valuation methods run and which are refused outright.
+            Mature-profitable gets a DCF and a reverse DCF; high-growth gets explicit year-by-year
+            revenue paths instead, and pre-revenue gets none of them. Confirm the wrong one and
+            every number below is computed by a method that does not describe this company — the
+            arithmetic will be correct and the report will look entirely normal. Override and the
+            methods change to match the profile you name, carrying your reason and the
+            not-validated statement into the report. Answer Cannot judge and the run continues on
+            the recommendation with no confirmed profile behind it, which the report states on its
+            face.
           </p>
 
           <div className="judgment" style={{ marginTop: 24 }}>
             <h3>Recommended: {recommendedLabel}</h3>
-            <p className="why">The facts that drove it, per §6.3:</p>
+            {/* The mock's kicker. Section references are the contract's
+                vocabulary, not the reader's — "per §6.3" was printed to the
+                analyst and told them nothing. */}
+            <p className="why">Software recommends, with the facts that drove it</p>
             <div className="idsource">
               <dl>
                 <dt>Revenue</dt>
@@ -86,16 +99,29 @@ export default async function ProfilePage({ params }: { params: Promise<{ runId:
                 <dt>Ten-year margin range</dt>
                 <dd>{inputs.cyclicality.tenYearMarginRange.mul(100).toFixed(1)} pts</dd>
                 <dt>Balance-sheet nature</dt>
-                <dd>{inputs.balanceSheetNature} — an ASSUMPTION you confirm, not a FACT</dd>
+                {/* The mock gives this the underlined token treatment rather
+                    than prose in the cell: it is an ASSUMPTION the analyst
+                    confirms, and §6.3 is explicit that it was wrongly marked
+                    FACT in earlier versions. */}
+                <dd>
+                  {inputs.balanceSheetNature} <span className="typetag">Assumption</span>
+                </dd>
               </dl>
             </div>
           </div>
 
+          {/* Amendment M7-c, change C3. The block used to stop at "a recorded
+              answer, not a way past this screen". C3 requires the three §6.3
+              consequences and the closing sentence. Wording is the mock's,
+              verbatim. */}
           <p className="whythisfact" style={{ marginTop: 20 }}>
-            Three answers, and none of them is the expected one. <b>Confirm</b> means the
-            classification above describes this company as you read it. <b>Override</b> means it
-            does not, and you name the profile that does and why. <b>Cannot judge</b> means you
-            cannot assess the question — a recorded answer, not a way past this screen.
+            Three answers, and none of them is the expected one.{" "}
+            <b>Confirm recommended profile</b> means the classification above describes this
+            company as you read it. <b>Override</b> means it does not, and you name the profile
+            that does and why. <b>Cannot judge</b> means you cannot assess the question — a
+            recorded answer, not a way past this screen. It uses the recommended profile
+            provisionally so the run continues, records the profile as not human-confirmed, and
+            the valuation position does not render. It never counts as confirmation.
           </p>
 
           <ProfileDecisionForm runId={runId} recommendedLabel={recommendedLabel} />

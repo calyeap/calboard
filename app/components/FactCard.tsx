@@ -21,10 +21,23 @@ export function FactCard({
   decision: StoredFactDecision | undefined;
   queued: boolean;
 }) {
-  // Nothing is pre-selected — not on first render, and not from a previous
-  // decision either. Re-opening a decided fact re-asks the question rather
-  // than presenting an answer to accept.
-  const [chosen, setChosen] = useState<"CONFIRMED" | "NOT CONFIRMED" | null>(null);
+  // `pending` is the analyst's unsubmitted change on this render; the recorded
+  // decision is what the card falls back to. Deriving `chosen` this way is what
+  // stops the card asserting two states at once.
+  //
+  // It previously defaulted to null even for a fact that HAD been decided, so a
+  // confirmed card showed its CONFIRMED token and .decided block beside an
+  // empty fieldset, a disabled button and the words "Neither option is
+  // selected" — confirmed twice and unconfirmed twice, on the one screen whose
+  // purpose is verification. Same root as the verification-state find: a
+  // default read in place of the derived value.
+  //
+  // §3.8.3 forbids a DEFAULT for a fact nobody has decided, and that still
+  // holds below — an undecided card pre-selects nothing. Showing an analyst the
+  // decision they themselves recorded is the record, not a default.
+  const [pending, setPending] = useState<"CONFIRMED" | "NOT CONFIRMED" | null>(null);
+  const chosen = pending ?? decision?.decision ?? null;
+  const setChosen = setPending;
   const citation = citationFor(fact);
 
   // Read, not re-derived. loadGateState has already replaced the fixture's
@@ -39,7 +52,8 @@ export function FactCard({
       <div>
         <h3 className="factname">{fact.name}</h3>
         <p className="requiredfor">
-          {queued ? "Queued for spot-check" : "Shown, not queued"} · {fact.type}
+          {queued && !decision ? "Queued for spot-check · " : queued ? "" : "Shown, not queued · "}
+          {fact.type}
         </p>
 
         <p className="periodline">
@@ -59,14 +73,22 @@ export function FactCard({
           <span>{titleCase(verificationState)}</span>
         </div>
 
+        {/* Qualification, not suppression. This used to render in the .decided
+            block's suppression decoration — tinted, with the 2px ink rule —
+            directly under a rendered value. Suppression means there is no
+            number here, and the number is right there; design §0 puts the
+            decoration on the cell it describes. The state itself is already in
+            the token line above, so repeating it here said the same thing
+            twice in the louder of the two treatments.
+
+            No mock renders this state (design R11, spec §14.6 F6), so the
+            treatment is chosen from the existing vocabulary rather than
+            invented: the same muted note the other qualifying lines use. */}
         {!queued && (
-          <div className="decided">
-            <span className="name">Spot-check not required</span>
-            <span className="cause">
-              Acquired through a fixed, versioned tag mapping (§3.8.1). It is not spot-checked; it
-              is not hidden, and it carries every label it would otherwise carry.
-            </span>
-          </div>
+          <p className="note">
+            Acquired through a fixed, versioned tag mapping, so it is not spot-checked. It is not
+            hidden either, and it carries every label it would otherwise carry.
+          </p>
         )}
 
         {queued && decision && (
@@ -76,7 +98,7 @@ export function FactCard({
             </span>
             <span className="cause">
               {decision.reasonCode
-                ? `${decision.reasonCode} · dependent outputs return INCOMPLETE (§5)`
+                ? `${decision.reasonCode} · dependent outputs return INCOMPLETE`
                 : "Counts toward spot-check completion"}
             </span>
           </div>
@@ -136,7 +158,14 @@ export function FactCard({
             {chosen === "NOT CONFIRMED" && (
               <div className="reasoncode">
                 <label htmlFor={`reason-${fact.id}`}>Reason — required</label>
-                <select id={`reason-${fact.id}`} name="reasonCode" defaultValue="" required>
+                <select
+                  id={`reason-${fact.id}`}
+                  name="reasonCode"
+                  // The recorded code, so a decided card shows what was chosen
+                  // rather than re-asking a question already answered.
+                  defaultValue={decision?.reasonCode ?? ""}
+                  required
+                >
                   <option value="" disabled>
                     Select a reason
                   </option>

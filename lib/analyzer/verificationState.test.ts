@@ -49,12 +49,12 @@ describe("deriveVerificationState", () => {
     expect(deriveVerificationState(base, undefined, false)).toBe("SPOT-CHECK NOT REQUIRED");
   });
 
-  // combineProvenance ranks UNVERIFIED above SPOT-CHECK PENDING, so keeping it
-  // is the fail-closed direction — the derivation must not upgrade a weaker
-  // acquisition state into a tidier-looking one.
-  it("keeps UNVERIFIED rather than relabelling it SPOT-CHECK PENDING", () => {
+  // §3.2 as amended by M7: the four M7 states REPLACED VERIFIED and UNVERIFIED
+  // on this field, and "UNVERIFIED now means only the §5.1 propagation state".
+  // A queued, undecided fact is SPOT-CHECK PENDING whatever the fixture wrote.
+  it("reports SPOT-CHECK PENDING even where acquisition wrote UNVERIFIED", () => {
     const unverified: FactRecord = { ...base, verificationState: "UNVERIFIED" };
-    expect(deriveVerificationState(unverified, undefined, true)).toBe("UNVERIFIED");
+    expect(deriveVerificationState(unverified, undefined, true)).toBe("SPOT-CHECK PENDING");
   });
 });
 
