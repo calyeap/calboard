@@ -34,7 +34,7 @@ Companion mocks, to be frozen with this document:
 
 ## 0. THE DESIGN THESIS IN ONE PAGE
 
-The spec's hardest interface problem is that a correct analysis routinely returns **states instead of numbers**, and there are twenty-two of them (ten suppressing, twelve qualifying) plus six provenance fields on every fact. Semantic colour is unavailable — Calboard reserves it for gain / loss / stale, and a new vocabulary cannot borrow reserved colours.
+The spec's hardest interface problem is that a correct analysis routinely returns **states instead of numbers**, and there are twenty-three of them (ten suppressing, thirteen qualifying) plus six provenance fields on every fact. Semantic colour is unavailable — Calboard reserves it for gain / loss / stale, and a new vocabulary cannot borrow reserved colours.
 
 So the state vocabulary is built from **three decorations, no colour, no glyphs**:
 
@@ -42,15 +42,17 @@ So the state vocabulary is built from **three decorations, no colour, no glyphs*
 |---|---|---|
 | **Tint fill + 2px left rule, replacing the value** | Suppression. There is no number here. | 10 states |
 | **Underlined word token, right-aligned beneath the value** | Provenance qualification. The number is real; this is where it came from. | 3 flags |
-| **Tick-ruled word, left-aligned beneath the value** | Analytic qualification. The number is real; this is what it means. | 9 flags |
+| **Tick-ruled word, left-aligned beneath the value** | Analytic qualification. The number is real; this is what it means. | 10 flags |
 
 Suppression **replaces**. Qualification **accompanies**. That is the whole distinction and it is visible at a glance without reading a word, because one changes the shape of the cell content and the other does not.
+
+**The decoration belongs to the cell, not to the state.** One name can take two treatments where it does two things in two places. PROFILE NOT CONFIRMED (§9.4) is the case: beside the profile, in the Section A manifest and on the trust line it accompanies a real value and takes the tick rule; in the §10.6 position slot there is no value to accompany, so it takes the suppression decoration. The rule is read cell by cell, which is the only way a reader ever reads it — the shape always states truthfully what happened in that cell. Minting a second name for the second treatment is the alternative and it is worse: two names for one condition is state-count drift by construction.
 
 **The comprehension revision adds a fourth mechanism that is not a decoration:** every section opens with a **finding block** — plain-English finding, why it matters, what it means for this company, what to examine — and then presents the states, numbers, calculations and provenance unchanged beneath it. Canonical state names are preserved exactly and gain a plain-English line above them. Nothing is removed, softened or hidden to achieve this. See §17.
 
 Three further consequences drive everything below:
 
-1. **No abbreviations anywhere in the state vocabulary.** Every state and flag prints its own name. Twenty-two states do not need twenty-two icons; they need twenty-two names in three mechanisms.
+1. **No abbreviations anywhere in the state vocabulary.** Every state and flag prints its own name. Twenty-three states do not need twenty-three icons; they need twenty-three names in three mechanisms.
 2. **A layout that only works when every cell has a number is the wrong layout.** Every table in this design is specified at its degenerate extreme first — the Microsoft grid with four of nine cells gone, the OKLO table with two of six probabilities gone — and the healthy case is the easy one.
 3. **Section A's state manifest is also the legend.** Every active state and flag is listed before any number, in the same three decorations it will use downstream. The reader learns the vocabulary before meeting it.
 
@@ -336,9 +338,9 @@ Left alignment is doing real work. Right-aligning text inside a numeric column m
 
 ---
 
-## 7. VISUAL SYSTEM — THE TWELVE QUALIFYING FLAGS
+## 7. VISUAL SYSTEM — THE THIRTEEN QUALIFYING FLAGS
 
-**The twelve split into two behavioural families and get two mechanisms.** §9.4 lists them as one set; nothing in the spec requires one treatment. Giving twelve identical treatments to two different kinds of thing would be the actual design failure. *Ruling needed — item R3.*
+**The thirteen split into two behavioural families and get two mechanisms.** §9.4 lists them as one set; nothing in the spec requires one treatment. Giving thirteen identical treatments to two different kinds of thing would be the actual design failure. *Ruling needed — item R3.*
 
 ### 7.1 Provenance qualifiers — underline
 
@@ -372,7 +374,9 @@ An implementation with one combined token, one quality score or one confidence b
 
 ### 7.2 Analytic qualifiers — tick rule
 
-**LOW RONIC — VALUE-DESTROYING GROWTH · INVERTED — HIGHER GROWTH LOWERS VALUE · RONIC CAPPED AT 200% · CAPITAL-LIGHT · SHORT HISTORY · MARGIN AT HISTORICAL HIGH · PEAK EARNINGS · SHAPE MISMATCH · RATE CAPPED — VALUE IS AN UPPER BOUND.**
+**LOW RONIC — VALUE-DESTROYING GROWTH · INVERTED — HIGHER GROWTH LOWERS VALUE · RONIC CAPPED AT 200% · CAPITAL-LIGHT · SHORT HISTORY · MARGIN AT HISTORICAL HIGH · PEAK EARNINGS · SHAPE MISMATCH · RATE CAPPED — VALUE IS AN UPPER BOUND · PROFILE NOT CONFIRMED.**
+
+**PROFILE NOT CONFIRMED takes the suppression decoration in the §10.6 position slot only**, per §0. Everywhere else it takes the tick rule like the other nine.
 
 These describe what the number means. They are rarer, heavier, and worth more vertical space.
 
@@ -1072,7 +1076,7 @@ The surface got easier to consume. **No analytical depth was removed to achieve 
 
 ## 19. DESIGN → COMMAND CENTER HANDOFF
 
-**RESULT** — Stock Analyzer v1 interaction and screen design complete. Four screens, three-decoration state system, all 22 states and flags given distinct treatment without semantic colour, provenance layered across three disclosure levels, report ordering fixed with §10.3 resolved by restatement, Microsoft and OKLO degenerate cases rendered.
+**RESULT** — Stock Analyzer v1 interaction and screen design complete. Four screens, three-decoration state system, all 23 states and flags given distinct treatment without semantic colour, provenance layered across three disclosure levels, report ordering fixed with §10.3 resolved by restatement, Microsoft and OKLO degenerate cases rendered.
 
 **VERDICT** — PASS against the brief's DONE WHEN, all 18 items.
 
@@ -1086,7 +1090,7 @@ The surface got easier to consume. **No analytical depth was removed to achieve 
 | 4 | Step 2 fact-verification UX | §4 + `mock-human-steps.html` |
 | 5 | Steps 6 and 7 profile confirmation/override and scenario UX | §5 + `mock-human-steps.html` |
 | 6 | Ten suppressing states | §6 |
-| 7 | Twelve qualifying flags | §7 |
+| 7 | Thirteen qualifying flags | §7 |
 | 8 | Suppression vs qualification distinction | §8 |
 | 9 | Six provenance fields without drowning figures | §9 |
 | 10 | Fixed report ordering | §10 |
@@ -1158,6 +1162,8 @@ Not on the numbered list, but required for the numbered changes to be coherent. 
 | `mock-human-steps.html` | Two statements of the **four-tier queue order** on Screen 2 — in the *What to examine* finding block and in the body copy beneath it — corrected to three tiers plus the exemption. They contradicted §3.8.1 outright once change 1 landed | Spec change 1 |
 
 **No methodology, no calculation, no report-section order and no state vocabulary was changed by this document.** The §6 ten suppressing states and the §7 twelve qualifying flags are untouched, and the three-decoration system is unchanged.
+
+> **Amended 7 Sept 2026 (M7-b).** The counts in the sentence above and in the R3 ruling row describe the document as it stood before this amendment and are preserved as a record. Live counts are twenty-three states, thirteen qualifying, ten analytic. The amendment adds one qualifying flag, PROFILE NOT CONFIRMED; it changes no methodology, no calculation and no report-section order.
 
 ### 20.4 Rulings this amendment needs and does not make
 
