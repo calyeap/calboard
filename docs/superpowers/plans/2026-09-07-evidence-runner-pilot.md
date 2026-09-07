@@ -26,7 +26,14 @@
   - `2f9e741bb770c7ee2dca5c68315e1a64e5ed9b9c4287e1b5de422f1f55dd6f1c  mock-human-steps.html`
   - `35f382a109ffbeb9b048b8f6d532564e80fc26c00b8c1d6ea8345b7e17fbf870  mock-report-msft.html`
   - `fc6de075e6c84f4ba2b720d669985b4f43534f4a7ae77e658c725122d4d9476f  mock-report-oklo.html`
-- **Capture widths:** 720, 1024, 1440. Full page.
+- **Capture widths:** 720, 1024, 1440. Full page, `deviceScaleFactor: 2`, a fresh browser context per width.
+- **The source instrument:** `C:\Users\Calvin\m7gate\capture-m7-gate.js` is the capture script
+  Calvin has been running by hand, and the one DESIGN's readings were taken with. The probe and
+  the capture loop are ports of it — its node selector, its half-pixel overflow tolerance, its
+  field names, its caps. Read it before writing either. This runner replaces the manual round
+  trip around the instrument, not the instrument itself: a probe that measures something else
+  produces an archive DESIGN has not been reading. It is outside the repo — never import from
+  it, never modify it.
 - **Font assertion target:** `div.cb-analyzer`, whose declared stack is
   `var(--font-ibm-plex-sans), "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif`
   (`app/globals.css:1451`). Never `html` — nothing styles `html`, so it computes `"Times New Roman"` on every page and an assertion there can never fail.
@@ -84,11 +91,16 @@ The checks are the product. They are written first, with no browser and no app, 
 ```typescript
 // scripts/evidence/preflight/types.ts
 
-/** One captured node, field-for-field the shape the existing capture script emits. */
+/**
+ * One captured node, field-for-field the shape `capture-m7-gate.js` emits.
+ *
+ * `cls` is nullable because the existing probe writes
+ * `getAttribute("class") || null` — an unclassed element carries null, not "".
+ */
 export interface ProbeNode {
   i: number;
   tag: string;
-  cls: string;
+  cls: string | null;
   type: string | null;
   checked: boolean | null;
   disabled: boolean | null;
@@ -141,7 +153,7 @@ import type { ProbeDocument, ProbeNode } from "./types";
 
 function node(over: Partial<ProbeNode> = {}): ProbeNode {
   return {
-    i: 0, tag: "div", cls: "", type: null, checked: null, disabled: null,
+    i: 0, tag: "div", cls: null, type: null, checked: null, disabled: null,
     ariaExpanded: null, offsetTop: 0, scrollOverflow: false, clientW: 700,
     scrollW: 700, text: "", box: { x: 0, y: 0, w: 700, h: 10, right: 700 },
     style: {}, ...over,
@@ -197,6 +209,22 @@ describe("checkOverflow", () => {
     expect(r.status).toBe("FAIL");
     expect(r.detail).toContain("factcard");
     expect(r.detail).toContain("880");
+  });
+
+  it("does not fire on sub-pixel rounding the probe already tolerated", () => {
+    // The probe applies a half-pixel tolerance, so a node 0.4px over reports
+    // scrollOverflow false. The check must trust that verdict rather than
+    // recomputing strictly and manufacturing a FAIL the layout does not have.
+    const hair = node({ cls: "wrap", clientW: 657, scrollW: 657.4, scrollOverflow: false });
+    expect(checkOverflow("s1-resolved", doc({ nodes: [hair] })).status).toBe("PASS");
+  });
+
+  it("names an unclassed node by its tag rather than printing null", () => {
+    const bare = node({ cls: null, tag: "table", scrollOverflow: true, clientW: 600, scrollW: 900 });
+    const r = checkOverflow("s2-facts-msft", doc({ nodes: [bare] }));
+    expect(r.status).toBe("FAIL");
+    expect(r.detail).toContain("table");
+    expect(r.detail).not.toContain("null");
   });
 });
 
@@ -311,14 +339,20 @@ export function checkRendered(
  * Both limbs are reported because they are different faults: the document
  * overflowing is a layout that does not fit the viewport; a node overflowing is
  * a card that does not fit its own container.
+ *
+ * Reads the probe's own `scrollOverflow` verdict rather than recomputing
+ * `scrollW > clientW` here. The probe applies a half-pixel tolerance, and it
+ * must: sub-pixel layout rounding otherwise reports overflow that does not
+ * exist, which would FAIL a known-good baseline and make the runner the thing
+ * that is wrong.
  */
 export function checkOverflow(target: string, d: ProbeDocument): CheckResult {
   const step = "no document or card overflow";
   const faults: string[] = [];
   if (d.docOverflow) faults.push(`${target} at ${d.viewport.w}: document overflows`);
   for (const n of d.nodes) {
-    if (n.scrollW > n.clientW) {
-      const name = n.cls === "" ? n.tag : `${n.tag}.${n.cls}`;
+    if (n.scrollOverflow) {
+      const name = n.cls ? `${n.tag}.${n.cls}` : n.tag;
       faults.push(
         `${target} at ${d.viewport.w}: ${name} scrollW ${n.scrollW} > clientW ${n.clientW}`
       );
@@ -337,7 +371,7 @@ export function checkOverflow(target: string, d: ProbeDocument): CheckResult {
  */
 export function checkFont(target: string, d: ProbeDocument): CheckResult {
   const step = "expected font family resolves on .cb-analyzer";
-  const roots = d.nodes.filter((n) => n.cls.split(/\s+/).includes(FONT_ROOT_CLASS));
+  const roots = d.nodes.filter((n) => (n.cls ?? "").split(/\s+/).includes(FONT_ROOT_CLASS));
   if (roots.length === 0) {
     return fail(step, `${target} at ${d.viewport.w}: no div.${FONT_ROOT_CLASS} node in the capture`);
   }
@@ -381,7 +415,7 @@ export function checkStatesAppeared(
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `npx vitest run scripts/evidence/preflight/checks.test.ts`
-Expected: PASS, 14 tests.
+Expected: PASS, 17 tests (checkRendered 3, checkOverflow 5, checkFont 5, checkConsoleErrors 2, checkStatesAppeared 2).
 
 - [ ] **Step 6: Commit**
 
@@ -745,16 +779,27 @@ The fixtures come first so the capture engine has something to be proven against
 
 **Interfaces:**
 - Consumes: `ProbeDocument` from `./preflight/types`.
-- Produces: `probeInPage(): unknown`; `attachErrorCollector(page: Page): string[]`;
-  `capturePage(page: Page, target: string, width: number, outDir: string, errors: string[]): Promise<ProbeDocument>`.
+- Produces: `probeInPage(): unknown`; and
+  `captureAt(browser: Browser, args: { target: string; width: number; url: string; outDir: string; prepare?: (page: Page) => Promise<void> }): Promise<ProbeDocument>`.
 
 - [ ] **Step 1: Install Playwright as a devDependency**
 
-The Chromium build is already present at `~/AppData/Local/ms-playwright/chromium-1243`, so no browser download is needed.
+Pin **1.63.0** exactly. The Chromium already on this machine is build 1243, which is
+1.63.0's — `C:\Users\Calvin\m7gate\node_modules\playwright-core` is 1.63.0 and owns the
+link in `~/AppData/Local/ms-playwright/.links/`. A different minor expects a different
+Chromium build and would download one.
 
 ```bash
-npm install --save-dev playwright@1.49.1
+npm install --save-dev playwright@1.63.0
 ```
+
+Confirm no browser download was triggered:
+
+```bash
+npx playwright install --dry-run chromium
+```
+
+Expected: it reports chromium already installed at the `chromium-1243` path.
 
 - [ ] **Step 2: Write the four fault fixtures**
 
@@ -824,18 +869,38 @@ Each mimics the analyzer's own structure — a `div.cb-analyzer` root — so the
 
 - [ ] **Step 3: Write `probe.ts`**
 
+This is a **port of the PROBE constant in `C:\Users\Calvin\m7gate\capture-m7-gate.js`**, not a
+fresh design. Read that file before writing this one. Every detail below is load-bearing and
+was taken from it:
+
+- The selector is an explicit list, **not `*`**. `*` would emit hundreds of nodes per page
+  instead of the ~35 the existing archives carry, changing the artefact DESIGN reads.
+  `[class]` in that list is what captures `html`, `div.cb-analyzer` and every styled element.
+- Nodes with zero width **and** zero height are skipped — not rendered.
+- Overflow carries a **half-pixel tolerance** on both limbs. Sub-pixel layout rounding
+  otherwise reports overflow that does not exist.
+- `cls` is `getAttribute("class") || null`.
+- Box numbers round to 1 decimal place.
+- `text` prefers `innerText`, capped at 200 chars; `bodyText` prefers `innerText`, capped at
+  6000.
+- `docOverflow` compares against `innerWidth`, not `clientWidth`.
+
 ```typescript
 // scripts/evidence/probe.ts
 
 /**
  * The in-page probe, evaluated in the browser.
  *
- * Field-for-field the shape the capture script Calvin has been running emits —
- * known to produce what DESIGN can read — so the archive stays legible to the
- * reader it is for. Extending it is safe; renaming a field is not.
+ * A port of the PROBE in C:\Users\Calvin\m7gate\capture-m7-gate.js — the
+ * instrument DESIGN's readings have been taken with. The field names, the node
+ * selector, the tolerances and the caps are all that script's, deliberately:
+ * this runner replaces the manual round trip around the instrument, not the
+ * instrument. Extending the shape is safe; changing what it measures is not.
+ *
+ * Serialised into the page by Playwright, so it must close over nothing.
  */
 export function probeInPage(): unknown {
-  const STYLE_KEYS = [
+  const PROPS = [
     "display", "flexWrap", "flexDirection", "gap", "columnGap", "rowGap",
     "fontSize", "fontWeight", "fontFamily", "lineHeight", "letterSpacing",
     "textTransform", "color", "backgroundColor", "borderStyle", "borderWidth",
@@ -844,48 +909,64 @@ export function probeInPage(): unknown {
     "textDecorationLine",
   ];
 
-  const root = document.documentElement;
-  const nodes: unknown[] = [];
-  let i = 0;
+  // Deliberately not "*". This is the existing instrument's selector: the
+  // controls that carry state, the headings that carry structure, and anything
+  // with a class — which is what picks up html, .cb-analyzer and every styled
+  // container. Widening it to "*" would change every archive DESIGN reads.
+  const SEL = [
+    "fieldset", "legend", "label", "input", "select", "button", "details", "summary",
+    "table", "th", "h1", "h2", "h3", "h4", "[class]",
+  ].join(",");
 
-  // querySelectorAll("*") includes <html> itself, which is why node 0 is html
-  // in the existing captures. Script/style/link carry no layout and are skipped.
-  for (const el of Array.from(document.querySelectorAll("*")) as HTMLElement[]) {
-    const tag = el.tagName.toLowerCase();
-    if (tag === "script" || tag === "style" || tag === "link") continue;
+  const nodes: unknown[] = [];
+  const seen = new Set<Element>();
+
+  document.querySelectorAll(SEL).forEach((raw, i) => {
+    if (seen.has(raw)) return;
+    seen.add(raw);
+
+    const el = raw as HTMLElement;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) return; // not rendered
 
     const cs = getComputedStyle(el);
     const style: Record<string, string> = {};
-    for (const key of STYLE_KEYS) {
-      style[key] = (cs as unknown as Record<string, string>)[key] ?? "";
-    }
+    for (const p of PROPS) style[p] = (cs as unknown as Record<string, string>)[p];
 
-    const r = el.getBoundingClientRect();
     const input = el as HTMLInputElement;
+    const text = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+
     nodes.push({
-      i: i++,
-      tag,
-      cls: typeof el.className === "string" ? el.className : "",
-      type: typeof input.type === "string" ? input.type : null,
-      checked: typeof input.checked === "boolean" ? input.checked : null,
-      disabled: typeof input.disabled === "boolean" ? input.disabled : null,
+      i,
+      tag: el.tagName.toLowerCase(),
+      cls: el.getAttribute("class") || null,
+      type: el.getAttribute("type"),
+      checked: el.tagName === "INPUT" ? input.checked : null,
+      disabled: input.disabled === undefined ? null : input.disabled,
       ariaExpanded: el.getAttribute("aria-expanded"),
       offsetTop: el.offsetTop,
-      scrollOverflow: el.scrollWidth > el.clientWidth,
+      // Half-pixel tolerance, both here and on docOverflow below. Without it,
+      // sub-pixel layout rounding reports overflow the layout does not have —
+      // which would FAIL a known-good baseline and make the runner the thing
+      // that is wrong.
+      scrollOverflow: el.scrollWidth > el.clientWidth + 0.5,
       clientW: el.clientWidth,
       scrollW: el.scrollWidth,
-      text: (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 200),
-      box: { x: r.x, y: r.y, w: r.width, h: r.height, right: r.right },
+      text: text.slice(0, 200),
+      box: {
+        x: +r.x.toFixed(1), y: +r.y.toFixed(1), w: +r.width.toFixed(1),
+        h: +r.height.toFixed(1), right: +r.right.toFixed(1),
+      },
       style,
     });
-  }
+  });
 
   return {
     url: location.href,
     title: document.title,
     viewport: { w: window.innerWidth, h: window.innerHeight },
-    docOverflow: root.scrollWidth > root.clientWidth,
-    bodyText: (document.body.textContent ?? "").replace(/\s+/g, " ").trim(),
+    docOverflow: document.documentElement.scrollWidth > window.innerWidth + 0.5,
+    bodyText: (document.body.innerText || "").replace(/\s+/g, " ").trim().slice(0, 6000),
     nodes,
   };
 }
@@ -893,58 +974,83 @@ export function probeInPage(): unknown {
 
 - [ ] **Step 4: Write `capture.ts`**
 
+Like the probe, this mirrors `capture-m7-gate.js`: **a fresh browser context per width, at
+`deviceScaleFactor: 2`**, rather than resizing one page. The 2x screenshots are what DESIGN
+has been reading, and a fresh context keeps each width's console errors its own.
+
+`captureAt` takes a `prepare` callback that lands the page on the state to capture. Screen 1
+needs typing; the fact and profile screens only need a URL, because once a run exists its
+screens are URL-addressable — which is exactly how the existing script captured them.
+
 ```typescript
 // scripts/evidence/capture.ts
 import path from "node:path";
 import fs from "node:fs/promises";
-import type { Page } from "playwright";
+import type { Browser, Page } from "playwright";
 import { probeInPage } from "./probe";
 import type { ProbeDocument } from "./preflight/types";
 
 /**
- * Starts collecting console errors and uncaught page errors.
+ * Captures one target at one width in its own browser context.
  *
- * Returns the live array. Attach BEFORE navigating: errors thrown during load
- * are the ones worth catching, and a collector attached afterwards misses them.
+ * `prepare` receives a page already loaded at `url` and lands it on the state
+ * to capture — typing a ticker, waiting for a result. It returns nothing; the
+ * screenshot and probe follow whatever it leaves on screen.
+ *
+ * The error collector is attached before navigating, because errors thrown
+ * during load are the ones worth catching and a collector attached afterwards
+ * misses them.
  */
-export function attachErrorCollector(page: Page): string[] {
+export async function captureAt(
+  browser: Browser,
+  args: {
+    target: string;
+    width: number;
+    url: string;
+    outDir: string;
+    prepare?: (page: Page) => Promise<void>;
+  }
+): Promise<ProbeDocument> {
+  const { target, width, url, outDir, prepare } = args;
+
+  // deviceScaleFactor 2 matches the existing instrument — DESIGN reads 2x
+  // screenshots, and halving them silently would change the evidence.
+  const ctx = await browser.newContext({
+    viewport: { width, height: 1200 },
+    deviceScaleFactor: 2,
+  });
+  const page = await ctx.newPage();
+
   const errors: string[] = [];
+  page.on("pageerror", (err) => errors.push(`pageerror: ${String(err)}`));
   page.on("console", (msg) => {
     if (msg.type() === "error") errors.push(`console.error: ${msg.text()}`);
   });
-  page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
-  return errors;
-}
 
-/**
- * Captures one already-navigated page at one width: a full-page screenshot and
- * the computed-style probe.
- *
- * This function does not navigate. For the fact and profile screens the state
- * is reached by driving the UI, not by a URL, so re-navigating here would throw
- * away the state that was just reached.
- */
-export async function capturePage(
-  page: Page,
-  target: string,
-  width: number,
-  outDir: string,
-  errors: string[]
-): Promise<ProbeDocument> {
-  await page.setViewportSize({ width, height: 1200 });
-  await page.waitForLoadState("networkidle");
+  try {
+    await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
+    if (prepare) await prepare(page);
+    // Settle, as the existing script does — layout and fonts after the last
+    // network event.
+    await page.waitForTimeout(400);
 
-  await page.screenshot({ path: path.join(outDir, `${target}-${width}.png`), fullPage: true });
+    await page.screenshot({
+      path: path.join(outDir, `${target}-${width}.png`),
+      fullPage: true,
+    });
 
-  const probed = (await page.evaluate(probeInPage)) as Omit<ProbeDocument, "errors">;
-  const doc: ProbeDocument = { ...probed, errors: [...errors] };
+    const probed = (await page.evaluate(probeInPage)) as Omit<ProbeDocument, "errors">;
+    const doc: ProbeDocument = { ...probed, errors };
 
-  await fs.writeFile(
-    path.join(outDir, `${target}-${width}.json`),
-    JSON.stringify(doc, null, 1),
-    "utf8"
-  );
-  return doc;
+    await fs.writeFile(
+      path.join(outDir, `${target}-${width}.json`),
+      JSON.stringify(doc, null, 1),
+      "utf8"
+    );
+    return doc;
+  } finally {
+    await ctx.close();
+  }
 }
 ```
 
@@ -971,8 +1077,8 @@ This is DONE WHEN #2. A preflight that has never failed is a check that cannot f
 - Test: `scripts/evidence/selfTest.test.ts`
 
 **Interfaces:**
-- Consumes: `capturePage`, `attachErrorCollector` (Task 4); `checkOverflow`, `checkFont`,
-  `checkConsoleErrors` (Task 1); `verifyAppReachable` (Task 3).
+- Consumes: `captureAt` (Task 4); `checkOverflow`, `checkFont`, `checkConsoleErrors` (Task 1);
+  `verifyAppReachable` (Task 3).
 - Produces: `SelfTestResult { name; expected; actual; step; ok }` and `runSelfTest(): Promise<SelfTestResult[]>`.
 
 - [ ] **Step 1: Write the failing test**
@@ -1012,7 +1118,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
-import { attachErrorCollector, capturePage } from "./capture";
+import { captureAt } from "./capture";
 import { checkConsoleErrors, checkFont, checkOverflow } from "./preflight/checks";
 import { verifyAppReachable } from "./gates";
 import type { CheckResult, ProbeDocument } from "./preflight/types";
@@ -1049,14 +1155,13 @@ export async function runSelfTest(): Promise<SelfTestResult[]> {
   };
 
   try {
-    const load = async (fixture: string): Promise<ProbeDocument> => {
-      const page = await browser.newPage({ viewport: { width: 720, height: 1200 } });
-      const errors = attachErrorCollector(page);
-      await page.goto(pathToFileURL(path.join(FIXTURE_DIR, `${fixture}.html`)).toString());
-      const doc = await capturePage(page, fixture, 720, out, errors);
-      await page.close();
-      return doc;
-    };
+    const load = (fixture: string): Promise<ProbeDocument> =>
+      captureAt(browser, {
+        target: fixture,
+        width: 720,
+        url: pathToFileURL(path.join(FIXTURE_DIR, `${fixture}.html`)).toString(),
+        outDir: out,
+      });
 
     // The control. If the clean fixture does not pass all three, the checks are
     // over-firing and every FAIL below would be meaningless.
@@ -1112,17 +1217,31 @@ Driving is by the server-action contract — `name="runId"`, `name="factId"`, hi
 - Create: `scripts/evidence/drive.ts`
 
 **Interfaces:**
-- Consumes: `WIDTHS`, `TICKERS` (config); `capturePage`, `attachErrorCollector` (capture);
+- Consumes: `WIDTHS`, `TICKERS` (config); `captureAt` (capture);
   `queuedFacts` from `@/lib/analyzer/spotCheck`; `MSFT_FIXTURE`, `OKLO_FIXTURE`.
-- Produces: `driveScreen1(browser, baseUrl, outDir): Promise<Map<string, ProbeDocument>>`;
+- Produces: `resolveTicker(page, ticker): Promise<void>`;
+  `driveScreen1(browser, baseUrl, outDir): Promise<Map<string, ProbeDocument>>`;
   `driveRun(browser, baseUrl, ticker, outDir, opts): Promise<{ runId: string; captured: Map<string, ProbeDocument> }>`.
+
+Two structural points, both from the existing instrument:
+
+- **The run is created once, then captured by URL.** `driveRun` opens one page, resolves the
+  ticker, begins the run, answers the queue, and stops. Only then does it capture — three
+  widths for the facts screen and three for the profile screen — by navigating fresh contexts
+  to `/analyzer/<runId>/facts` and `/analyzer/<runId>/profile`. The decisions live in the
+  database, so the URL reproduces the state; this is exactly what `capture-m7-gate.js` did
+  with its hand-pasted URLs, and it is what lets every capture run at 2x in its own context.
+- **Resolution waits on the DOM, not on the network.** Screen 1's resolution is a React
+  server action that updates in place without navigating, so `networkidle` can settle before
+  the result renders. Wait for `.result` to appear. (The existing script slept 2500ms; waiting
+  on the element is deterministic and strictly better.)
 
 - [ ] **Step 1: Write `drive.ts`**
 
 ```typescript
 // scripts/evidence/drive.ts
 import type { Browser, Page } from "playwright";
-import { attachErrorCollector, capturePage } from "./capture";
+import { captureAt } from "./capture";
 import { WIDTHS, TICKERS } from "./config";
 import type { ProbeDocument } from "./preflight/types";
 import { queuedFacts } from "@/lib/analyzer/spotCheck";
@@ -1131,11 +1250,18 @@ import { OKLO_FIXTURE } from "@/lib/analyzer/fixtures/oklo";
 
 const FIXTURES = { MSFT: MSFT_FIXTURE, OKLO: OKLO_FIXTURE } as const;
 
-/** Types a ticker into Screen 1 and waits for resolution — it fires on blur. */
-async function resolve(page: Page, ticker: string): Promise<void> {
+/**
+ * Types a ticker into Screen 1 and waits for the resolution to render.
+ *
+ * Resolution fires on blur — there is deliberately no Resolve button — and it
+ * is a server action that updates in place without navigating, so waiting for
+ * the network to go idle can return before the result exists. Waiting for the
+ * result element is the deterministic form of the same wait.
+ */
+export async function resolveTicker(page: Page, ticker: string): Promise<void> {
   await page.fill('input[name="ticker"]', ticker);
   await page.locator('input[name="ticker"]').blur();
-  await page.waitForLoadState("networkidle");
+  await page.waitForSelector(".result", { timeout: 30_000 });
 }
 
 /**
@@ -1150,6 +1276,7 @@ export async function driveScreen1(
   outDir: string
 ): Promise<Map<string, ProbeDocument>> {
   const captured = new Map<string, ProbeDocument>();
+  const url = new URL("/analyzer", baseUrl).toString();
   const cases = [
     ["s1-resolved", TICKERS.resolved],
     ["s1-unknown", TICKERS.unknown],
@@ -1158,25 +1285,31 @@ export async function driveScreen1(
 
   for (const [target, ticker] of cases) {
     for (const width of WIDTHS) {
-      const page = await browser.newPage({ viewport: { width, height: 1200 } });
-      const errors = attachErrorCollector(page);
-      await page.goto(new URL("/analyzer", baseUrl).toString());
-      await resolve(page, ticker);
-      captured.set(`${target}|${width}`, await capturePage(page, target, width, outDir, errors));
-      await page.close();
+      const doc = await captureAt(browser, {
+        target,
+        width,
+        url,
+        outDir,
+        prepare: (page) => resolveTicker(page, ticker),
+      });
+      captured.set(`${target}|${width}`, doc);
     }
   }
   return captured;
 }
 
 /**
- * Creates one run through the real UI, answers its queue, and stops on the
- * profile screen with nothing selected.
+ * Creates one run through the real UI, answers its queue, stops before Step 6,
+ * then captures the two screens at every width.
  *
  * Every decision goes through the form the analyst uses, so the gate, the
  * server actions and the redirects are all exercised. Seeding decisions into
  * the database instead would let this capture a profile screen no human could
  * have reached, which is exactly what the evidence must not contain.
+ *
+ * Driving happens once, on one page; capture then navigates fresh contexts to
+ * the run's URLs. The decisions are persisted, so the URL reproduces the state
+ * — and each capture gets its own context at 2x, as the existing instrument does.
  */
 export async function driveRun(
   browser: Browser,
@@ -1185,62 +1318,74 @@ export async function driveRun(
   outDir: string,
   opts: { cannotVerifyFirstFact: boolean }
 ): Promise<{ runId: string; captured: Map<string, ProbeDocument> }> {
-  const captured = new Map<string, ProbeDocument>();
   const slug = ticker.toLowerCase();
-  const page = await browser.newPage({ viewport: { width: WIDTHS[0], height: 1200 } });
-  const errors = attachErrorCollector(page);
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 1200 } });
+  const page = await ctx.newPage();
+  let runId: string;
 
-  await page.goto(new URL("/analyzer", baseUrl).toString());
-  await resolve(page, ticker);
-  await page.click('button:has-text("Begin analysis")');
-  await page.waitForURL(/\/analyzer\/[0-9a-f-]{36}\/facts$/);
+  try {
+    await page.goto(new URL("/analyzer", baseUrl).toString(), { waitUntil: "networkidle" });
+    await resolveTicker(page, ticker);
+    await page.click('button:has-text("Begin analysis")');
+    await page.waitForURL(/\/analyzer\/[0-9a-f-]{36}\/facts$/, { timeout: 30_000 });
 
-  const match = page.url().match(/\/analyzer\/([0-9a-f-]{36})\/facts/);
-  if (match === null) throw new Error(`${ticker}: no runId in ${page.url()}`);
-  const runId = match[1];
+    const match = page.url().match(/\/analyzer\/([0-9a-f-]{36})\/facts/);
+    if (match === null) throw new Error(`${ticker}: no runId in ${page.url()}`);
+    runId = match[1];
 
-  // The queue is derived, never hardcoded: a fact that should be queued but has
-  // no card in the DOM surfaces as a failure rather than as a card nobody looked
-  // for.
-  const queue = queuedFacts(FIXTURES[ticker].facts);
-  if (queue.length === 0) throw new Error(`${ticker}: the spot-check queue is empty`);
+    // The queue is derived, never hardcoded: a fact that should be queued but
+    // has no card in the DOM surfaces as a failure rather than as a card nobody
+    // looked for.
+    const queue = queuedFacts(FIXTURES[ticker].facts);
+    if (queue.length === 0) throw new Error(`${ticker}: the spot-check queue is empty`);
 
-  for (const [index, fact] of queue.entries()) {
-    const card = page.locator(`form:has(input[name="factId"][value="${fact.id}"])`);
-    if ((await card.count()) === 0) {
-      throw new Error(`Queued fact "${fact.id}" has no card on the ${ticker} facts screen`);
+    for (const [index, fact] of queue.entries()) {
+      const card = page.locator(`form:has(input[name="factId"][value="${fact.id}"])`);
+      if ((await card.count()) === 0) {
+        throw new Error(`Queued fact "${fact.id}" has no card on the ${ticker} facts screen`);
+      }
+
+      // §3.8.4's fixed two-option select renders only under NOT CONFIRMED,
+      // which is why one MSFT fact must take this branch — without it the
+      // control never appears in the evidence at all.
+      const cannotVerify = opts.cannotVerifyFirstFact && index === 0;
+      const value = cannotVerify ? "NOT CONFIRMED" : "CONFIRMED";
+
+      await card.locator(`input[name="decision-${fact.id}"][value="${value}"]`).check();
+      if (cannotVerify) {
+        await card.locator('select[name="reasonCode"]').selectOption("CONTRADICTED BY SOURCE");
+      }
+      await card.locator('button[type="submit"]').click();
+      await page.waitForLoadState("networkidle");
     }
 
-    // §3.8.4's fixed two-option select renders only under NOT CONFIRMED, which
-    // is why one MSFT fact must take this branch — without it the control never
-    // appears in the evidence at all.
-    const cannotVerify = opts.cannotVerifyFirstFact && index === 0;
-    const value = cannotVerify ? "NOT CONFIRMED" : "CONFIRMED";
-
-    await card.locator(`input[name="decision-${fact.id}"][value="${value}"]`).check();
-    if (cannotVerify) {
-      await card.locator('select[name="reasonCode"]').selectOption("CONTRADICTED BY SOURCE");
-    }
-    await card.locator('button[type="submit"]').click();
-    await page.waitForLoadState("networkidle");
+    // Step 2 must actually be complete, or the profile screen is not reachable
+    // and the capture below would silently record the wrong screen.
+    await page.waitForSelector('a:has-text("Continue to gates")', { timeout: 30_000 });
+  } finally {
+    await ctx.close();
   }
 
-  for (const width of WIDTHS) {
-    const target = `s2-facts-${slug}`;
-    captured.set(`${target}|${width}`, await capturePage(page, target, width, outDir, errors));
-  }
-
-  await page.click('a:has-text("Continue to gates")');
-  await page.waitForURL(new RegExp(`/analyzer/${runId}/profile$`));
-
-  // Stop here. Step 6 is never submitted, so the profile screen captures with
+  // Step 6 is never submitted. The profile screen therefore captures with
   // nothing selected — the state §6.3 requires and the one DESIGN needs to see.
-  for (const width of WIDTHS) {
-    const target = `s3-profile-${slug}`;
-    captured.set(`${target}|${width}`, await capturePage(page, target, width, outDir, errors));
+  const captured = new Map<string, ProbeDocument>();
+  const screens = [
+    [`s2-facts-${slug}`, `/analyzer/${runId}/facts`],
+    [`s3-profile-${slug}`, `/analyzer/${runId}/profile`],
+  ] as const;
+
+  for (const [target, route] of screens) {
+    for (const width of WIDTHS) {
+      const doc = await captureAt(browser, {
+        target,
+        width,
+        url: new URL(route, baseUrl).toString(),
+        outDir,
+      });
+      captured.set(`${target}|${width}`, doc);
+    }
   }
 
-  await page.close();
   return { runId, captured };
 }
 ```
@@ -1532,7 +1677,7 @@ Any FAIL here is the runner being wrong, not the app — this baseline is known 
 npm test
 ```
 
-Expected: 82 test files, all passing (79 baseline + `checks`, `verdict`, `gates`, `selfTest`).
+Expected: 83 test files, all passing (79 baseline + `checks`, `verdict`, `gates`, `selfTest`).
 
 ```bash
 npx tsc --noEmit
@@ -1571,4 +1716,17 @@ git commit -m "feat(evidence): one-command archive with manifest, preflight verd
 
 1. `checkFont` asserts on `div.cb-analyzer`. If the current build renders the analyzer screens without that root, the check FAILs on a known-good baseline — which under DONE WHEN 3 means the runner is wrong, not the app. Fix by widening the assertion to the element `app/globals.css` actually declares the Plex stack on. Do **not** weaken it to "any node mentions Plex", which restores the vacuous pass.
 
-2. `checkOverflow` runs against every node. A component that legitimately scrolls its own content — a deliberate `overflow-x: auto` container — would report as a fault. If the known-good baseline produces such a FAIL, the correct fix is an explicit, named allowlist of intentionally-scrollable classes in `config.ts`, not removing the node-level limb. Record any allowlist entry with the reason it is intentional, so the exemption is visible rather than silent.
+2. `checkOverflow` runs against every node. Sub-pixel rounding is already handled — the probe's
+   half-pixel tolerance is carried over from the existing instrument — but a component that
+   *legitimately* scrolls its own content (a deliberate `overflow-x: auto` container) would
+   still report as a fault. If the known-good baseline produces such a FAIL, the correct fix is
+   an explicit, named allowlist of intentionally-scrollable classes in `config.ts`, never
+   removing the node-level limb. Record each allowlist entry with the reason it is intentional,
+   so the exemption is visible rather than silent.
+
+3. The plan's first draft reconstructed the probe from the *output* of `capture-m7-gate.js`
+   rather than from the script, and got the node selector, the overflow tolerance, the `cls`
+   nullability and the screenshot scale wrong. Two of those would have produced FAILs on a
+   known-good baseline; one would have changed the artefact DESIGN reads. If any later question
+   arises about what the probe should emit, the answer is in that file, not in a sample of its
+   output.
