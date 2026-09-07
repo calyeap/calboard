@@ -27,6 +27,18 @@ export function FactCard({
   const [chosen, setChosen] = useState<"CONFIRMED" | "NOT CONFIRMED" | null>(null);
   const citation = citationFor(fact);
 
+  // Derived once and used in both the provenance stamp and the source pane.
+  // The fixtures carry verificationState VERIFIED on every record, which is
+  // true of their acquisition but says nothing about this run's spot-check —
+  // rendering it on an undecided queued fact would claim the analyst had
+  // verified a figure they have not yet looked at, which is the opposite of
+  // what Step 2 is for. The run's own state wins over the fact's.
+  const verificationState = decision
+    ? decision.decision
+    : queued
+      ? "SPOT-CHECK PENDING"
+      : "SPOT-CHECK NOT REQUIRED";
+
   return (
     <div className="factcard">
       <div>
@@ -49,7 +61,7 @@ export function FactCard({
             {titleCase(fact.extractionType)}
           </span>
           <span className="sep">·</span>
-          <span>{titleCase(decision ? decision.decision : fact.verificationState)}</span>
+          <span>{titleCase(verificationState)}</span>
         </div>
 
         {!queued && (
@@ -165,7 +177,7 @@ export function FactCard({
           <dt>Extraction type</dt>
           <dd>{fact.extractionType}</dd>
           <dt>Verification state</dt>
-          <dd>{decision ? decision.decision : queued ? "SPOT-CHECK PENDING" : "SPOT-CHECK NOT REQUIRED"}</dd>
+          <dd>{verificationState}</dd>
           <dt>As-of / period</dt>
           <dd>{fact.asOfDate}</dd>
           <dt>Retrieval timestamp</dt>
