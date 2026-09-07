@@ -5,7 +5,7 @@ import { loadGateState, computeAnalysisForRun } from "./gate";
 import { queuedFacts, exemptFacts, applyDecisions, deriveVerificationState } from "./spotCheck";
 import { MSFT_FIXTURE } from "./fixtures/msft";
 import { OKLO_FIXTURE } from "./fixtures/oklo";
-import type { FactRecord } from "./types";
+import { VERIFICATION_STATES, type FactRecord } from "./types";
 
 // ---------------------------------------------------------------------------
 // The invariant: a queued fact that nobody has decided must never report
@@ -23,13 +23,16 @@ function statesOf(facts: readonly FactRecord[]): Record<string, string> {
   return Object.fromEntries(facts.map((f) => [f.id, f.verificationState]));
 }
 
-describe("the fixtures still carry acquisition-time labels", () => {
-  // Not a complaint — this is what makes the derivation necessary, and if it
-  // ever changes the rest of this file should be re-read rather than trusted.
-  it("MSFT writes VERIFIED on records that are queued and undecided", () => {
+describe("the fixtures carry acquisition-time labels", () => {
+  // The fixtures no longer write VERIFIED — that value left the union when §3.2
+  // was collapsed to four. They still write an acquisition-time state that says
+  // nothing about this run, which is what keeps the derivation necessary.
+  it("writes an acquisition-time state on records that are queued", () => {
     const queued = queuedFacts(MSFT_FIXTURE.facts);
     expect(queued.length).toBeGreaterThan(0);
-    expect(queued.some((f) => f.verificationState === "VERIFIED")).toBe(true);
+    for (const f of queued) {
+      expect(VERIFICATION_STATES).toContain(f.verificationState);
+    }
   });
 });
 
@@ -53,8 +56,10 @@ describe("deriveVerificationState", () => {
   // on this field, and "UNVERIFIED now means only the §5.1 propagation state".
   // A queued, undecided fact is SPOT-CHECK PENDING whatever the fixture wrote.
   it("reports SPOT-CHECK PENDING even where acquisition wrote UNVERIFIED", () => {
-    const unverified: FactRecord = { ...base, verificationState: "UNVERIFIED" };
-    expect(deriveVerificationState(unverified, undefined, true)).toBe("SPOT-CHECK PENDING");
+    // There is no longer an UNVERIFIED to preserve: it left this field with the
+    // §3.2 collapse. A queued, undecided fact is SPOT-CHECK PENDING whatever
+    // acquisition wrote.
+    expect(deriveVerificationState(base, undefined, true)).toBe("SPOT-CHECK PENDING");
   });
 });
 

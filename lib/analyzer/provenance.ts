@@ -6,16 +6,20 @@ import type { ExtractionType, ProvenanceTokens, SourceClass, VerificationState }
 // never upgraded by aggregation. combineProvenance implements the
 // weakest-wins rule for a computed value's inputs.
 //
-// verificationState has a third case beyond the SECONDARY/PRIMARY,
-// AI-EXTRACTED/DETERMINISTIC binary: VERIFIED, UNVERIFIED, SPOT-CHECK
-// PENDING. §I14 states "UNVERIFIED propagates like SECONDARY," so UNVERIFIED
-// wins over SPOT-CHECK PENDING here — the spec does not rank the two
-// directly, but by the time Step 7 runs, the Step 2 gate has already forced
-// every MATERIAL fact to VERIFIED or UNVERIFIED (§2's ordering rule); a
-// SPOT-CHECK PENDING input reaching a module at all can only be a non-
-// material fact that was never surfaced for confirmation. This ranking is a
-// narrow implementation judgment on an edge case the spec does not exercise
-// in any validation case, not a resolution of a genuine contract conflict.
+// verificationState is not a binary like the other two slots: §3.2 gives it
+// four values, and they are ordered here weakest-first. NOT CONFIRMED and
+// SPOT-CHECK PENDING are both weaker than a confirmation for obvious reasons;
+// SPOT-CHECK NOT REQUIRED is ranked below CONFIRMED because §3.2 states the
+// tag-mapping exemption is "not a human confirmation and must never be
+// displayed as one".
+//
+// UNVERIFIED is deliberately absent. Since amendment M7 it names only the §5.1
+// propagation state — a property of the figure and its source, which travels
+// under §5.2 and propagates like SECONDARY — and no longer a value of this
+// field, which is a property of the human review. A figure can be UNVERIFIED
+// and CONFIRMED at once (§5.1), and that combination was unstatable while one
+// word carried both jobs. The propagation state's carrier is
+// ProvenanceQualifier, not this function.
 export function combineProvenance(...tokens: ProvenanceTokens[]): ProvenanceTokens {
   if (tokens.length === 0) {
     throw new Error("combineProvenance requires at least one input");
@@ -29,27 +33,28 @@ export function combineProvenance(...tokens: ProvenanceTokens[]): ProvenanceToke
     ? "AI-EXTRACTED"
     : "DETERMINISTIC/STRUCTURED";
 
+  // Weakest-wins over §3.2's four values, strictly ordered. Every branch is
+  // explicit and the final one is a value rather than a catch-all: a catch-all
+  // is what let NOT CONFIRMED resolve to VERIFIED before M7, which was a
+  // fail-open on precisely the fact the analyst said they could not verify.
   let verificationState: VerificationState;
   if (tokens.some((t) => t.verificationState === "NOT CONFIRMED")) {
-    // M7. Ranked above UNVERIFIED and handled explicitly rather than left to
-    // the final `else`, which would resolve it to VERIFIED — a fail-open on
-    // precisely the fact the analyst said they could not verify, against
-    // §5.3. In a correct run this branch is unreachable: §5 returns INCOMPLETE
-    // for a non-confirmed fact's dependents, so the module never computes and
-    // never combines. It is here because "unreachable" is the assumption
-    // fail-closed exists to stop the code resting on.
+    // Weakest. In a correct run this is unreachable — §5 returns INCOMPLETE for
+    // a non-confirmed fact's dependents, so the module never computes — but
+    // "unreachable" is the assumption §5.3 exists to stop code resting on.
     verificationState = "NOT CONFIRMED";
-  } else if (tokens.some((t) => t.verificationState === "UNVERIFIED")) {
-    verificationState = "UNVERIFIED";
   } else if (tokens.some((t) => t.verificationState === "SPOT-CHECK PENDING")) {
+    // Queued and undecided: the Step 2 gate is not satisfied while any material
+    // fact sits here (§3.2).
     verificationState = "SPOT-CHECK PENDING";
+  } else if (tokens.some((t) => t.verificationState === "SPOT-CHECK NOT REQUIRED")) {
+    // Ranked BELOW confirmed, not merged with it. §3.2: the exemption is "not a
+    // human confirmation and must never be displayed as one" — so a combination
+    // containing an exempt input must not come out the other side claiming a
+    // human confirmed it.
+    verificationState = "SPOT-CHECK NOT REQUIRED";
   } else {
-    // VERIFIED, CONFIRMED and SPOT-CHECK NOT REQUIRED all reach here. All
-    // three mean the figure is not carrying a provenance weakness: CONFIRMED
-    // is the analyst having checked it, and SPOT-CHECK NOT REQUIRED is the
-    // §3.8.1 tag-mapping exemption, which changes what is queued rather than
-    // what is carried.
-    verificationState = "VERIFIED";
+    verificationState = "CONFIRMED";
   }
 
   return { sourceClass, extractionType, verificationState };
@@ -58,5 +63,9 @@ export function combineProvenance(...tokens: ProvenanceTokens[]): ProvenanceToke
 export const CLEAN_PROVENANCE: ProvenanceTokens = {
   sourceClass: "PRIMARY",
   extractionType: "DETERMINISTIC/STRUCTURED",
-  verificationState: "VERIFIED",
+  // The M7 name for what this field used to call VERIFIED: a human checked the
+  // figure against its source and it matched (§3.2). The rename is the whole
+  // point of the amendment — the old word also named the §5.1 propagation
+  // state, and those are different claims about a figure.
+  verificationState: "CONFIRMED",
 };

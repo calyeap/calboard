@@ -22,7 +22,7 @@ function fact(over: Partial<FactRecord> = {}): FactRecord {
     sourceUrl: null,
     sourceClass: "PRIMARY",
     extractionType: "DETERMINISTIC/STRUCTURED",
-    verificationState: "VERIFIED",
+    verificationState: "SPOT-CHECK PENDING",
     asOfDate: "FY2026",
     retrievalTimestamp: "2026-09-04T21:04:00-04:00",
     supersedesFactId: null,
@@ -38,15 +38,16 @@ describe("materialityOf", () => {
     expect(materialityOf(fact({ id: "quarterly-burn" })).reason).toBe("NAMED IN §3.8");
   });
 
-  it("recognises the three classification limbs whatever the fact id", () => {
+  // Two limbs, not three: §3.8's "any figure classified UNVERIFIED" limb has no
+  // carrier on a FactRecord since M7 moved UNVERIFIED to the §5.1 propagation
+  // state. A fact that would have matched it is queued by the fail-closed
+  // default instead.
+  it("recognises the classification limbs whatever the fact id", () => {
     expect(materialityOf(fact({ id: "obscure", sourceClass: "SECONDARY" })).reason).toBe(
       "CLASSIFIED SECONDARY"
     );
     expect(materialityOf(fact({ id: "obscure", extractionType: "AI-EXTRACTED" })).reason).toBe(
       "CLASSIFIED AI-EXTRACTED"
-    );
-    expect(materialityOf(fact({ id: "obscure", verificationState: "UNVERIFIED" })).reason).toBe(
-      "CLASSIFIED UNVERIFIED"
     );
   });
 

@@ -53,10 +53,10 @@ function sourced(value: Decimal): SourcedValue<Decimal> {
   return { value, provenance: CLEAN_PROVENANCE };
 }
 function aiExtracted(value: Decimal): SourcedValue<Decimal> {
-  return { value, provenance: { sourceClass: "PRIMARY", extractionType: "AI-EXTRACTED", verificationState: "VERIFIED" } };
+  return { value, provenance: { sourceClass: "PRIMARY", extractionType: "AI-EXTRACTED", verificationState: "CONFIRMED" } };
 }
 function secondary(value: Decimal): SourcedValue<Decimal> {
-  return { value, provenance: { sourceClass: "SECONDARY", extractionType: "DETERMINISTIC/STRUCTURED", verificationState: "VERIFIED" } };
+  return { value, provenance: { sourceClass: "SECONDARY", extractionType: "DETERMINISTIC/STRUCTURED", verificationState: "CONFIRMED" } };
 }
 
 const price = new Decimal("510.12");
@@ -308,7 +308,10 @@ function factRow(
     sourceUrl: null,
     sourceClass,
     extractionType,
-    verificationState: "VERIFIED",
+    // Acquisition-time state for a fact that is queued and not yet decided
+    // (§3.2). loadGateState derives the run's own state over this anyway; what
+    // matters is that the fixture cannot assert a confirmation nobody made.
+    verificationState: "SPOT-CHECK PENDING",
     asOfDate: "FY2026",
     retrievalTimestamp: "2026-09-04T21:04:00-04:00",
     supersedesFactId: null,

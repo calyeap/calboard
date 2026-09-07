@@ -25,18 +25,30 @@ import Decimal from "decimal.js";
 export type FactType = "FACT" | "ASSUMPTION" | "INFERENCE";
 export type SourceClass = "PRIMARY" | "SECONDARY";
 export type ExtractionType = "DETERMINISTIC/STRUCTURED" | "AI-EXTRACTED";
-// The first three are the M1–M16 values and neither their strings nor their
-// semantics change. M7 adds the three states Step 2 introduces (§3.8.1,
-// §3.8.3): SPOT-CHECK NOT REQUIRED is set on a fact acquired through a fixed,
-// versioned tag mapping, which is shown but never queued; CONFIRMED and
-// NOT CONFIRMED are the two decisions Step 2 offers, and there is no third.
-export type VerificationState =
-  | "VERIFIED"
-  | "UNVERIFIED"
-  | "SPOT-CHECK PENDING"
-  | "SPOT-CHECK NOT REQUIRED"
-  | "CONFIRMED"
-  | "NOT CONFIRMED";
+// §3.2 — the verification state answers one question and one only: has a human
+// confirmed this figure against its source?
+//
+// FOUR values, and only these four. Amendment M7 records that they REPLACED
+// VERIFIED and UNVERIFIED, because UNVERIFIED was doing two unrelated jobs: it
+// named a verification state here AND the §5.1 propagation state. Those are
+// different claims — "no human has confirmed it" versus "it exists but could
+// not be checked against a source" — and §5.1 is explicit that a figure can be
+// UNVERIFIED and CONFIRMED at once, which was unstatable while one word carried
+// both. UNVERIFIED now means only the §5.1 propagation state and lives on
+// ProvenanceQualifier below; it is not a value of this field.
+//
+// The union is DERIVED from the array so the two cannot drift, and so a value
+// cannot be added back to the type without appearing in a list that
+// verificationStateVocabulary.test.ts asserts against. VERIFIED is meant to be
+// unreachable here, not merely unused.
+export const VERIFICATION_STATES = [
+  "CONFIRMED",
+  "NOT CONFIRMED",
+  "SPOT-CHECK PENDING",
+  "SPOT-CHECK NOT REQUIRED",
+] as const;
+
+export type VerificationState = (typeof VERIFICATION_STATES)[number];
 export type Requiredness = "REQUIRED" | "OPTIONAL";
 
 export interface FactRecord {

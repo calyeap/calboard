@@ -81,7 +81,12 @@ function dataAndModelQualityItem(result: AnalysisResult): ReactNode {
   const { states } = result;
   const consolidated = consolidateStates(states.suppressing);
   const anyNonDefaultProvenanceFact = result.facts.some(
-    (f) => f.sourceClass === "SECONDARY" || f.extractionType === "AI-EXTRACTED" || f.verificationState !== "VERIFIED"
+    (f) =>
+      f.sourceClass === "SECONDARY" ||
+      f.extractionType === "AI-EXTRACTED" ||
+      // §3.2: only CONFIRMED is a human confirmation. SPOT-CHECK NOT REQUIRED
+      // "must never be displayed as one", so it qualifies here too.
+      f.verificationState !== "CONFIRMED"
   );
   const bullets: ReactNode[] = [
     ...consolidated.map((c) => (

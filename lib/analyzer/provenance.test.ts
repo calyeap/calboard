@@ -19,23 +19,10 @@ describe("combineProvenance", () => {
     expect(result.extractionType).toBe("AI-EXTRACTED");
   });
 
-  it("propagates UNVERIFIED like SECONDARY (I14)", () => {
-    const unverified: ProvenanceTokens = { ...CLEAN_PROVENANCE, verificationState: "UNVERIFIED" };
-    const result = combineProvenance(CLEAN_PROVENANCE, unverified);
-    expect(result.verificationState).toBe("UNVERIFIED");
-  });
-
   it("propagates SPOT-CHECK PENDING when nothing worse is present", () => {
     const pending: ProvenanceTokens = { ...CLEAN_PROVENANCE, verificationState: "SPOT-CHECK PENDING" };
     const result = combineProvenance(CLEAN_PROVENANCE, pending);
     expect(result.verificationState).toBe("SPOT-CHECK PENDING");
-  });
-
-  it("prefers UNVERIFIED over SPOT-CHECK PENDING when both are present", () => {
-    const unverified: ProvenanceTokens = { ...CLEAN_PROVENANCE, verificationState: "UNVERIFIED" };
-    const pending: ProvenanceTokens = { ...CLEAN_PROVENANCE, verificationState: "SPOT-CHECK PENDING" };
-    const result = combineProvenance(unverified, pending);
-    expect(result.verificationState).toBe("UNVERIFIED");
   });
 
   it("is never upgraded by aggregating many clean inputs alongside one weak one", () => {
@@ -55,49 +42,74 @@ describe("combineProvenance", () => {
   // input would have been silently upgraded to clean. That is a fail-open on
   // exactly the fact the analyst said they could not verify, and §5.3 requires
   // fail-closed.
-  it("propagates NOT CONFIRMED over every other state, never upgrading it to VERIFIED", () => {
-    const notConfirmed: ProvenanceTokens = {
-      ...CLEAN_PROVENANCE,
-      verificationState: "NOT CONFIRMED",
-    };
-    const unverified: ProvenanceTokens = { ...CLEAN_PROVENANCE, verificationState: "UNVERIFIED" };
-    const pending: ProvenanceTokens = {
-      ...CLEAN_PROVENANCE,
-      verificationState: "SPOT-CHECK PENDING",
-    };
+  const withState = (verificationState: ProvenanceTokens["verificationState"]) => ({
+    ...CLEAN_PROVENANCE,
+    verificationState,
+  });
+
+  it("propagates NOT CONFIRMED over every other state, never upgrading it", () => {
+    const notConfirmed = withState("NOT CONFIRMED");
 
     expect(combineProvenance(CLEAN_PROVENANCE, notConfirmed).verificationState).toBe(
       "NOT CONFIRMED"
     );
-    expect(combineProvenance(notConfirmed, unverified).verificationState).toBe("NOT CONFIRMED");
-    expect(combineProvenance(pending, notConfirmed).verificationState).toBe("NOT CONFIRMED");
+    expect(
+      combineProvenance(withState("SPOT-CHECK PENDING"), notConfirmed).verificationState
+    ).toBe("NOT CONFIRMED");
+    expect(
+      combineProvenance(withState("SPOT-CHECK NOT REQUIRED"), notConfirmed).verificationState
+    ).toBe("NOT CONFIRMED");
     expect(
       combineProvenance(...Array(10).fill(CLEAN_PROVENANCE), notConfirmed).verificationState
     ).toBe("NOT CONFIRMED");
   });
 
-  it("treats CONFIRMED as clean — it is the analyst having checked the figure", () => {
-    const confirmed: ProvenanceTokens = { ...CLEAN_PROVENANCE, verificationState: "CONFIRMED" };
-    expect(combineProvenance(CLEAN_PROVENANCE, confirmed).verificationState).toBe("VERIFIED");
+  it("returns CONFIRMED only when every input is a confirmation", () => {
+    expect(combineProvenance(CLEAN_PROVENANCE, withState("CONFIRMED")).verificationState).toBe(
+      "CONFIRMED"
+    );
   });
 
-  // §3.8.1: the tag-mapping exemption changes what is queued, not what is
-  // carried. An exempt fact is not weaker than a verified one, so it does not
-  // drag a combination down.
-  it("treats SPOT-CHECK NOT REQUIRED as clean, per the §3.8.1 exemption", () => {
-    const exempt: ProvenanceTokens = {
-      ...CLEAN_PROVENANCE,
-      verificationState: "SPOT-CHECK NOT REQUIRED",
-    };
-    expect(combineProvenance(CLEAN_PROVENANCE, exempt).verificationState).toBe("VERIFIED");
+  // §3.2: the tag-mapping exemption is "not a human confirmation and must never
+  // be displayed as one". So it ranks BELOW confirmed rather than counting as
+  // clean — a combination containing an exempt input must not come out the
+  // other side claiming a human confirmed it.
+  it("does not let SPOT-CHECK NOT REQUIRED come out as a confirmation", () => {
+    const exempt = withState("SPOT-CHECK NOT REQUIRED");
+    expect(combineProvenance(CLEAN_PROVENANCE, exempt).verificationState).toBe(
+      "SPOT-CHECK NOT REQUIRED"
+    );
+    expect(combineProvenance(exempt, withState("CONFIRMED")).verificationState).toBe(
+      "SPOT-CHECK NOT REQUIRED"
+    );
   });
 
-  it("still ranks UNVERIFIED above SPOT-CHECK PENDING once the M7 states exist", () => {
-    const unverified: ProvenanceTokens = { ...CLEAN_PROVENANCE, verificationState: "UNVERIFIED" };
-    const exempt: ProvenanceTokens = {
-      ...CLEAN_PROVENANCE,
-      verificationState: "SPOT-CHECK NOT REQUIRED",
-    };
-    expect(combineProvenance(unverified, exempt).verificationState).toBe("UNVERIFIED");
+  it("ranks SPOT-CHECK PENDING above the exemption and below a non-confirmation", () => {
+    expect(
+      combineProvenance(withState("SPOT-CHECK PENDING"), withState("SPOT-CHECK NOT REQUIRED"))
+        .verificationState
+    ).toBe("SPOT-CHECK PENDING");
+  });
+
+  // The full ordering in one place, weakest first, so a reordering of the
+  // branches in combineProvenance cannot pass silently.
+  it("orders the four values weakest-first, whatever order they arrive in", () => {
+    const order: ProvenanceTokens["verificationState"][] = [
+      "NOT CONFIRMED",
+      "SPOT-CHECK PENDING",
+      "SPOT-CHECK NOT REQUIRED",
+      "CONFIRMED",
+    ];
+    for (let weak = 0; weak < order.length; weak++) {
+      for (let strong = weak + 1; strong < order.length; strong++) {
+        expect(
+          combineProvenance(withState(order[weak]), withState(order[strong])).verificationState
+        ).toBe(order[weak]);
+        // ...and the same the other way round: order of arrival must not matter.
+        expect(
+          combineProvenance(withState(order[strong]), withState(order[weak])).verificationState
+        ).toBe(order[weak]);
+      }
+    }
   });
 });

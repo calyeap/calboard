@@ -39,7 +39,6 @@ export type MaterialityReason =
   | "NAMED IN §3.8"
   | "CLASSIFIED SECONDARY"
   | "CLASSIFIED AI-EXTRACTED"
-  | "CLASSIFIED UNVERIFIED"
   | "UNRECOGNISED — FAIL-CLOSED";
 
 export interface Materiality {
@@ -64,9 +63,17 @@ export function materialityOf(fact: FactRecord): Materiality {
   if (fact.extractionType === "AI-EXTRACTED") {
     return { material: true, reason: "CLASSIFIED AI-EXTRACTED" };
   }
-  if (fact.verificationState === "UNVERIFIED") {
-    return { material: true, reason: "CLASSIFIED UNVERIFIED" };
-  }
+  // §3.8's third classification limb is "any figure classified UNVERIFIED".
+  // There is deliberately no test for it here, because since amendment M7
+  // UNVERIFIED is the §5.1 PROPAGATION state — a property of a figure and its
+  // source that travels onto outputs — and not a value of the §3.2
+  // verification-state field a FactRecord carries. There is nothing on an input
+  // record to test it against, and inventing one would put the word back to
+  // doing the two jobs the amendment separated.
+  //
+  // Nothing escapes the queue as a result: a fact that would have matched this
+  // limb falls through to the fail-closed default below and is queued anyway,
+  // which is why removing the test changes no outcome on either fixture.
   // Fail-closed, per §5.3 and the Command Center ruling of 7 September 2026:
   // an unrecognised fact staying in the queue costs a spot-check, one skipping
   // it costs the thing the queue exists for. A fact reaching here is PRIMARY,

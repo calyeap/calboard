@@ -23,7 +23,7 @@ import type { DiscountRate } from "../types";
 const PROVENANCE = {
   sourceClass: "PRIMARY" as const,
   extractionType: "DETERMINISTIC/STRUCTURED" as const,
-  verificationState: "VERIFIED" as const,
+  verificationState: "CONFIRMED" as const,
 };
 
 function sourced(value: number) {
