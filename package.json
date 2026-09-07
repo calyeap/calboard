@@ -9,7 +9,8 @@
     "test": "vitest run",
     "migrate": "tsx scripts/migrate.ts",
     "record-split": "tsx scripts/record-corporate-action.ts",
-    "record-reconciliation": "tsx scripts/record-reconciliation.ts"
+    "record-reconciliation": "tsx scripts/record-reconciliation.ts",
+    "evidence": "tsx scripts/evidence/run.ts"
   },
   "dependencies": {
     "decimal.js": "^10.4.3",

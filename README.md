@@ -151,6 +151,64 @@ explicitly-linked reversal transactions, never edits.
 (`positions_current.avg_cost_usd`) are recomputed from the full transaction
 history as it's applied — not FIFO/LIFO lot tracking.
 
+## Design evidence runner
+
+`npm run evidence` captures screenshots and computed-style probes of the
+stock analyzer's screens for a design reviewer working in an isolated
+container that cannot reach `localhost` — replacing what used to be a manual
+round trip: start the app, walk the flow by hand, copy run URLs, edit a
+capture script, zip the result.
+
+Start the dev server first, in another terminal:
+
+```bash
+npm run dev
+```
+
+Note the port it prints — it may not be 3000 if something else is already
+listening there. If it isn't 3000, point the runner at it:
+
+```bash
+EVIDENCE_BASE_URL=http://127.0.0.1:3001 npm run evidence
+```
+
+The runner then:
+
+- checks three gates (the frozen spec/design/mock artefacts still match their
+  SHA-256, the app is reachable and actually serving Screen 1, and the
+  analyzer's database tables exist — it never runs a migration itself);
+- drives Screen 1's three reachable states (resolved, unknown, unsupported)
+  and creates two runs (MSFT, OKLO) through the real UI, answering the
+  spot-check queue and stopping before the final confirmation step;
+- captures every screen at 720/1024/1440px, full page, plus a computed-style
+  probe of the rendered DOM;
+- runs a mechanical preflight over the capture (render completeness, no
+  document/card overflow, expected font family, no console errors, expected
+  state markers present) and rolls the results into one verdict — `PASS`,
+  `FAIL`, or `UNKNOWN` — naming the first failing or unknown step;
+- writes a `manifest.json` alongside the screenshots and probes, then zips
+  the whole capture directory under `.evidence/` (gitignored, regenerated
+  each run, never committed).
+
+**PASS** means every check succeeded. **FAIL** means something measurable is
+wrong — the run exits non-zero. **UNKNOWN** means a check could not be
+completed (most notably, Screen 1's UNAVAILABLE state, which cannot be
+reached without reconfiguring the market data provider or adding a test seam
+to application code — outside this runner's authority, so it's recorded as
+UNKNOWN with its reason rather than skipped silently) — the run still exits
+zero, because a state that could not be reached is not a state that rendered
+wrongly.
+
+The runner never fixes anything it finds — it reports and stops. It never
+compares the capture against the design mock, and never judges appearance,
+spacing, hierarchy, copy, or treatment. It never deletes or modifies any run,
+including the ones it creates: `manifest.json` records their run IDs so
+clearing them stays your decision, not the runner's.
+
+`npm run evidence -- --self-test` proves the checks against deliberately
+broken fixtures (never against the real app) and exits non-zero if any check
+fails to catch its fault or fires where it shouldn't.
+
 ## Engineering Notes
 
 ### Invalid-symbol identity defect (found and fixed — PR #5, `b43f705`)
