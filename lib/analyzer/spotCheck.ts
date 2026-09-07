@@ -74,6 +74,10 @@ export function materialityOf(fact: FactRecord): Materiality {
   // Nothing escapes the queue as a result: a fact that would have matched this
   // limb falls through to the fail-closed default below and is queued anyway,
   // which is why removing the test changes no outcome on either fixture.
+  //
+  // For the M8 cross-check: one of three items waiting on real acquisition,
+  // with NAMED_MATERIAL_FACT_IDS above and the NON-OPERATING INVESTMENTS
+  // judgment in judgments.ts. Re-read all three together when M8 lands.
   // Fail-closed, per §5.3 and the Command Center ruling of 7 September 2026:
   // an unrecognised fact staying in the queue costs a spot-check, one skipping
   // it costs the thing the queue exists for. A fact reaching here is PRIMARY,

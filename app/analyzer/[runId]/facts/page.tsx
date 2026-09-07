@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { AnalyzerShell } from "@/app/components/AnalyzerShell";
 import { FactCard } from "@/app/components/FactCard";
 import { loadGateState, RunNotFoundError } from "@/lib/analyzer/gate";
-import { getFactDecisions, getJudgments, JUDGMENT_KEYS } from "@/lib/analyzer/runStore";
-import { recordJudgmentAction } from "@/app/actions/analyzer";
+import { getFactDecisions, getJudgments } from "@/lib/analyzer/runStore";
+import { JUDGMENTS } from "@/lib/analyzer/judgments";
+import { JudgmentSelector } from "@/app/components/JudgmentSelector";
 import { queuedFacts, exemptFacts } from "@/lib/analyzer/spotCheck";
 import type { FactRecord } from "@/lib/analyzer/types";
 
@@ -97,49 +98,14 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
               open, rather than inheriting them from a default nobody chose.
             </p>
 
-            {JUDGMENT_KEYS.map((key) => {
-              const existing = judgmentByKey.get(key);
-              return (
-                <div className="judgment" key={key}>
-                  <h3>{JUDGMENT_TITLES[key]}</h3>
-                  <p className="why">{JUDGMENT_WHY[key]}</p>
-                  <form action={recordJudgmentAction}>
-                    <input type="hidden" name="runId" value={runId} />
-                    <input type="hidden" name="judgmentKey" value={key} />
-                    <label className="fieldlabel" htmlFor={`sel-${key}`}>
-                      Selection
-                    </label>
-                    <input
-                      className="inset"
-                      id={`sel-${key}`}
-                      name="selection"
-                      defaultValue={existing?.selection ?? ""}
-                      placeholder={JUDGMENT_PLACEHOLDER[key]}
-                    />
-                    <div style={{ height: 16 }} />
-                    <label className="fieldlabel" htmlFor={`reason-${key}`}>
-                      Reason
-                    </label>
-                    <input
-                      className="inset"
-                      id={`reason-${key}`}
-                      name="reason"
-                      defaultValue={existing?.reason ?? ""}
-                    />
-                    <div className="continue">
-                      <button className="act" type="submit">
-                        {existing ? "Update judgment" : "Record judgment"}
-                      </button>
-                      {existing && (
-                        <span className="reason">
-                          Recorded. Selection and reason are printed in report section J.
-                        </span>
-                      )}
-                    </div>
-                  </form>
-                </div>
-              );
-            })}
+            {JUDGMENTS.map((judgment) => (
+              <JudgmentSelector
+                key={judgment.key}
+                runId={runId}
+                judgment={judgment}
+                existing={judgmentByKey.get(judgment.key)}
+              />
+            ))}
           </div>
 
           {/* The step completes when the last individual fact has a decision,
@@ -187,23 +153,3 @@ function toPlainFact(fact: FactRecord): FactRecord {
   return { ...fact, value: fact.value === null ? null : String(fact.value) };
 }
 
-const JUDGMENT_TITLES: Record<string, string> = {
-  "ACCOUNTING-BASIS WINDOW": "Accounting-basis window",
-  "NON-OPERATING INVESTMENTS": "Which investments are non-operating",
-  "MEDIAN-MARGIN NOPAT WINDOW": "Median-margin NOPAT window",
-};
-
-const JUDGMENT_WHY: Record<string, string> = {
-  "ACCOUNTING-BASIS WINDOW":
-    "Restate-all and shorten-window give different answers. Both are defensible once labelled. The mixed basis is not.",
-  "NON-OPERATING INVESTMENTS":
-    "A classification, not a reported line. Carried at book, with the direction of likely error stated.",
-  "MEDIAN-MARGIN NOPAT WINDOW":
-    "A choice of normalisation basis. Named median-margin NOPAT throughout the interface, never normalised (I15).",
-};
-
-const JUDGMENT_PLACEHOLDER: Record<string, string> = {
-  "ACCOUNTING-BASIS WINDOW": "RESTATE ALL or SHORTEN WINDOW",
-  "NON-OPERATING INVESTMENTS": "The line items treated as non-operating",
-  "MEDIAN-MARGIN NOPAT WINDOW": "The window used",
-};
