@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { runSelfTest } from "./selfTest";
 
 describe("runSelfTest", () => {
-  it("proves checkOverflow (both limbs), checkFont, checkConsoleErrors, checkStatesAppeared (both directions), and the dead-port limb of verifyAppReachable, each against its fixture", async () => {
+  it("proves checkOverflow (both limbs), checkFont, checkConsoleErrors, checkStatesAppeared (both directions), checkRendered (both directions), and the dead-port limb of verifyAppReachable, each against a real capture", async () => {
     const results = await runSelfTest();
     const byName = new Map(results.map((r) => [r.name, r]));
 
@@ -14,6 +14,8 @@ describe("runSelfTest", () => {
     expect(byName.get("dead-port")?.actual).toBe("FAIL");
     expect(byName.get("states-appeared-pass")?.actual).toBe("PASS");
     expect(byName.get("states-appeared-fail")?.actual).toBe("FAIL");
+    expect(byName.get("rendered-complete")?.actual).toBe("PASS");
+    expect(byName.get("rendered-missing")?.actual).toBe("FAIL");
 
     for (const r of results) expect(r.ok).toBe(true);
 
@@ -50,5 +52,21 @@ describe("runSelfTest", () => {
     expect(byName.get("states-appeared-pass")?.step).toBe("every requested state appeared");
     expect(byName.get("states-appeared-fail")?.step).toBe("every requested state appeared");
     expect(byName.get("states-appeared-fail")?.detail).toContain("Listed operating company");
+
+    // The complete map must report a clean PASS with no detail — if it did
+    // not, the FAIL below would prove nothing about the missing entry.
+    expect(byName.get("rendered-complete")?.detail).toBe("");
+
+    // The FAIL must name BOTH the target and the width that went missing, and
+    // say it was never captured rather than captured-but-empty — those are
+    // different faults and the detail is what distinguishes them.
+    expect(byName.get("rendered-missing")?.step).toBe(
+      "every requested target rendered at every width"
+    );
+    expect(byName.get("rendered-missing")?.detail).toContain("rendered-probe");
+    expect(byName.get("rendered-missing")?.detail).toContain("1024");
+    expect(byName.get("rendered-missing")?.detail).toContain("not captured");
+    // ...and must NOT implicate the width that really was captured.
+    expect(byName.get("rendered-missing")?.detail).not.toContain("720");
   }, 180_000);
 });

@@ -9,6 +9,7 @@ import {
   checkConsoleErrors,
   checkFont,
   checkOverflow,
+  checkRendered,
   checkStatesAppeared,
 } from "./preflight/checks";
 import { verifyAppReachable } from "./gates";
@@ -33,10 +34,18 @@ const FIXTURE_DIR = path.join(__dirname, "fixtures");
  * deliberately broken, and asserts each produces a FAIL naming the right step.
  *
  * Covers checkOverflow (both the node limb and the document limb),
- * checkFont, checkConsoleErrors, checkStatesAppeared (both directions), and
- * the dead-port limb of verifyAppReachable. It does not cover checkRendered,
- * verifyFrozenArtefacts or verifyDatabaseReady — those have their own unit
- * tests instead.
+ * checkFont, checkConsoleErrors, checkStatesAppeared (both directions),
+ * checkRendered (both directions), and the dead-port limb of
+ * verifyAppReachable.
+ *
+ * It does not cover verifyFrozenArtefacts or verifyDatabaseReady. Those are
+ * documented residual gaps, both lower-value than they look: the frozen-hash
+ * check already fails against real tampered and real absent files in
+ * gates.test.ts, which is the same fidelity a fixture would give it since no
+ * browser is involved; and proving verifyDatabaseReady's FAIL for real would
+ * mean dropping analyzer_runs from a live database, which costs more than the
+ * branch is worth. checkFont's "no .cb-analyzer node" guard is likewise
+ * hand-built only — no fixture omits the root.
  *
  * Fixtures rather than temporary edits to app/globals.css: breaking the
  * application to test the instrument would be the runner changing the thing it
@@ -117,6 +126,46 @@ export async function runSelfTest(): Promise<SelfTestResult[]> {
       "states-appeared-fail",
       "FAIL",
       checkStatesAppeared("clean", "Listed operating company", clean)
+    );
+
+    // checkRendered was the last check with no end-to-end case: both its
+    // failure modes had only ever been produced by handing the function a Map
+    // built by hand in checks.test.ts. That is the weakest place to leave it,
+    // because checkRendered is the one check whose whole job is to notice that
+    // something did NOT happen — if the drive ever returned fewer captures than
+    // it should, this is the only check that would catch it, and nothing had
+    // ever made a real capture go missing and watched it notice.
+    //
+    // So: capture the same fixture at two real widths, key the map exactly as
+    // run.ts does, and assert the complete map PASSes BEFORE removing an entry.
+    // Without that PASS first, a checkRendered that always returned FAIL would
+    // satisfy the negative case and prove nothing.
+    const renderedWidths = [720, 1024] as const;
+    const renderedMap = new Map<string, ProbeDocument>();
+    for (const w of renderedWidths) {
+      renderedMap.set(
+        `rendered-probe|${w}`,
+        await captureAt(b, {
+          target: "rendered-probe",
+          width: w,
+          url: pathToFileURL(path.join(FIXTURE_DIR, "clean.html")).toString(),
+          outDir: out,
+        })
+      );
+    }
+    record(
+      "rendered-complete",
+      "PASS",
+      checkRendered(["rendered-probe"], renderedWidths, renderedMap)
+    );
+
+    // Remove exactly one target×width entry — the shape a capture leaves
+    // behind when it silently did not happen.
+    renderedMap.delete("rendered-probe|1024");
+    record(
+      "rendered-missing",
+      "FAIL",
+      checkRendered(["rendered-probe"], renderedWidths, renderedMap)
     );
   } finally {
     await browser?.close();
