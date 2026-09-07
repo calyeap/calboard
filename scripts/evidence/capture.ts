@@ -34,15 +34,15 @@ export async function captureAt(
     viewport: { width, height: 1200 },
     deviceScaleFactor: 2,
   });
-  const page = await ctx.newPage();
 
   const errors: string[] = [];
-  page.on("pageerror", (err) => errors.push(`pageerror: ${String(err)}`));
-  page.on("console", (msg) => {
-    if (msg.type() === "error") errors.push(`console.error: ${msg.text()}`);
-  });
 
   try {
+    const page = await ctx.newPage();
+    page.on("pageerror", (err) => errors.push(`pageerror: ${String(err)}`));
+    page.on("console", (msg) => {
+      if (msg.type() === "error") errors.push(`console.error: ${msg.text()}`);
+    });
     await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
     if (prepare) await prepare(page);
     // Settle, as the existing script does — layout and fonts after the last
