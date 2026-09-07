@@ -16,6 +16,8 @@ export interface SelfTestResult {
   actual: string;
   /** The step the check named, so a FAIL for the wrong reason stays visible. */
   step: string;
+  /** The check's own detail string, so a FAIL for the wrong cause stays visible. */
+  detail: string;
   ok: boolean;
 }
 
@@ -33,16 +35,25 @@ const FIXTURE_DIR = path.join(__dirname, "fixtures");
  */
 export async function runSelfTest(): Promise<SelfTestResult[]> {
   const out = await fs.mkdtemp(path.join(os.tmpdir(), "evidence-selftest-"));
-  const browser = await chromium.launch();
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   const results: SelfTestResult[] = [];
 
   const record = (name: string, expected: "PASS" | "FAIL", r: CheckResult): void => {
-    results.push({ name, expected, actual: r.status, step: r.step, ok: r.status === expected });
+    results.push({
+      name,
+      expected,
+      actual: r.status,
+      step: r.step,
+      detail: r.detail,
+      ok: r.status === expected,
+    });
   };
 
   try {
+    const b = await chromium.launch();
+    browser = b;
     const load = (fixture: string): Promise<ProbeDocument> =>
-      captureAt(browser, {
+      captureAt(b, {
         target: fixture,
         width: 720,
         url: pathToFileURL(path.join(FIXTURE_DIR, `${fixture}.html`)).toString(),
@@ -62,7 +73,8 @@ export async function runSelfTest(): Promise<SelfTestResult[]> {
       name: "clean",
       expected: "PASS",
       actual: cleanBad ? cleanBad.status : "PASS",
-      step: cleanBad ? `${cleanBad.step}: ${cleanBad.detail}` : "",
+      step: cleanBad ? cleanBad.step : "",
+      detail: cleanBad ? cleanBad.detail : "",
       ok: cleanBad === undefined,
     });
 
@@ -71,7 +83,7 @@ export async function runSelfTest(): Promise<SelfTestResult[]> {
     record("console-error", "FAIL", checkConsoleErrors("console-error", await load("console-error")));
     record("dead-port", "FAIL", await verifyAppReachable("http://127.0.0.1:59999"));
   } finally {
-    await browser.close();
+    await browser?.close();
     await fs.rm(out, { recursive: true, force: true });
   }
 
