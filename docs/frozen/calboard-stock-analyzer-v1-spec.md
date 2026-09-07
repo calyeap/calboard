@@ -890,7 +890,7 @@ Five of the six are implemented in v1. Only R4 is deferred, and only because the
 
 Trigger: Step 1 identity resolution returns an instrument that is not a **listed operating company** — a fund, an index, or a currency or crypto pair (§1.2, §2).
 
-Consequently the §9.3 table still holds **ten** states, the §9.4 list still holds **twelve** flags, and the design's twenty-two-item state vocabulary is unchanged by this amendment. Criterion B8 is unaffected. UNSUPPORTED INSTRUMENT needs an entry-screen treatment, not a report-cell treatment, and §14 records that as a design follow-up rather than resolving it here.
+Consequently the §9.3 table still holds **ten** states. The §9.4 list held **twelve** flags and the design's state vocabulary twenty-two items when this paragraph was written; amendment M7-b added PROFILE NOT CONFIRMED, taking them to **thirteen** and **twenty-three**. Neither count is changed by the UNSUPPORTED INSTRUMENT reasoning above. Criterion B8 is unaffected. UNSUPPORTED INSTRUMENT needs an entry-screen treatment, not a report-cell treatment, and §14 records that as a design follow-up rather than resolving it here.
 
 ### 9.4 Flags that qualify rather than suppress
 
