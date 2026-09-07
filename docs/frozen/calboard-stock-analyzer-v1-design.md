@@ -256,9 +256,13 @@ Then **Triggers A and B**, evaluated separately and displayed separately, each w
 - The six classification inputs with their values: revenue scale, FCF character, revenue growth, capital intensity, cyclicality (ten-year margin range and worst single-year change), balance-sheet nature.
 - **Balance-sheet nature is labelled ASSUMPTION**, not FACT — §6.3 is explicit that the asset-light / asset-heavy distinction inside the supported profiles is an analyst assumption, and it was wrongly marked FACT in earlier versions.
 
-**Nothing is pre-selected.** The confirm control sits below the evidence as a separate act. A pre-checked radio would make confirmation the default and reduce Step 6 to the click-through Step 2 is designed to prevent.
+**Nothing is pre-selected.** The controls sit below the evidence as a separate act, with no default among them. A pre-checked option would make one of the three the expected answer and reduce Step 6 to the click-through Step 2 is designed to prevent.
 
-Two controls, equally weighted: **Confirm recommended profile** · **Override**.
+Three controls, equally weighted: **Confirm recommended profile** · **Override** · **Cannot judge**. Equal weight is the requirement, not an aesthetic preference — the recommendation is presented as evidence rather than as a proposal awaiting assent, so nothing may mark confirmation as the expected answer and nothing may mark declining as the lesser one. Their left-to-right order is fixed as listed. It is a reading order, not a ranking, and it carries no visual emphasis of its own.
+
+**The three are framed as one decision, not offered as a menu.** They sit inside the same `<fieldset>` mechanism §4 gives the Step 2 pair, legended **Decision — no default**, and take the same option treatment. Three equally weighted controls in an unframed row read as three separate things to do rather than as one question with three answers, and an unframed control in the last position reads as the way out of the screen. The fieldset is what makes them one question. Step 2 already solves this; Step 6 reuses that solution rather than a second one, so both human steps present a decision the same way.
+
+**Cannot judge is an answer, not an exit.** §6.3 governs what it does to the run and this document does not restate it. The presentation requirement is that the card states those consequences in prose, adjacent to the controls and before the analyst commits, in the register §4.2 uses for *Cannot verify*. A control whose only explanation is its own label reads as abandonment, which is precisely the fake-confirmation pressure this outcome exists to remove: an analyst who cannot assess the question must have somewhere honest to put that, or confirmation absorbs it.
 
 ### 5.3 Override
 
@@ -738,6 +742,7 @@ The colour constraint turns out to be an accessibility asset — **no state, fla
 | Abbreviations | None. Full names throughout, so visible text and accessible name are identical |
 | Tables | Real `<table>` with `<th scope>` on both axes. The reverse-DCF grid announces *"margin 38.0%, rate 12%, DEGENERATE — TERMINAL EXCEEDS TOTAL VALUE, terminal share 124%"* |
 | Step 2 decision | Radio group, no default, `<fieldset>` labelled with the fact name |
+| Step 6 decision | Radio group, no default, `<fieldset>` labelled *Decision — no default*. The same mechanism as Step 2, so both human steps announce one decision rather than a row of separate actions |
 | Continue control | Disabled state carries the reason in its accessible name — never a bare disabled button |
 | Focus order | Follows the review queue order, which is risk order |
 | Disclosure | `<button aria-expanded>` + adjacent region. Expanded content is in DOM order |
