@@ -510,7 +510,9 @@ Facts acquired through a fixed, versioned tag mapping are not queued at all.
   Mature-profitable gets a DCF and a reverse DCF; high-growth gets explicit year-by-year revenue paths
   instead, and pre-revenue gets none of them. Confirm the wrong one and every number below is computed by a
   method that does not describe this company — the arithmetic will be correct and the report will look
-  entirely normal.</p>
+  entirely normal. Override and the methods change to match the profile you name, carrying your reason and the
+  not-validated statement into the report. Answer Cannot judge and the run continues on the recommendation
+  with no confirmed profile behind it, which the report states on its face.</p>
   <table>
     <tr><td>Revenue scale</td><td>large</td></tr>
     <tr><td>Free cash flow</td><td>positive and stable, 10 years</td></tr>
@@ -522,11 +524,21 @@ Facts acquired through a fixed, versioned tag mapping are not queued at all.
   <p class="note">Hard auto-assignment is rejected by the methodology. A cyclical in a peak year looks like a growth
   company; a mature company in a capex spike looks unstable. This is a recommendation, not the final word.</p>
 
-  <div class="acts">
-    <button class="act">Confirm recommended profile</button>
-    <button class="act">Override</button>
-    <button class="act">Cannot judge</button>
-  </div>
+  <p class="whythisfact">Three answers, and none of them is the expected one. <b>Confirm recommended profile</b>
+  means the classification above describes this company as you read it. <b>Override</b> means it does not, and
+  you name the profile that does and why. <b>Cannot judge</b> means you cannot assess the question — a recorded
+  answer, not a way past this screen. It uses the recommended profile provisionally so the run continues,
+  records the profile as not human-confirmed, and the valuation position does not render. It never counts as
+  confirmation.</p>
+
+  <fieldset class="decision">
+    <legend>Decision — no default</legend>
+    <div class="choices">
+      <label class="choice"><input type="radio" name="p1"> Confirm recommended profile</label>
+      <label class="choice"><input type="radio" name="p1"> Override</label>
+      <label class="choice"><input type="radio" name="p1"> Cannot judge</label>
+    </div>
+  </fieldset>
 </div>
 
 <div class="overrideblock">
