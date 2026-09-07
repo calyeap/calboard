@@ -110,7 +110,7 @@ Two rules govern this step.
 
 **Step 5 — Profile recommendation and trigger evaluation.** Software recommends a profile with the facts that drove it, and evaluates triggers A and B separately.
 
-**Step 6 — Profile confirmation.** Analyst confirms or overrides the recommended profile; every override, its reason, and the fact that nothing under an overridden gate has been validated are recorded.
+**Step 6 — Profile confirmation.** Analyst confirms the recommended profile, overrides it, or answers **Cannot judge**. Every override, its reason, and the fact that nothing under an overridden gate has been validated are recorded. *Cannot judge* uses the recommended profile provisionally, records the profile as **not human-confirmed**, and raises PROFILE NOT CONFIRMED (§6.3, §9.4).
 
 **Step 7 — Analyst scenarios.** Analyst supplies three scenarios per §10 Step 3, with drivers set together, anchors written down, and a per-scenario share count where financing differs.
 
@@ -495,9 +495,13 @@ It runs the margin diagnostics and says the window is short. That is the whole o
 
 **Provisional thresholds:** <5 / 5–9 are red-team judgment with no observations (Appendix B). The direction of error is suppression, so a wrong threshold shows less rather than something false. The policy stress margins (current, −25%, −50% relative) likewise have no observations and substitute for a median that does not exist.
 
-### 6.3 Profile recommendation [S recommends, human confirms]
+### 6.3 Profile recommendation [S recommends, human confirms, overrides or declines]
 
-Software recommends a profile **with the facts that drove it**. The human confirms or overrides. Overrides are recorded.
+Software recommends a profile **with the facts that drove it**. The human has three outcomes: **confirm**, **override**, or **Cannot judge**. None is pre-selected and there is no default. Overrides are recorded with their free-text reason. *Cannot judge* records no reason — requiring an explanation from an analyst who has just said they cannot assess the question produces text nobody can act on, and §3.8.4 already sets the rule that a reason is coded where it will be counted and free where it will not.
+
+**Cannot judge — what it does.** The recommended profile is used **provisionally** so the run continues. The profile is recorded as **not human-confirmed**, the qualifying flag **PROFILE NOT CONFIRMED** (§9.4) is raised on the valuation path, and the §10.6 valuation position and its action clause do not render (§10.6.3). Every other output runs normally. *Cannot judge* never counts as confirmation.
+
+**Why the position is suppressed rather than only qualified.** The profile selects the primary valuation method, so an unconfirmed profile leaves the loudest sentence in the report resting on a judgment nobody made. Trust status falls to PARTIAL on the §9.4 flag and the fair-value range still renders. The position does not, and its slot shows the state per §9.5.
 
 Hard auto-assignment is explicitly rejected by the methodology: a cyclical in a peak year looks like a growth company, and a mature company in a capex spike looks unstable. The table is a recommendation rule, not the final word.
 
@@ -886,11 +890,13 @@ Five of the six are implemented in v1. Only R4 is deferred, and only because the
 
 Trigger: Step 1 identity resolution returns an instrument that is not a **listed operating company** — a fund, an index, or a currency or crypto pair (§1.2, §2).
 
-Consequently the §9.3 table still holds **ten** states, the §9.4 list still holds **twelve** flags, and the design's twenty-two-item state vocabulary is unchanged by this amendment. Criterion B8 is unaffected. UNSUPPORTED INSTRUMENT needs an entry-screen treatment, not a report-cell treatment, and §14 records that as a design follow-up rather than resolving it here.
+Consequently the §9.3 table still holds **ten** states. The §9.4 list held **twelve** flags and the design's state vocabulary twenty-two items when this paragraph was written; amendment M7-b added PROFILE NOT CONFIRMED, taking them to **thirteen** and **twenty-three**. Neither count is changed by the UNSUPPORTED INSTRUMENT reasoning above. Criterion B8 is unaffected. UNSUPPORTED INSTRUMENT needs an entry-screen treatment, not a report-cell treatment, and §14 records that as a design follow-up rather than resolving it here.
 
 ### 9.4 Flags that qualify rather than suppress
 
-LOW RONIC — VALUE-DESTROYING GROWTH · INVERTED — HIGHER GROWTH LOWERS VALUE · RONIC CAPPED AT 200% · CAPITAL-LIGHT · SHORT HISTORY · MARGIN AT HISTORICAL HIGH · PEAK EARNINGS · SHAPE MISMATCH · RATE CAPPED — VALUE IS AN UPPER BOUND · SECONDARY · UNVERIFIED · AI-EXTRACTED.
+LOW RONIC — VALUE-DESTROYING GROWTH · INVERTED — HIGHER GROWTH LOWERS VALUE · RONIC CAPPED AT 200% · CAPITAL-LIGHT · SHORT HISTORY · MARGIN AT HISTORICAL HIGH · PEAK EARNINGS · SHAPE MISMATCH · RATE CAPPED — VALUE IS AN UPPER BOUND · SECONDARY · UNVERIFIED · AI-EXTRACTED · PROFILE NOT CONFIRMED.
+
+PROFILE NOT CONFIRMED (§6.3) belongs in this list. It qualifies the analysis — the fair-value range and every module still render — and removes exactly one output, the §10.6 position and its action clause. That single removal is named in §10.6.3 rather than here. It is not a §9.3 state: §9.3 states remove the range, and this one does not, which is also why trust status resolves to PARTIAL rather than UNUSABLE.
 
 SEASONAL — RUN-RATE SUPPRESSED is **not** in this list. It suppresses rather than qualifies, and appears in §9.3.
 
@@ -1060,12 +1066,13 @@ Both inputs are fields the analyzer already computes. Nothing new is measured an
 
 #### 10.6.3 It never renders under suppression
 
-The position renders only where **both** hold:
+The position renders only where **all three** hold:
 
 - a valuation range exists (§10.3), **and**
-- trust status is **CLEAN** or **PARTIAL** (§9.6).
+- trust status is **CLEAN** or **PARTIAL** (§9.6), **and**
+- **PROFILE NOT CONFIRMED** is not active (§6.3, §9.4).
 
-Under **UNUSABLE**, under any §9.3 suppressing state, or where the range failed, the slot shows **the state** — not a position, not a hedge, not a softened verdict, not an empty frame. OKLO with nine of nine reverse-DCF cells failed must say the model has nothing to say, and must say it in that slot rather than leaving the reader to infer it from an absence.
+Under **UNUSABLE**, under **PROFILE NOT CONFIRMED**, under any §9.3 suppressing state, or where the range failed, the slot shows **the state** — not a position, not a hedge, not a softened verdict, not an empty frame. OKLO with nine of nine reverse-DCF cells failed must say the model has nothing to say, and must say it in that slot rather than leaving the reader to infer it from an absence.
 
 #### 10.6.4 The action clause
 
@@ -1251,6 +1258,7 @@ Observable conditions. Each is PASS / FAIL, not a judgment.
 | B6 | Every degenerate solver output returns a state; no cell anywhere returns a number with a warning glyph (V4) |
 | B7 | Triggers A and B are evaluated separately, and A alone produces no cyclicality claim (V4) |
 | B8 | Every suppressing state in §9.3 is reachable and displays as its state |
+| B9 | Step 6 offers three outcomes with none pre-selected. *Cannot judge* leaves the profile not human-confirmed, raises PROFILE NOT CONFIRMED, sets trust status to PARTIAL, renders the fair-value range, and renders the state rather than a position in the §10.6 slot. A run in this state never displays CHEAP, FAIR or EXPENSIVE and never displays an action clause |
 
 ### 12.3 Register inheritance
 
