@@ -1,4 +1,4 @@
-import type { FactRecord } from "./types";
+import type { FactRecord, VerificationState } from "./types";
 
 // ---------------------------------------------------------------------------
 // §3.8 / §3.8.1 — what Step 2 queues, and when Step 2 is complete.
@@ -138,4 +138,75 @@ export function undecidedFacts(
   decidedFactIds: ReadonlySet<string>
 ): FactRecord[] {
   return queuedFacts(facts).filter((f) => !decidedFactIds.has(f.id));
+}
+
+/**
+ * The verification state a fact actually has in THIS run.
+ *
+ * §3.2's verificationState describes acquisition, and the fixtures set it at
+ * acquisition time — MSFT's helper writes VERIFIED on every record. That says
+ * nothing about whether a human has checked the figure, so a queued fact that
+ * nobody has decided was reporting VERIFIED while the screen beside it said
+ * SPOT-CHECK PENDING. Anything reading the record rather than the decision —
+ * the report's provenance tokens do exactly that — got VERIFIED for a fact
+ * nobody checked. That is the combineProvenance fail-open one layer up.
+ *
+ * So the state is DERIVED from the run's decision rather than travelling
+ * beside it, and the invariant is absolute: a queued fact with no decision can
+ * never report VERIFIED.
+ */
+export function deriveVerificationState(
+  fact: FactRecord,
+  decision: FactDecisionState | undefined,
+  queued: boolean
+): VerificationState {
+  // A decision, once taken, is the answer. Both count toward completion;
+  // NOT CONFIRMED additionally drives §5's INCOMPLETE propagation.
+  if (decision !== undefined) return decision;
+
+  // §3.8.1 — acquired through a fixed, versioned tag mapping. Not queued, so
+  // there is no decision to wait for.
+  if (!queued) return "SPOT-CHECK NOT REQUIRED";
+
+  // Queued and undecided. A fact that was already UNVERIFIED at acquisition
+  // stays UNVERIFIED rather than being relabelled SPOT-CHECK PENDING:
+  // combineProvenance ranks UNVERIFIED above SPOT-CHECK PENDING, so keeping it
+  // is the fail-closed direction and never upgrades a weaker state.
+  if (fact.verificationState === "UNVERIFIED") return "UNVERIFIED";
+
+  return "SPOT-CHECK PENDING";
+}
+
+/** Just the decision half of a stored decision — this module needs no more. */
+export type FactDecisionState = Extract<
+  VerificationState,
+  "CONFIRMED" | "NOT CONFIRMED"
+>;
+
+/**
+ * Rewrites a fact set so every record carries the verification state this run
+ * gives it.
+ *
+ * Applied once, where the run is loaded, so that every consumer — the screens,
+ * the Analysis Result, the report's provenance tokens — reads the same state
+ * and none of them has to remember to derive it. A second derivation somewhere
+ * downstream is how the screen and the data came to disagree in the first
+ * place.
+ */
+export function applyDecisions(
+  facts: readonly FactRecord[],
+  decisions: ReadonlyMap<string, FactDecisionState>
+): FactRecord[] {
+  const exemptIds = new Set(exemptFacts(facts).map((f) => f.id));
+  const queuedIds = new Set(queuedFacts(facts).map((f) => f.id));
+
+  return facts.map((fact) => {
+    // A fact is queued, exempt, or neither (immaterial and unmapped); only the
+    // queued set waits on a human.
+    const queued = queuedIds.has(fact.id) && !exemptIds.has(fact.id);
+    return {
+      ...fact,
+      verificationState: deriveVerificationState(fact, decisions.get(fact.id), queued),
+    };
+  });
 }

@@ -2,8 +2,8 @@ import { assembleAnalysisResult, type CompanyFixture } from "./assemble";
 import type { AnalysisResult } from "./types";
 import { MSFT_FIXTURE } from "./fixtures/msft";
 import { OKLO_FIXTURE } from "./fixtures/oklo";
-import { isSpotCheckComplete, queuedFacts, undecidedFacts } from "./spotCheck";
-import { getRun, getDecidedFactIds, type AnalyzerRun } from "./runStore";
+import { isSpotCheckComplete, queuedFacts, undecidedFacts, applyDecisions } from "./spotCheck";
+import { getRun, getFactDecisions, type AnalyzerRun } from "./runStore";
 
 // ---------------------------------------------------------------------------
 // §2's ordering rule: "no calculation module may execute before Step 2 has
@@ -92,12 +92,25 @@ export async function loadGateState(runId: string): Promise<GateState> {
     throw new RunNotFoundError(runId);
   }
 
-  const decidedFactIds = await getDecidedFactIds(runId);
+  const decisions = await getFactDecisions(runId);
+  const decidedFactIds = new Set(decisions.map((d) => d.factId));
   const outstanding = undecidedFacts(fixture.facts, decidedFactIds).map((f) => f.id);
+
+  // Every fact leaves this function carrying the verification state THIS run
+  // gives it, derived from the decisions — never the acquisition-time label the
+  // fixture wrote. Done once, here, because this is the single place a run's
+  // facts are loaded: the screens, the Analysis Result and the report's
+  // provenance tokens all read what this produces, and none of them re-derives
+  // it. A second derivation downstream is how the screen and the data came to
+  // disagree.
+  const facts = applyDecisions(
+    fixture.facts,
+    new Map(decisions.map((d) => [d.factId, d.decision]))
+  );
 
   return {
     run,
-    fixture,
+    fixture: { ...fixture, facts },
     decidedFactIds,
     queuedCount: queuedFacts(fixture.facts).length,
     outstandingFactIds: outstanding,

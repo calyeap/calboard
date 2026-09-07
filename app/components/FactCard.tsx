@@ -27,17 +27,12 @@ export function FactCard({
   const [chosen, setChosen] = useState<"CONFIRMED" | "NOT CONFIRMED" | null>(null);
   const citation = citationFor(fact);
 
-  // Derived once and used in both the provenance stamp and the source pane.
-  // The fixtures carry verificationState VERIFIED on every record, which is
-  // true of their acquisition but says nothing about this run's spot-check —
-  // rendering it on an undecided queued fact would claim the analyst had
-  // verified a figure they have not yet looked at, which is the opposite of
-  // what Step 2 is for. The run's own state wins over the fact's.
-  const verificationState = decision
-    ? decision.decision
-    : queued
-      ? "SPOT-CHECK PENDING"
-      : "SPOT-CHECK NOT REQUIRED";
+  // Read, not re-derived. loadGateState has already replaced the fixture's
+  // acquisition-time label with the state this run gives the fact, so the card,
+  // the Analysis Result and the report all show the same thing. This component
+  // used to derive it locally, which is why the screen could read SPOT-CHECK
+  // PENDING while the record underneath still said VERIFIED.
+  const verificationState = fact.verificationState;
 
   return (
     <div className="factcard">
