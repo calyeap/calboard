@@ -55,6 +55,35 @@ export async function verifyAppReachable(baseUrl: string): Promise<CheckResult> 
   return { step, status: "PASS", detail: "" };
 }
 
+const DB_READY_STEP = "analyzer run table present";
+
+/** One row of what `to_regclass('public.analyzer_runs')::text` returns. */
+export interface RegclassRow {
+  present: string | null;
+}
+
+/**
+ * The pure decision from the row shape `to_regclass` returns, extracted so it
+ * is testable without a live database.
+ *
+ * Uses `== null` rather than `=== null` so an *empty* result set FAILs too,
+ * not just a row carrying an explicit `null`. `to_regclass` always returns
+ * exactly one row today, so `rows` being empty is unreachable in practice —
+ * but a default-to-PASS branch on an unproven shape is exactly the fault
+ * family this project forbids, so both are treated as "not proven present."
+ */
+export function interpretRegclassRows(rows: readonly RegclassRow[]): CheckResult {
+  if (rows[0]?.present == null) {
+    return {
+      step: DB_READY_STEP,
+      status: "FAIL",
+      detail:
+        "analyzer_runs is absent — apply migration 002 yourself; the runner does not migrate",
+    };
+  }
+  return { step: DB_READY_STEP, status: "PASS", detail: "" };
+}
+
 /**
  * The analyzer run table exists.
  *
@@ -62,22 +91,17 @@ export async function verifyAppReachable(baseUrl: string): Promise<CheckResult> 
  * would be the runner changing the schema it is measuring against.
  */
 export async function verifyDatabaseReady(): Promise<CheckResult> {
-  const step = "analyzer run tables present";
   try {
     const { getPool } = await import("@/lib/db");
-    const res = await getPool().query<{ present: string | null }>(
+    const res = await getPool().query<RegclassRow>(
       "SELECT to_regclass('public.analyzer_runs')::text AS present"
     );
-    if (res.rows[0]?.present === null) {
-      return {
-        step,
-        status: "FAIL",
-        detail:
-          "analyzer_runs is absent — apply migration 002 yourself; the runner does not migrate",
-      };
-    }
-    return { step, status: "PASS", detail: "" };
+    return interpretRegclassRows(res.rows);
   } catch (err) {
-    return { step, status: "FAIL", detail: `database unreachable: ${(err as Error).message}` };
+    return {
+      step: DB_READY_STEP,
+      status: "FAIL",
+      detail: `database unreachable: ${(err as Error).message}`,
+    };
   }
 }

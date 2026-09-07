@@ -5,7 +5,12 @@ import os from "node:os";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { captureAt } from "./capture";
-import { checkConsoleErrors, checkFont, checkOverflow } from "./preflight/checks";
+import {
+  checkConsoleErrors,
+  checkFont,
+  checkOverflow,
+  checkStatesAppeared,
+} from "./preflight/checks";
 import { verifyAppReachable } from "./gates";
 import type { CheckResult, ProbeDocument } from "./preflight/types";
 
@@ -26,6 +31,12 @@ const FIXTURE_DIR = path.join(__dirname, "fixtures");
 /**
  * Runs the real capture engine and the real checks against fixtures that are
  * deliberately broken, and asserts each produces a FAIL naming the right step.
+ *
+ * Covers checkOverflow (both the node limb and the document limb),
+ * checkFont, checkConsoleErrors, checkStatesAppeared (both directions), and
+ * the dead-port limb of verifyAppReachable. It does not cover checkRendered,
+ * verifyFrozenArtefacts or verifyDatabaseReady — those have their own unit
+ * tests instead.
  *
  * Fixtures rather than temporary edits to app/globals.css: breaking the
  * application to test the instrument would be the runner changing the thing it
@@ -82,6 +93,31 @@ export async function runSelfTest(): Promise<SelfTestResult[]> {
     record("missing-font", "FAIL", checkFont("missing-font", await load("missing-font")));
     record("console-error", "FAIL", checkConsoleErrors("console-error", await load("console-error")));
     record("dead-port", "FAIL", await verifyAppReachable("http://127.0.0.1:59999"));
+
+    // overflow.html only ever proves the node limb (it puts overflow-x: auto
+    // on .cb-analyzer, which contains the overflow in a scrollable node and
+    // keeps the document itself from overflowing). The document limb — a
+    // fixture with no scroll container, so the overflow propagates up to
+    // document.documentElement.scrollWidth — was previously proven only
+    // against a hand-built doc({docOverflow: true}) literal in checks.test.ts,
+    // which proves checkOverflow reads the flag but not that the real probe
+    // ever sets it. This drives it through the real probe instead.
+    record("doc-overflow", "FAIL", checkOverflow("doc-overflow", await load("doc-overflow")));
+
+    // checkStatesAppeared was not exercised at all: every existing fixture
+    // happens to contain "Fact acquisition and spot-check", a real
+    // STATE_MARKERS value, but nothing tried it in both directions. `clean`
+    // is reused for both — it is already known-good from the control above.
+    record(
+      "states-appeared-pass",
+      "PASS",
+      checkStatesAppeared("clean", "Fact acquisition and spot-check", clean)
+    );
+    record(
+      "states-appeared-fail",
+      "FAIL",
+      checkStatesAppeared("clean", "Listed operating company", clean)
+    );
   } finally {
     await browser?.close();
     await fs.rm(out, { recursive: true, force: true });

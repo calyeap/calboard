@@ -17,6 +17,18 @@ export interface ManifestArgs {
  * `base`, `captured`, `widths` and `targets` keep their existing names and
  * meaning, so nothing about how the archive is read has to change. `preflight`
  * and `runs` are new.
+ *
+ * Each target also carries `url` — the route captured, as an absolute URL
+ * (`ProbeDocument.url`, i.e. `location.href` at capture time), restored from
+ * the instrument this ports (`C:\Users\Calvin\m7gate\capture-m7-gate.js`,
+ * which wrote `targets[label] = { url, ticker, widths }`). It is the field
+ * most worth keeping because the run IDs are new on every run — it is what
+ * tells a reviewer which run a screenshot came from, and it is what
+ * disambiguates `s2-facts-msft` from `s2-facts-oklo`, which otherwise share
+ * a state marker. `ticker` was deliberately not restored: it would only add
+ * information for the two per-run targets, and for those the run ID is
+ * already in `url` and in the top-level `runs` map — a second, narrower
+ * field carrying the same fact was not worth the surface.
  */
 export function buildManifest(args: ManifestArgs): unknown {
   const targets: Record<string, unknown> = {};
@@ -24,16 +36,18 @@ export function buildManifest(args: ManifestArgs): unknown {
 
   for (const target of names) {
     const widths: Record<string, unknown> = {};
+    let url: string | undefined;
     for (const w of WIDTHS) {
       const d = args.captured.get(`${target}|${w}`);
       if (d === undefined) continue;
+      if (url === undefined) url = d.url;
       widths[String(w)] = {
         screenshot: `${target}-${w}.png`,
         nodes: d.nodes.length,
         errors: d.errors,
       };
     }
-    targets[target] = { widths };
+    targets[target] = { url: url ?? null, widths };
   }
   for (const u of args.unknowns) targets[u.target] = { skipped: u.reason };
 

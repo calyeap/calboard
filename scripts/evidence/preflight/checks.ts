@@ -62,7 +62,17 @@ export function checkOverflow(target: string, d: ProbeDocument): CheckResult {
 }
 
 /**
- * The expected font family resolves in the analyzer root's computed stack.
+ * The expected font family is declared in the analyzer root's computed stack.
+ *
+ * This proves the computed `font-family` declaration contains the expected
+ * token — not that the webfont file actually loaded. `app/globals.css`
+ * includes `"IBM Plex Sans"` as a literal fallback inside that same
+ * declaration, so the token reads as present whenever the declaration
+ * exists, even if the network request for the font file failed. A possible
+ * future strengthening is `document.fonts.check()`, which would prove the
+ * font actually loaded at a given size/weight — not added here, since it
+ * risks failing a known-good build on a size/weight technicality this check
+ * was never meant to judge.
  *
  * Asserted on div.cb-analyzer and nowhere else. `html` is never styled, so it
  * computes "Times New Roman" on every page and an assertion there could never
@@ -70,7 +80,7 @@ export function checkOverflow(target: string, d: ProbeDocument): CheckResult {
  * vacuous pass — a check with nothing to assert on has not passed.
  */
 export function checkFont(target: string, d: ProbeDocument): CheckResult {
-  const step = "expected font family resolves on .cb-analyzer";
+  const step = "expected font family declared on .cb-analyzer";
   const roots = d.nodes.filter((n) => (n.cls ?? "").split(/\s+/).includes(FONT_ROOT_CLASS));
   if (roots.length === 0) {
     return fail(step, `${target} at ${d.viewport.w}: no div.${FONT_ROOT_CLASS} node in the capture`);

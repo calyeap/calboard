@@ -5,7 +5,7 @@ import fs from "node:fs/promises";
 import http from "node:http";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { verifyFrozenArtefacts, verifyAppReachable } from "./gates";
+import { verifyFrozenArtefacts, verifyAppReachable, interpretRegclassRows } from "./gates";
 import { SCREEN1_MARKUP_MARKER } from "./config";
 
 const REPO_ROOT = path.resolve(__dirname, "../..");
@@ -118,5 +118,28 @@ describe("verifyAppReachable", () => {
     const r = await verifyAppReachable(baseUrl);
     expect(r.status).toBe("FAIL");
     expect(r.detail).toContain("HTTP 500");
+  });
+});
+
+describe("interpretRegclassRows", () => {
+  it("PASSes when the table is present", () => {
+    const r = interpretRegclassRows([{ present: "analyzer_runs" }]);
+    expect(r.status).toBe("PASS");
+    expect(r.step).toBe("analyzer run table present");
+  });
+
+  it("FAILs when to_regclass returns an explicit null", () => {
+    const r = interpretRegclassRows([{ present: null }]);
+    expect(r.status).toBe("FAIL");
+    expect(r.detail).toContain("analyzer_runs is absent");
+  });
+
+  it("FAILs, not defaults to PASS, when the result set is empty", () => {
+    // Unreachable via to_regclass today (it always returns one row), but a
+    // default-to-PASS on an unproven row shape is exactly the fault this
+    // project forbids — a verify that could not fail is not a verify.
+    const r = interpretRegclassRows([]);
+    expect(r.status).toBe("FAIL");
+    expect(r.detail).toContain("analyzer_runs is absent");
   });
 });

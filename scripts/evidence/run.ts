@@ -30,14 +30,24 @@ const UNAVAILABLE_REASON =
   "or a test seam in app/actions/analyzer.ts (application code, outside this runner's " +
   "authority). Capture this state separately.";
 
-/** Prints a gate's result and exits non-zero when it stopped the run. */
-function stopOn(r: CheckResult): void {
+/**
+ * Prints a gate's result and, when it stopped the run, exits.
+ *
+ * Only FAIL exits non-zero — the branch's own rule. Gates only ever return
+ * PASS/FAIL today, but a gate returning UNKNOWN in the future must still
+ * exit 0 rather than borrow FAIL's exit code, so this branches on the exact
+ * status rather than on "anything but PASS".
+ *
+ * Returns the CheckResult (rather than void) so gate-phase results can be
+ * recorded into the manifest without re-running the gate later.
+ */
+function stopOn(r: CheckResult): CheckResult {
   if (r.status === "PASS") {
     console.log(`  ok   ${r.step}`);
-    return;
+    return r;
   }
   console.error(`\nSTOP — ${r.step}\n  ${r.detail}\n`);
-  process.exit(1);
+  process.exit(r.status === "FAIL" ? 1 : 0);
 }
 
 async function main(): Promise<void> {
@@ -56,9 +66,9 @@ async function main(): Promise<void> {
   console.log(`Evidence runner — ${baseUrl}\n`);
 
   console.log("Gates:");
-  stopOn(await verifyFrozenArtefacts(REPO_ROOT));
-  stopOn(await verifyAppReachable(baseUrl));
-  stopOn(await verifyDatabaseReady());
+  const frozenGate = stopOn(await verifyFrozenArtefacts(REPO_ROOT));
+  const reachableGate = stopOn(await verifyAppReachable(baseUrl));
+  const dbGate = stopOn(await verifyDatabaseReady());
 
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const outDir = path.join(REPO_ROOT, ".evidence", `m7-gate-capture-${stamp}`);
@@ -94,7 +104,10 @@ async function main(): Promise<void> {
     results.push(checkConsoleErrors(target, doc));
     results.push(checkStatesAppeared(target, STATE_MARKERS[target], doc));
   }
-  results.push(await verifyFrozenArtefacts(REPO_ROOT));
+  // The gate-phase results, captured above rather than re-run, so the
+  // archive carries evidence the app was reachable and the schema present —
+  // not just that the frozen artefacts matched.
+  results.push(frozenGate, reachableGate, dbGate);
   results.push({
     step: "Screen 1 UNAVAILABLE captured",
     status: "UNKNOWN",
@@ -110,17 +123,36 @@ async function main(): Promise<void> {
     "utf8"
   );
 
-  const zipPath = `${outDir}.zip`;
-  await zipDirectory(outDir, zipPath);
-
+  // Printed before packaging: a zip failure below must not cost the operator
+  // the preflight verdict they came here for. The capture is already
+  // complete on disk at this point regardless of what packaging does next.
   console.log(`\nPreflight: ${verdict.status}`);
   if (verdict.failingStep) console.log(`  step: ${verdict.failingStep}`);
   for (const r of verdict.results.filter((x) => x.status !== "PASS")) {
     console.log(`  ${r.status}  ${r.step} — ${r.detail}`);
   }
-  console.log(`\nArchive: ${zipPath}`);
 
-  // FAIL is the only non-zero outcome. UNKNOWN is a real result, not an error.
+  const zipPath = `${outDir}.zip`;
+  try {
+    await zipDirectory(outDir, zipPath);
+    console.log(`\nArchive: ${zipPath}`);
+  } catch (err) {
+    // Reported as its own named condition, not thrown up to main().catch —
+    // that path prints "STOP — runner error" and exits 1, which would read
+    // as a preflight FAIL even on a verdict of PASS or UNKNOWN. The capture
+    // is intact on disk; only the zip step failed.
+    console.error(
+      `\nPackaging FAILED — the capture is complete but was not zipped.\n` +
+        `  capture directory: ${outDir}\n` +
+        `  error: ${(err as Error).message}\n`
+    );
+  }
+
+  // Exit code is driven by the preflight verdict alone. FAIL is the only
+  // non-zero outcome; UNKNOWN is a real result, not an error; and a
+  // packaging failure is a delivery-mechanics problem, not a preflight
+  // result, so it must not borrow FAIL's exit code either — the message
+  // above is how the operator learns about it.
   process.exit(verdict.status === "FAIL" ? 1 : 0);
 }
 

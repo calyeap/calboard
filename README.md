@@ -34,6 +34,16 @@ Local-only, single-user, never publicly deployed. Not financial advice.
 npm install
 ```
 
+Playwright's browser binary is a separate download from the `playwright`
+package itself. `selfTest.test.ts` (the evidence runner's self-test) is
+picked up by `npm test`'s default file glob, so without this step, both
+`npm test` and `npm run evidence` fail on a fresh clone with an opaque
+"Executable doesn't exist" error rather than anything mentioning Playwright:
+
+```bash
+npx playwright install chromium
+```
+
 ### 2. Start Postgres
 
 ```bash
@@ -188,7 +198,10 @@ The runner then:
   `FAIL`, or `UNKNOWN` — naming the first failing or unknown step;
 - writes a `manifest.json` alongside the screenshots and probes, then zips
   the whole capture directory under `.evidence/` (gitignored, regenerated
-  each run, never committed).
+  each run, never committed). Packaging shells out to PowerShell's
+  `Compress-Archive`, so it requires Windows PowerShell; a packaging failure
+  is reported on its own and does not affect the preflight verdict or exit
+  code below — the capture is left intact on disk either way.
 
 **PASS** means every check succeeded. **FAIL** means something measurable is
 wrong — the run exits non-zero. **UNKNOWN** means a check could not be
@@ -198,6 +211,12 @@ to application code — outside this runner's authority, so it's recorded as
 UNKNOWN with its reason rather than skipped silently) — the run still exits
 zero, because a state that could not be reached is not a state that rendered
 wrongly.
+
+**PASS is currently unreachable by construction.** Every run appends an
+UNKNOWN result for Screen 1's UNAVAILABLE state, and `aggregate()` reports
+UNKNOWN whenever nothing FAILed but something is UNKNOWN — so the best
+achievable verdict today is UNKNOWN, not PASS. If you run this and never see
+PASS, that is expected; it does not mean something is broken.
 
 The runner never fixes anything it finds — it reports and stops. It never
 compares the capture against the design mock, and never judges appearance,
