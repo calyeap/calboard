@@ -91,16 +91,30 @@ export function FactCard({
           <form action={recordFactDecisionAction}>
             <input type="hidden" name="runId" value={runId} />
             <input type="hidden" name="factId" value={fact.id} />
+            {/* What is actually posted. The radios below are grouped per card
+                and carry per-card names, so this hidden field keeps the server
+                action's contract — it reads formData.get("decision") — stable
+                and independent of how the controls are grouped. */}
+            <input type="hidden" name="decision" value={chosen ?? ""} />
 
             {/* Exactly two decisions, neither pre-selected, no third control,
-                and no control that edits a figure (§3.8.3). */}
+                and no control that edits a figure (§3.8.3).
+
+                The group name is per-card. It was "decision" on every card,
+                which left the cards apart only because each happens to sit in
+                its own <form> — browsers and React both scope radio grouping by
+                form owner. Grouping that depends on an enclosing element rather
+                than on the control's own identity is one refactor from
+                collapsing, and when it collapses a click on one fact moves
+                another fact's radio: a decision recorded that nobody made,
+                which is the failure Step 2 exists to prevent. */}
             <fieldset className="decision">
               <legend>Decision — no default</legend>
               <div className="choices">
                 <label className="choice">
                   <input
                     type="radio"
-                    name="decision"
+                    name={`decision-${fact.id}`}
                     value="CONFIRMED"
                     checked={chosen === "CONFIRMED"}
                     onChange={() => setChosen("CONFIRMED")}
@@ -110,7 +124,7 @@ export function FactCard({
                 <label className="choice">
                   <input
                     type="radio"
-                    name="decision"
+                    name={`decision-${fact.id}`}
                     value="NOT CONFIRMED"
                     checked={chosen === "NOT CONFIRMED"}
                     onChange={() => setChosen("NOT CONFIRMED")}

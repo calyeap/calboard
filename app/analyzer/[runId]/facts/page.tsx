@@ -6,6 +6,7 @@ import { loadGateState, RunNotFoundError } from "@/lib/analyzer/gate";
 import { getFactDecisions, getJudgments, JUDGMENT_KEYS } from "@/lib/analyzer/runStore";
 import { recordJudgmentAction } from "@/app/actions/analyzer";
 import { queuedFacts, exemptFacts } from "@/lib/analyzer/spotCheck";
+import type { FactRecord } from "@/lib/analyzer/types";
 
 // Screen 2 — Step 2, fact acquisition and human spot-check.
 // The step that blocks all calculation (§2 ordering rule, §3.8).
@@ -26,8 +27,8 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
   const decisionByFactId = new Map(decisions.map((d) => [d.factId, d]));
   const judgmentByKey = new Map(judgments.map((j) => [j.judgmentKey, j]));
 
-  const queued = queuedFacts(state.fixture.facts);
-  const exempt = exemptFacts(state.fixture.facts);
+  const queued = queuedFacts(state.fixture.facts).map(toPlainFact);
+  const exempt = exemptFacts(state.fixture.facts).map(toPlainFact);
   const outstanding = state.outstandingFactIds.length;
 
   return (
@@ -165,6 +166,25 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
       </div>
     </AnalyzerShell>
   );
+}
+
+/**
+ * Renders a fact's value to a string before it crosses into a Client
+ * Component.
+ *
+ * FactRecord.value is `Decimal | string | null`, and a Decimal is a class
+ * instance. React refuses to serialise those across the server/client boundary
+ * — "Only plain objects can be passed to Client Components" — so passing the
+ * record through untouched logs an error on every fact on every render and
+ * relies on behaviour that is not guaranteed to keep working.
+ *
+ * The conversion is lossless for display purposes because FactCard only ever
+ * stringifies the value; it has no arithmetic to do. Every calculation module
+ * keeps operating on the real Decimal, server-side, where it belongs — no
+ * figure is ever recomputed from this string.
+ */
+function toPlainFact(fact: FactRecord): FactRecord {
+  return { ...fact, value: fact.value === null ? null : String(fact.value) };
 }
 
 const JUDGMENT_TITLES: Record<string, string> = {
