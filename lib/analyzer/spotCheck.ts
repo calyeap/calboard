@@ -1,0 +1,141 @@
+import type { FactRecord } from "./types";
+
+// ---------------------------------------------------------------------------
+// §3.8 / §3.8.1 — what Step 2 queues, and when Step 2 is complete.
+//
+// This module is the authority the route gate reads. It answers two questions
+// and nothing else: which facts require a human decision, and whether every
+// one of them has had one. It computes; it does not store, render or decide.
+// ---------------------------------------------------------------------------
+
+// §3.8's named material-fact categories, as fact ids. The three "any figure
+// classified X" limbs of that list are not here — they are properties of the
+// record, evaluated in materialityOf below, and a fact matching one is
+// material whatever its id.
+//
+// Deliberately NOT included: "cash per share". §3.8's pre-revenue limb names
+// share count, cash balance and quarterly burn; cash-per-share is a derived
+// figure the spec does not name, and OKLO's is queued anyway because it is
+// UNVERIFIED. Adding it here would put words in §3.8's mouth to reach an
+// outcome the classification limbs already reach honestly.
+export const NAMED_MATERIAL_FACT_IDS: ReadonlySet<string> = new Set([
+  "price",
+  "shares-outstanding",
+  "treasury-method-dilution",
+  "total-debt",
+  "finance-lease-liabilities",
+  "cash-and-marketable-debt-securities",
+  "current-revenue",
+  "current-operating-margin",
+  "finance-lease-rou-additions",
+  "capex",
+  // §3.8, pre-revenue limb.
+  "share-count",
+  "cash-balance",
+  "quarterly-burn",
+]);
+
+export type MaterialityReason =
+  | "NAMED IN §3.8"
+  | "CLASSIFIED SECONDARY"
+  | "CLASSIFIED AI-EXTRACTED"
+  | "CLASSIFIED UNVERIFIED"
+  | "UNRECOGNISED — FAIL-CLOSED";
+
+export interface Materiality {
+  material: boolean;
+  reason: MaterialityReason | "NOT MATERIAL";
+}
+
+/**
+ * Why a fact is material, not merely whether. The reason is returned so the
+ * fail-closed default is visible and testable rather than hiding inside a
+ * boolean — a fact queued because nothing recognised it is a different
+ * situation from one queued because §3.8 names it, and only the first is a
+ * signal that this mapping needs extending.
+ */
+export function materialityOf(fact: FactRecord): Materiality {
+  if (NAMED_MATERIAL_FACT_IDS.has(fact.id)) {
+    return { material: true, reason: "NAMED IN §3.8" };
+  }
+  if (fact.sourceClass === "SECONDARY") {
+    return { material: true, reason: "CLASSIFIED SECONDARY" };
+  }
+  if (fact.extractionType === "AI-EXTRACTED") {
+    return { material: true, reason: "CLASSIFIED AI-EXTRACTED" };
+  }
+  if (fact.verificationState === "UNVERIFIED") {
+    return { material: true, reason: "CLASSIFIED UNVERIFIED" };
+  }
+  // Fail-closed, per §5.3 and the Command Center ruling of 7 September 2026:
+  // an unrecognised fact staying in the queue costs a spot-check, one skipping
+  // it costs the thing the queue exists for. A fact reaching here is PRIMARY,
+  // deterministic, verified and unnamed by §3.8 — plausibly immaterial, but
+  // "plausibly" is not the standard this milestone works to.
+  return { material: true, reason: "UNRECOGNISED — FAIL-CLOSED" };
+}
+
+/**
+ * Whether the §3.8.1 tag-mapping exemption applies.
+ *
+ * Granted by acquisition path and never by extraction-type label: a fact
+ * marked DETERMINISTIC/STRUCTURED that did not come through a fixed, versioned
+ * tag mapping is queued like any other (guard 1). The test is therefore on the
+ * recorded mapping version, never on extractionType.
+ *
+ * Note the shape of the check. A bare `!== null` would treat `undefined` as a
+ * mapping version and exempt the fact — which is exactly what an unsound type
+ * assertion produced on the OKLO fixture before this milestone. Absence of a
+ * recorded mapping version is not evidence of one.
+ */
+export function isExemptFromQueue(fact: FactRecord): boolean {
+  return typeof fact.tagMappingVersion === "string" && fact.tagMappingVersion.length > 0;
+}
+
+/**
+ * The Step 2 queue: material facts that are not exempt. Order is the fact
+ * set's own order, so the queue is stable across refreshes and a run resumed
+ * from its URL presents the same fact in the same place.
+ */
+export function queuedFacts(facts: readonly FactRecord[]): FactRecord[] {
+  return facts.filter((f) => materialityOf(f).material && !isExemptFromQueue(f));
+}
+
+/**
+ * Facts shown but not queued (§3.8.1): "It is not spot-checked; it is not
+ * hidden." Screen 2 renders these with SPOT-CHECK NOT REQUIRED beside them.
+ */
+export function exemptFacts(facts: readonly FactRecord[]): FactRecord[] {
+  return facts.filter((f) => isExemptFromQueue(f));
+}
+
+/**
+ * §3.8.1's operative definition, and the one the route gate enforces:
+ * "spot-check complete means every queued material fact carries a decision."
+ *
+ * Note what this does NOT depend on. It does not care WHICH decision each fact
+ * carries — a queue answered entirely with Cannot verify is complete, and its
+ * dependents return INCOMPLETE per §5 rather than being blocked here. The two
+ * decisions do not branch the gate (§3.8.3); they branch propagation.
+ *
+ * An empty queue is complete. That is not a licence to skip Step 2: it means
+ * every material fact was tag-mapped, and §3.8.2's deterministic cross-checks
+ * are the compensating control the exemption rests on.
+ */
+export function isSpotCheckComplete(
+  facts: readonly FactRecord[],
+  decidedFactIds: ReadonlySet<string>
+): boolean {
+  return queuedFacts(facts).every((f) => decidedFactIds.has(f.id));
+}
+
+/**
+ * The queued facts still awaiting a decision, in queue order. Screen 2 uses
+ * this to place the analyst at the next undecided fact after a refresh.
+ */
+export function undecidedFacts(
+  facts: readonly FactRecord[],
+  decidedFactIds: ReadonlySet<string>
+): FactRecord[] {
+  return queuedFacts(facts).filter((f) => !decidedFactIds.has(f.id));
+}
