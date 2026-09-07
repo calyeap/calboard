@@ -47,6 +47,28 @@ export function FactCard({
   // PENDING while the record underneath still said VERIFIED.
   const verificationState = fact.verificationState;
 
+  // §4.3 — absence is displayed, never rendered as zero. A card with no value
+  // is the only case where suppression decoration is correct, because
+  // suppression is the claim that there is no number here.
+  const valuePresent = fact.value !== null;
+
+  // What this card says about its own state, or null where the state line adds
+  // nothing the token stamp has not already said.
+  const stateLine = !queued
+    ? {
+        name: "Spot-check not required",
+        cause:
+          "Acquired through a fixed, versioned tag mapping, so it is not spot-checked. It is not hidden either, and it carries every label it would otherwise carry.",
+      }
+    : decision
+      ? {
+          name: decision.decision === "CONFIRMED" ? "Confirmed" : "Cannot verify",
+          cause: decision.reasonCode
+            ? `${decision.reasonCode} · dependent outputs return INCOMPLETE`
+            : "Counts toward spot-check completion",
+        }
+      : null;
+
   return (
     <div className="factcard">
       <div>
@@ -73,34 +95,21 @@ export function FactCard({
           <span>{titleCase(verificationState)}</span>
         </div>
 
-        {/* Qualification, not suppression. This used to render in the .decided
-            block's suppression decoration — tinted, with the 2px ink rule —
-            directly under a rendered value. Suppression means there is no
-            number here, and the number is right there; design §0 puts the
-            decoration on the cell it describes. The state itself is already in
-            the token line above, so repeating it here said the same thing
-            twice in the louder of the two treatments.
+        {/* Design §0 — the decoration belongs to the CELL, not to the state.
+            Suppression (tint plus the 2px ink rule) means there is no value
+            here; qualification sits beside a value that is present and says
+            something about it.
 
-            No mock renders this state (design R11, spec §14.6 F6), so the
-            treatment is chosen from the existing vocabulary rather than
-            invented: the same muted note the other qualifying lines use. */}
-        {!queued && (
-          <p className="note">
-            Acquired through a fixed, versioned tag mapping, so it is not spot-checked. It is not
-            hidden either, and it carries every label it would otherwise carry.
-          </p>
-        )}
-
-        {queued && decision && (
-          <div className="decided">
-            <span className="name">
-              {decision.decision === "CONFIRMED" ? "Confirmed" : "Cannot verify"}
-            </span>
-            <span className="cause">
-              {decision.reasonCode
-                ? `${decision.reasonCode} · dependent outputs return INCOMPLETE`
-                : "Counts toward spot-check completion"}
-            </span>
+            So the treatment is chosen by whether this card has a value, and
+            never by which verification state it happens to be in. Written this
+            way deliberately: the previous version applied §0 to a list of state
+            names, which is why SPOT-CHECK NOT REQUIRED was corrected and
+            CONFIRMED kept its suppression block. A rule keyed on the value
+            cannot go out of date when a state is added. */}
+        {stateLine && (
+          <div className={valuePresent ? "qualifier" : "state"}>
+            <span className="name">{stateLine.name}</span>
+            <span className="cause">{stateLine.cause}</span>
           </div>
         )}
 

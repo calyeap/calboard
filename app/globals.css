@@ -2444,20 +2444,30 @@ h6 {
   color: var(--ink);
   min-width: 260px;
 }
-.cb-analyzer .cb-steps .decided {
+/* QUALIFICATION — sits beside a value that is present and says something
+   about it. Deliberately not suppression: no tint fill and no 2px ink rule,
+   because those mean "there is no value here" and on these cards the value is
+   on screen. Design §0 — the decoration belongs to the cell, not the state.
+
+   The `.decided` class this replaces carried the suppression decoration and
+   was applied by state name, which is how CONFIRMED kept a suppression block
+   after SPOT-CHECK NOT REQUIRED had been corrected. There is no state-named
+   treatment here at all: FactCard picks between this and `.state` on whether
+   the card has a value. */
+.cb-analyzer .cb-steps .qualifier {
   margin-top: 22px;
-  background: var(--tint);
-  border-left: 2px solid var(--ink);
-  padding: 12px 14px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--hairline);
 }
-.cb-analyzer .cb-steps .decided .name {
+.cb-analyzer .cb-steps .qualifier .name {
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: var(--ink-muted);
   display: block;
 }
-.cb-analyzer .cb-steps .decided .cause {
+.cb-analyzer .cb-steps .qualifier .cause {
   font-size: 11px;
   color: var(--ink-muted);
   display: block;

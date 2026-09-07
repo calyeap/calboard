@@ -4,6 +4,8 @@ import { render, cleanup, screen, fireEvent, within } from "@testing-library/rea
 import { MSFT_FIXTURE } from "@/lib/analyzer/fixtures/msft";
 import { queuedFacts } from "@/lib/analyzer/spotCheck";
 import type { StoredFactDecision } from "@/lib/analyzer/decisions";
+import type { FactRecord } from "@/lib/analyzer/types";
+import Decimal from "decimal.js";
 
 // The server action reaches lib/db and therefore `pg`, which must not load
 // into a jsdom test. Only the form's `action` prop references it.
@@ -156,10 +158,10 @@ describe("Step 2 fact cards hold independent decisions", () => {
       const { container } = renderDecided();
 
       // The decision is shown, in the block that exists to show it. Scoped to
-      // .decided deliberately: "Cannot verify" is also a radio label and
+      // .qualifier deliberately: "Cannot verify" is also a radio label and
       // "Confirmed" also appears in the provenance stamp, so a bare text query
       // would measure the query rather than the card.
-      expect(container.querySelector(".decided")?.textContent).toMatch(/Confirmed/);
+      expect(container.querySelector(".qualifier")?.textContent).toMatch(/Confirmed/);
 
       // ...so the card must NOT simultaneously claim nothing is selected.
       expect(screen.queryByText(/Neither option is selected/)).toBeNull();
@@ -222,11 +224,93 @@ describe("Step 2 fact cards hold independent decisions", () => {
 
       // Scoped to the two blocks that make the claim, not to any text that
       // happens to read the same way on a control.
-      const saysDecided = container.querySelector(".decided") !== null;
+      const saysDecided = container.querySelector(".qualifier") !== null;
       const saysUndecided = screen.queryByText(/Neither option is selected/) !== null;
 
       // Exactly one of the two readings, never both and never neither.
       expect(saysDecided !== saysUndecided).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // Design §0 — the decoration belongs to the cell, not the state.
+  // Suppression (the tinted block with the 2px ink rule) is the claim that
+  // there is no value here. Beside a value that IS on screen it contradicts
+  // the number next to it, so every verification state takes qualification
+  // there instead.
+  //
+  // Asserted over every state rather than a list of names: naming states is
+  // how CONFIRMED kept its suppression block after SPOT-CHECK NOT REQUIRED
+  // had been corrected.
+  // -------------------------------------------------------------------
+  describe("suppression decoration never sits beside a present value", () => {
+    const CASES: [string, StoredFactDecision | undefined, boolean][] = [
+      ["undecided, queued", undefined, true],
+      [
+        "confirmed",
+        { factId: QUEUED[0].id, decision: "CONFIRMED", reasonCode: null },
+        true,
+      ],
+      [
+        "not confirmed",
+        { factId: QUEUED[0].id, decision: "NOT CONFIRMED", reasonCode: "NOT LOCATED" },
+        true,
+      ],
+      ["exempt", undefined, false],
+    ];
+
+    it.each(CASES)("renders no suppression block when %s", (_label, decision, queued) => {
+      const fact = {
+        ...QUEUED[0],
+        value: new Decimal("24.6"),
+        verificationState: decision ? decision.decision : queued ? "SPOT-CHECK PENDING" : "SPOT-CHECK NOT REQUIRED",
+        tagMappingVersion: queued ? null : "us-gaap-2026",
+      } as FactRecord;
+
+      const { container } = render(
+        <FactCard runId={RUN_ID} fact={fact} decision={decision} queued={queued} />
+      );
+
+      // The value is on screen...
+      expect(container.querySelector(".value")?.textContent).toBe("24.6");
+      // ...so nothing in this card may claim there is no value here.
+      expect(container.querySelector(".state")).toBeNull();
+      expect(container.querySelector(".decided")).toBeNull();
+    });
+
+    it("uses qualification for a state shown beside a value", () => {
+      const fact = {
+        ...QUEUED[0],
+        value: new Decimal("24.6"),
+        verificationState: "CONFIRMED",
+      } as FactRecord;
+      const { container } = render(
+        <FactCard
+          runId={RUN_ID}
+          fact={fact}
+          decision={{ factId: fact.id, decision: "CONFIRMED", reasonCode: null }}
+          queued
+        />
+      );
+      expect(container.querySelector(".qualifier")?.textContent).toMatch(/Confirmed/);
+    });
+
+    // The other half of the rule, so it is a rule about the cell rather than a
+    // blanket ban: where the value is genuinely absent, suppression is what
+    // belongs there (§4.3 — absence is displayed, never rendered as zero).
+    it("does use suppression where the card has no value at all", () => {
+      const fact = { ...QUEUED[0], value: null, verificationState: "CONFIRMED" } as FactRecord;
+      const { container } = render(
+        <FactCard
+          runId={RUN_ID}
+          fact={fact}
+          decision={{ factId: fact.id, decision: "CONFIRMED", reasonCode: null }}
+          queued
+        />
+      );
+      expect(container.querySelector(".value")?.textContent).toBe("—");
+      expect(container.querySelector(".state")).not.toBeNull();
+      expect(container.querySelector(".qualifier")).toBeNull();
     });
   });
 
