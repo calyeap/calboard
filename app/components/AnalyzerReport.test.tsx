@@ -328,13 +328,14 @@ describe("AnalyzerReport — Section B always shows the full three-token provena
       const text = prov!.textContent ?? "";
       expect(text).toMatch(/Primary|Secondary/);
       expect(text).toMatch(/Deterministic\/structured|AI-extracted/);
-      expect(text).toMatch(/Verified|Unverified|Spot-check pending/);
+      // §3.2's four values, as the report labels them.
+      expect(text).toMatch(/Confirmed|Not confirmed|Spot-check pending|Spot-check not required/);
     }
-    // "Finance lease liabilities" is fully default (PRIMARY/DETERMINISTIC/
-    // VERIFIED) in the fixture — R4 requires the stamp anyway, unlike
-    // derived cells elsewhere, which stay omitted-when-default.
+    // "Finance lease liabilities" is PRIMARY/DETERMINISTIC in the fixture and
+    // carries the acquisition-time verification state — R4 requires the stamp
+    // anyway, unlike derived cells elsewhere, which stay omitted-when-default.
     const defaultRow = within(sectionB).getByText("Finance lease liabilities").closest("tr");
-    expect(defaultRow?.querySelector(".prov")?.textContent).toBe("Primary·Deterministic/structured·Verified");
+    expect(defaultRow?.querySelector(".prov")?.textContent).toBe("Primary·Deterministic/structured·Spot-check pending");
   });
 
   it("AI-extracted keeps its distinct .ai styling even when shown alongside two default tokens; a non-default SECONDARY token is plain text, matching both mocks", () => {
@@ -344,7 +345,7 @@ describe("AnalyzerReport — Section B always shows the full three-token provena
     const aiRow = within(sectionB).getByText("Finance-lease ROU assets obtained").closest("tr");
     expect(aiRow?.querySelector(".prov .ai")?.textContent).toBe("AI-extracted");
     const secondaryRow = within(sectionB).getByText("Current operating margin").closest("tr");
-    expect(secondaryRow?.querySelector(".prov")?.textContent).toBe("Secondary·Deterministic/structured·Verified");
+    expect(secondaryRow?.querySelector(".prov")?.textContent).toBe("Secondary·Deterministic/structured·Spot-check pending");
     expect(secondaryRow?.querySelector(".prov .ai")).toBeNull();
   });
 
@@ -354,11 +355,12 @@ describe("AnalyzerReport — Section B always shows the full three-token provena
     const sectionD = container.querySelector("section#D") as HTMLElement;
     // Implied return on new capital is AI-extracted in the fixture — its
     // marker should still show (non-default), but nothing in Section D
-    // should render "Verified" or "Primary" as bare filler text the way
-    // Section B now always does.
+    // should render "Confirmed" or "Primary" as bare filler text the way
+    // Section B now always does. ("Confirmed" is §3.2's name for what this
+    // field used to call VERIFIED — the clean, nothing-qualifying value.)
     expect(within(sectionD).getByText("AI-extracted")).not.toBeNull();
     expect(sectionD.textContent).not.toMatch(/\bPrimary\b/);
-    expect(sectionD.textContent).not.toMatch(/\bVerified\b/);
+    expect(sectionD.textContent).not.toMatch(/\bConfirmed\b/);
   });
 });
 

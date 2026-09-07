@@ -53,10 +53,10 @@ function sourced(value: Decimal): SourcedValue<Decimal> {
   return { value, provenance: CLEAN_PROVENANCE };
 }
 function aiExtracted(value: Decimal): SourcedValue<Decimal> {
-  return { value, provenance: { sourceClass: "PRIMARY", extractionType: "AI-EXTRACTED", verificationState: "VERIFIED" } };
+  return { value, provenance: { sourceClass: "PRIMARY", extractionType: "AI-EXTRACTED", verificationState: "CONFIRMED" } };
 }
 function secondary(value: Decimal): SourcedValue<Decimal> {
-  return { value, provenance: { sourceClass: "SECONDARY", extractionType: "DETERMINISTIC/STRUCTURED", verificationState: "VERIFIED" } };
+  return { value, provenance: { sourceClass: "SECONDARY", extractionType: "DETERMINISTIC/STRUCTURED", verificationState: "CONFIRMED" } };
 }
 
 const price = new Decimal("510.12");
@@ -94,10 +94,16 @@ export const MSFT_FIXTURE: CompanyFixture = {
   price: { value: price, timestamp: "2026-09-04T21:00:00-04:00" },
 
   facts: [
+    // AI-extracted from the filing text: no tag mapping, so queued (§3.8.1).
     factRow("finance-lease-rou-additions", "Finance-lease ROU assets obtained", financeLeaseRouAdditions, "FY2026 Form 10-K, Note 15", "PRIMARY", "AI-EXTRACTED"),
-    factRow("finance-lease-liabilities", "Finance lease liabilities", financeLeaseLiabilities, "XBRL tagged element", "PRIMARY", "DETERMINISTIC/STRUCTURED"),
+    // Tagged: exempt from the queue, still shown and still carrying its labels.
+    factRow("finance-lease-liabilities", "Finance lease liabilities", financeLeaseLiabilities, "XBRL tagged element", "PRIMARY", "DETERMINISTIC/STRUCTURED", "us-gaap-2026"),
+    // §3.8.1 guard 1 in the fixture: DETERMINISTIC/STRUCTURED but acquired from
+    // an aggregator feed with no tag mapping, so it is queued despite the
+    // label. The exemption is by acquisition path, not by extraction type.
     factRow("current-operating-margin", "Current operating margin", new Decimal("0.468"), "aggregator fundamentals feed", "SECONDARY", "DETERMINISTIC/STRUCTURED"),
-    factRow("operating-lease-liabilities", "Operating lease liabilities (memo only)", operatingLeaseLiabilities, "XBRL tagged element", "PRIMARY", "DETERMINISTIC/STRUCTURED"),
+    // Tagged: exempt.
+    factRow("operating-lease-liabilities", "Operating lease liabilities (memo only)", operatingLeaseLiabilities, "XBRL tagged element", "PRIMARY", "DETERMINISTIC/STRUCTURED", "us-gaap-2026"),
   ],
 
   gate0: {
@@ -287,7 +293,11 @@ function factRow(
   value: Decimal,
   source: string,
   sourceClass: "PRIMARY" | "SECONDARY",
-  extractionType: "DETERMINISTIC/STRUCTURED" | "AI-EXTRACTED"
+  extractionType: "DETERMINISTIC/STRUCTURED" | "AI-EXTRACTED",
+  // §3.8.1. Non-null only where the figure genuinely came through a fixed,
+  // versioned tag mapping. Defaults to null — the fail-closed direction, since
+  // a missing mapping version means queued, never exempt.
+  tagMappingVersion: string | null = null
 ): FactRecord {
   return {
     id,
@@ -298,9 +308,13 @@ function factRow(
     sourceUrl: null,
     sourceClass,
     extractionType,
-    verificationState: "VERIFIED",
+    // Acquisition-time state for a fact that is queued and not yet decided
+    // (§3.2). loadGateState derives the run's own state over this anyway; what
+    // matters is that the fixture cannot assert a confirmation nobody made.
+    verificationState: "SPOT-CHECK PENDING",
     asOfDate: "FY2026",
     retrievalTimestamp: "2026-09-04T21:04:00-04:00",
     supersedesFactId: null,
+    tagMappingVersion,
   };
 }

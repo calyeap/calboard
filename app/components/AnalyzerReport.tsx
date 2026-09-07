@@ -146,7 +146,9 @@ const PROFILE_LABELS: Record<Profile, string> = {
 const DEFAULT_PROVENANCE: ProvenanceTokens = {
   sourceClass: "PRIMARY",
   extractionType: "DETERMINISTIC/STRUCTURED",
-  verificationState: "VERIFIED",
+  // §3.2 renamed the old VERIFIED to CONFIRMED. This is the "nothing is
+  // qualifying this figure" baseline the omission rule compares against.
+  verificationState: "CONFIRMED",
 };
 
 function isDefaultProvenance(tokens: ProvenanceTokens): boolean {
@@ -163,9 +165,19 @@ function sourceClassLabel(v: ProvenanceTokens["sourceClass"]): string {
 function extractionTypeLabel(v: ProvenanceTokens["extractionType"]): string {
   return v === "AI-EXTRACTED" ? "AI-extracted" : "Deterministic/structured";
 }
+// §3.2's four values, exhaustively. UNVERIFIED is absent because since
+// amendment M7 it names only the §5.1 propagation state, not a value of this
+// field. A Record rather than a chain of ifs so that adding a value to the
+// union is a compile error here rather than a silent fall-through to whichever
+// label the last branch happened to return.
+const VERIFICATION_STATE_LABELS: Record<ProvenanceTokens["verificationState"], string> = {
+  CONFIRMED: "Confirmed",
+  "NOT CONFIRMED": "Not confirmed",
+  "SPOT-CHECK PENDING": "Spot-check pending",
+  "SPOT-CHECK NOT REQUIRED": "Spot-check not required",
+};
 function verificationStateLabel(v: ProvenanceTokens["verificationState"]): string {
-  if (v === "VERIFIED") return "Verified";
-  return v === "UNVERIFIED" ? "Unverified" : "Spot-check pending";
+  return VERIFICATION_STATE_LABELS[v];
 }
 
 // D1 — R4 rules the full three-token stamp always renders in Section B
@@ -195,7 +207,9 @@ function ProvenanceMarks({ tokens, full = false }: { tokens: ProvenanceTokens; f
   const parts: string[] = [];
   if (tokens.sourceClass === "SECONDARY") parts.push("Secondary");
   if (tokens.extractionType === "AI-EXTRACTED") parts.push("AI-extracted");
-  if (tokens.verificationState !== "VERIFIED") parts.push(tokens.verificationState === "UNVERIFIED" ? "Unverified" : "Spot-check pending");
+  // Anything that is not a human confirmation qualifies the figure — including
+  // SPOT-CHECK NOT REQUIRED, which §3.2 says must never be displayed as one.
+  if (tokens.verificationState !== "CONFIRMED") parts.push(verificationStateLabel(tokens.verificationState));
   return (
     <div className="prov">
       {parts.map((p, i) => (

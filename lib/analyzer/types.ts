@@ -25,7 +25,30 @@ import Decimal from "decimal.js";
 export type FactType = "FACT" | "ASSUMPTION" | "INFERENCE";
 export type SourceClass = "PRIMARY" | "SECONDARY";
 export type ExtractionType = "DETERMINISTIC/STRUCTURED" | "AI-EXTRACTED";
-export type VerificationState = "VERIFIED" | "UNVERIFIED" | "SPOT-CHECK PENDING";
+// §3.2 — the verification state answers one question and one only: has a human
+// confirmed this figure against its source?
+//
+// FOUR values, and only these four. Amendment M7 records that they REPLACED
+// VERIFIED and UNVERIFIED, because UNVERIFIED was doing two unrelated jobs: it
+// named a verification state here AND the §5.1 propagation state. Those are
+// different claims — "no human has confirmed it" versus "it exists but could
+// not be checked against a source" — and §5.1 is explicit that a figure can be
+// UNVERIFIED and CONFIRMED at once, which was unstatable while one word carried
+// both. UNVERIFIED now means only the §5.1 propagation state and lives on
+// ProvenanceQualifier below; it is not a value of this field.
+//
+// The union is DERIVED from the array so the two cannot drift, and so a value
+// cannot be added back to the type without appearing in a list that
+// verificationStateVocabulary.test.ts asserts against. VERIFIED is meant to be
+// unreachable here, not merely unused.
+export const VERIFICATION_STATES = [
+  "CONFIRMED",
+  "NOT CONFIRMED",
+  "SPOT-CHECK PENDING",
+  "SPOT-CHECK NOT REQUIRED",
+] as const;
+
+export type VerificationState = (typeof VERIFICATION_STATES)[number];
 export type Requiredness = "REQUIRED" | "OPTIONAL";
 
 export interface FactRecord {
@@ -50,6 +73,20 @@ export interface FactRecord {
   // Restatements are retained side by side, never overwritten (§3.4) — both
   // FactRecords stay in the array.
   supersedesFactId: string | null;
+  // M7, §3.8.1. The version of the fixed tag mapping this figure was acquired
+  // through — XBRL or equivalent — or null where it was not acquired that way.
+  //
+  // This field exists because the queue exemption is granted **by acquisition
+  // path, never by extraction-type label alone** (§3.8.1 guard 1). Without it
+  // the only available test would be `extractionType === "DETERMINISTIC/
+  // STRUCTURED"`, which the spec explicitly refuses: a structured feed field
+  // with no tag mapping, or a deterministic parse, is queued like any other.
+  // null therefore means queued, never exempt — "absence of a recorded mapping
+  // version is not evidence of one, on the §5.3 fail-closed rule".
+  //
+  // Unpopulated in M7: the fixtures record null or a fixture mapping version,
+  // and real mapping versions arrive with acquisition at M8.
+  tagMappingVersion: string | null;
 }
 
 // ---------------------------------------------------------------------------

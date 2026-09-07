@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 import { CLEAN_PROVENANCE } from "../provenance";
 import type { CompanyFixture, PreRevenueFixture } from "../assemble";
-import type { FactRecord, SourcedValue } from "../types";
+import type { SourcedValue } from "../types";
 
 // ---------------------------------------------------------------------------
 // Milestone 5 — OKLO validation fixture.
@@ -38,8 +38,11 @@ import type { FactRecord, SourcedValue } from "../types";
 function sourced(value: Decimal): SourcedValue<Decimal> {
   return { value, provenance: CLEAN_PROVENANCE };
 }
-function unverified(value: Decimal): SourcedValue<Decimal> {
-  return { value, provenance: { sourceClass: "PRIMARY", extractionType: "DETERMINISTIC/STRUCTURED", verificationState: "UNVERIFIED" } };
+// Named for what it now sets. It was `unverified`, which since amendment M7
+// names only the §5.1 propagation state — a different claim from "no human has
+// confirmed this", and not a value of the §3.2 verification-state field.
+function pendingSpotCheck(value: Decimal): SourcedValue<Decimal> {
+  return { value, provenance: { sourceClass: "PRIMARY", extractionType: "DETERMINISTIC/STRUCTURED", verificationState: "SPOT-CHECK PENDING" } };
 }
 
 const price = new Decimal("14.50"); // mock shows "$XX.XX" — no real figure given; a placeholder within the two 8GW cases' range
@@ -99,10 +102,17 @@ export const OKLO_FIXTURE: CompanyFixture = {
       sourceUrl: null,
       sourceClass: "PRIMARY",
       extractionType: "DETERMINISTIC/STRUCTURED",
-      verificationState: "UNVERIFIED",
+      // Queued and not yet decided (§3.2). UNVERIFIED is no longer a value of
+      // this field — since M7 it names only the §5.1 propagation state, which
+      // is a different claim and travels on ProvenanceQualifier.
+      verificationState: "SPOT-CHECK PENDING",
       asOfDate: "Q2 FY2026",
       retrievalTimestamp: "2026-09-04T16:00:00-04:00",
       supersedesFactId: null,
+      // Neither pre-revenue figure comes through a tag mapping — one is a 10-Q
+      // balance adjusted for burn, the other a cash-flow line — so both are
+      // queued for spot-check (§3.8.1).
+      tagMappingVersion: null,
     },
     {
       id: "quarterly-burn",
@@ -113,12 +123,24 @@ export const OKLO_FIXTURE: CompanyFixture = {
       sourceUrl: null,
       sourceClass: "PRIMARY",
       extractionType: "DETERMINISTIC/STRUCTURED",
-      verificationState: "UNVERIFIED",
+      // Queued and not yet decided (§3.2). UNVERIFIED is no longer a value of
+      // this field — since M7 it names only the §5.1 propagation state, which
+      // is a different claim and travels on ProvenanceQualifier.
+      verificationState: "SPOT-CHECK PENDING",
       asOfDate: "Q2 FY2026",
       retrievalTimestamp: "2026-09-04T16:00:00-04:00",
       supersedesFactId: null,
+      // Neither pre-revenue figure comes through a tag mapping — one is a 10-Q
+      // balance adjusted for burn, the other a cash-flow line — so both are
+      // queued for spot-check (§3.8.1).
+      tagMappingVersion: null,
     },
-  ] as FactRecord[],
+  // No `as FactRecord[]` assertion here. It used to carry one, and the
+  // assertion silently suppressed the missing-property error when
+  // tagMappingVersion was added to FactRecord — leaving the field `undefined`
+  // at runtime while the type claimed otherwise. Adding a required field to
+  // FactRecord must break this fixture loudly, not quietly.
+  ],
 
   gate0: {
     sectorClassification: "Utilities",
@@ -190,7 +212,7 @@ export const OKLO_FIXTURE: CompanyFixture = {
   },
 
   marginHistory: {
-    yearlyOperatingMargins: [unverified(new Decimal(-0.5)), unverified(new Decimal(-0.4)), unverified(new Decimal(-0.3))],
+    yearlyOperatingMargins: [pendingSpotCheck(new Decimal(-0.5)), pendingSpotCheck(new Decimal(-0.4)), pendingSpotCheck(new Decimal(-0.3))],
     fiftyTwoWeekLow: sourced(new Decimal("8.00")),
     fiftyTwoWeekHigh: sourced(new Decimal("22.00")),
   },
