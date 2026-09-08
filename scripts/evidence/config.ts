@@ -18,6 +18,8 @@ export const FROZEN_HASHES: Readonly<Record<string, string>> = {
     "35f382a109ffbeb9b048b8f6d532564e80fc26c00b8c1d6ea8345b7e17fbf870",
   "mock-report-oklo.html":
     "fc6de075e6c84f4ba2b720d669985b4f43534f4a7ae77e658c725122d4d9476f",
+  "calboard-valuation-methodology.md":
+    "a4a39e33717993fe9558f263009cec3814555765ac69c69728d99354d4a5ec7c",
 };
 
 /** Proves the reachability gate got Screen 1 and not merely a 200. */
@@ -35,13 +37,24 @@ export const STATE_MARKERS: Readonly<Record<string, string>> = {
   "s1-resolved": "Listed operating company",
   "s1-unknown": "Unknown — no provider evidence for ZXQY",
   "s1-unsupported": "Unsupported — not an operating company",
+  "s2-facts-msft-undecided": "Fact acquisition and spot-check",
   "s2-facts-msft": "Fact acquisition and spot-check",
   "s3-profile-msft": "PROFILE CONFIRMATION",
+  "s2-facts-oklo-undecided": "Fact acquisition and spot-check",
   "s2-facts-oklo": "Fact acquisition and spot-check",
   "s3-profile-oklo": "PROFILE CONFIRMATION",
 };
 
 export const TARGETS: readonly string[] = Object.keys(STATE_MARKERS);
+
+/**
+ * The suffix marking a target as the undecided (pre-decision) Screen 2
+ * capture, e.g. `s2-facts-msft-undecided`. Shared by `drive.ts` (which builds
+ * the target name) and `run.ts` (which decides whether to run
+ * `checkContinueGated` against it) so the two stay in lockstep — a drifted
+ * copy in either place would silently skip the gate check with no error.
+ */
+export const UNDECIDED_SUFFIX = "-undecided";
 
 /** Screen 1 tickers, matching the manual capture this runner replaces. */
 export const TICKERS = { resolved: "MSFT", unknown: "ZXQY", unsupported: "SPY" } as const;

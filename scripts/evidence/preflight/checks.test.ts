@@ -5,6 +5,8 @@ import {
   checkFont,
   checkConsoleErrors,
   checkStatesAppeared,
+  checkContinueGated,
+  CONTINUE_LABEL,
 } from "./checks";
 import type { ProbeDocument, ProbeNode } from "./types";
 
@@ -158,5 +160,56 @@ describe("checkStatesAppeared", () => {
     const r = checkStatesAppeared("s1-unknown", "Unknown — no provider evidence for ZXQY", d);
     expect(r.status).toBe("FAIL");
     expect(r.detail).toContain("Unknown");
+  });
+});
+
+describe("checkContinueGated", () => {
+  it("PASSes when Continue is disabled and a reason line is present", () => {
+    const button = node({ tag: "button", cls: "act", text: CONTINUE_LABEL, disabled: true });
+    const reason = node({
+      tag: "span",
+      cls: "reason",
+      text: "1 material fact still undecided — Continue is unavailable until every fact carries a decision.",
+    });
+    const d = doc({ nodes: [button, reason] });
+    expect(checkContinueGated("s2-facts-msft-undecided", d).status).toBe("PASS");
+  });
+
+  it("FAILs naming the step when Continue is enabled on an undecided capture", () => {
+    const button = node({ tag: "button", cls: "act", text: CONTINUE_LABEL, disabled: false });
+    const d = doc({ nodes: [button] });
+    const r = checkContinueGated("s2-facts-msft-undecided", d);
+    expect(r.status).toBe("FAIL");
+    expect(r.step).toBe("Continue to gates disabled with a reason on the undecided capture");
+    expect(r.detail).toContain("enabled");
+  });
+
+  it("FAILs when no Continue control is present in the capture", () => {
+    const d = doc({ nodes: [node({ tag: "div", text: "something else" })] });
+    const r = checkContinueGated("s2-facts-msft-undecided", d);
+    expect(r.status).toBe("FAIL");
+    expect(r.detail).toContain("no");
+    expect(r.detail).toContain("Continue to gates");
+  });
+
+  it("FAILs when Continue is disabled but no reason line accompanies it", () => {
+    const button = node({ tag: "button", cls: "act", text: CONTINUE_LABEL, disabled: true });
+    const d = doc({ nodes: [button] });
+    const r = checkContinueGated("s2-facts-msft-undecided", d);
+    expect(r.status).toBe("FAIL");
+    expect(r.detail).toContain("no reason line");
+  });
+
+  it("is not fooled by the decided screen's enabled Continue link carrying the same label", () => {
+    // The decided screen's control is an <a>, not a <button> — the probe's
+    // `disabled` read (`el.disabled`) is `undefined` on an anchor, which the
+    // probe already normalises to `null`. A check that treated null as
+    // "not disabled === true, so FAIL" would be correct by accident; this
+    // proves the FAIL is for the right reason on a button, not a coincidence
+    // of node shape.
+    const link = node({ tag: "a", cls: "act", text: CONTINUE_LABEL, disabled: null });
+    const r = checkContinueGated("s2-facts-msft-undecided", doc({ nodes: [link] }));
+    expect(r.status).toBe("FAIL");
+    expect(r.detail).toContain("no");
   });
 });

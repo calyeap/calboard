@@ -128,3 +128,61 @@ export function checkStatesAppeared(
   if (d.bodyText.toLowerCase().includes(marker.toLowerCase())) return pass(step);
   return fail(step, `${target} at ${d.viewport.w}: expected marker not present — "${marker}"`);
 }
+
+/** The button text the Step 2 gate control carries in both its states. */
+export const CONTINUE_LABEL = "Continue to gates";
+
+/**
+ * The reason line's fixed substring, rendered by the app whenever the gate is
+ * holding (app/analyzer/[runId]/facts/page.tsx:125 — the `<span
+ * className="reason">` text, e.g. "N material fact(s) still undecided —
+ * Continue is unavailable until every fact carries a decision.").
+ */
+export const REASON_TOKEN = "still undecided";
+
+/**
+ * On the undecided capture, Continue to gates is disabled and carries a
+ * reason — proof the gate is holding, not merely that the control exists.
+ *
+ * Only meaningful against an "-undecided" capture; run.ts decides when to
+ * call this, the same way it alone decides which marker checkStatesAppeared
+ * checks against — this function has no target-name logic of its own.
+ *
+ * Matched by tag + label rather than by class, because the decided screen's
+ * control is an `<a>` carrying the same "act" class and the same label —
+ * matching on class alone would let that control satisfy this check by
+ * accident. The Continue control is a `<button>` in the gated state and an
+ * `<a>` in the released one; only the `<button>` variant's `disabled` reads a
+ * real boolean rather than `null`.
+ *
+ * Judges only two objective facts: the `disabled` IDL property Playwright's
+ * probe already reads off the live DOM element, and whether a reason string
+ * is present alongside it. Never appearance, spacing or copy — a check that
+ * graded the build against the mock would be BUILD grading its own work.
+ */
+export function checkContinueGated(target: string, d: ProbeDocument): CheckResult {
+  const step = "Continue to gates disabled with a reason on the undecided capture";
+  const label = CONTINUE_LABEL.toLowerCase();
+  const button = d.nodes.find((n) => n.tag === "button" && n.text.toLowerCase().includes(label));
+
+  if (button === undefined) {
+    return fail(step, `${target} at ${d.viewport.w}: no "${CONTINUE_LABEL}" button in the capture`);
+  }
+  if (button.disabled !== true) {
+    return fail(
+      step,
+      `${target} at ${d.viewport.w}: "${CONTINUE_LABEL}" is enabled — the gate is not holding`
+    );
+  }
+
+  const hasReason = d.nodes.some(
+    (n) => n !== button && n.text.toLowerCase().includes(REASON_TOKEN)
+  );
+  if (!hasReason) {
+    return fail(
+      step,
+      `${target} at ${d.viewport.w}: "${CONTINUE_LABEL}" is disabled but no reason line is present`
+    );
+  }
+  return pass(step);
+}

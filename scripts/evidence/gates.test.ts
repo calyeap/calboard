@@ -41,6 +41,25 @@ describe("verifyFrozenArtefacts", () => {
     expect(r.status).toBe("FAIL");
     expect(r.detail).toContain("mock-screen1-entry.html: absent");
   });
+
+  it("FAILs naming a docs/frozen file that FROZEN_HASHES never registers", async () => {
+    // The fault this closes: calboard-valuation-methodology.md sat in
+    // docs/frozen/ for days while FROZEN_HASHES still only listed six names,
+    // and this gate PASSed the whole time because it never looked at what
+    // was actually in the directory — only at what it already knew to ask
+    // for. Dropping an unregistered file in and confirming a FAIL is the
+    // same fidelity as a browser fixture would give a check that needs one:
+    // no browser is involved here, so a real file on a real filesystem is
+    // as real as this check's proof gets.
+    const tmp = await frozenCopy();
+    await fs.writeFile(
+      path.join(tmp, "docs/frozen/stray-artefact.md"),
+      "never listed in FROZEN_HASHES"
+    );
+    const r = await verifyFrozenArtefacts(tmp);
+    expect(r.status).toBe("FAIL");
+    expect(r.detail).toContain("stray-artefact.md");
+  });
 });
 
 describe("verifyAppReachable", () => {

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { runSelfTest } from "./selfTest";
 
 describe("runSelfTest", () => {
-  it("proves checkOverflow (both limbs), checkFont, checkConsoleErrors, checkStatesAppeared (both directions), checkRendered (both directions), and the dead-port limb of verifyAppReachable, each against a real capture", async () => {
+  it("proves checkOverflow (both limbs), checkFont, checkConsoleErrors, checkStatesAppeared (both directions), checkRendered (both directions), checkContinueGated (both directions), and the dead-port limb of verifyAppReachable, each against a real capture", async () => {
     const results = await runSelfTest();
     const byName = new Map(results.map((r) => [r.name, r]));
 
@@ -14,6 +14,8 @@ describe("runSelfTest", () => {
     expect(byName.get("dead-port")?.actual).toBe("FAIL");
     expect(byName.get("states-appeared-pass")?.actual).toBe("PASS");
     expect(byName.get("states-appeared-fail")?.actual).toBe("FAIL");
+    expect(byName.get("continue-gated")?.actual).toBe("PASS");
+    expect(byName.get("continue-enabled")?.actual).toBe("FAIL");
     expect(byName.get("rendered-complete")?.actual).toBe("PASS");
     expect(byName.get("rendered-missing")?.actual).toBe("FAIL");
 
@@ -52,6 +54,14 @@ describe("runSelfTest", () => {
     expect(byName.get("states-appeared-pass")?.step).toBe("every requested state appeared");
     expect(byName.get("states-appeared-fail")?.step).toBe("every requested state appeared");
     expect(byName.get("states-appeared-fail")?.detail).toContain("Listed operating company");
+
+    expect(byName.get("continue-gated")?.detail).toBe("");
+
+    expect(byName.get("continue-enabled")?.step).toBe(
+      "Continue to gates disabled with a reason on the undecided capture"
+    );
+    expect(byName.get("continue-enabled")?.detail).toContain("enabled");
+    expect(byName.get("continue-enabled")?.detail).toContain("gate is not holding");
 
     // The complete map must report a clean PASS with no detail — if it did
     // not, the FAIL below would prove nothing about the missing entry.
