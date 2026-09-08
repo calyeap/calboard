@@ -10,7 +10,7 @@ import {
 import { buildSlotCatalogue } from "./slots";
 import { renderText, slotIdsIn, traceText, UntraceableFigureError, type SlotCatalogue } from "./traceability";
 import { scanProhibitedCopy, ProhibitedCopyError } from "./prohibitions";
-import { MalformedAnalystResponseError, type AnalystCall } from "./analystCall";
+import { callWithOneRegeneration, MalformedAnalystResponseError, type AnalystCall } from "./analystCall";
 
 export { INTERPRETATION_RESPONSIBILITIES };
 
@@ -41,12 +41,15 @@ HARD LIMITS. These are not style preferences.
 
 HOW YOU REFERENCE NUMBERS. You may not emit a numeral. Not one digit, anywhere, in any sentence you write. Every figure is referenced by its slot id from the catalogue you are given, written in double braces: {{slot.id}}. The renderer substitutes the value the deterministic layer computed. Quantities spelled out in words ("fifteen percent", "three billion") are numerals too, and are refused the same way. If you want to say something numeric and no slot carries it, say it qualitatively or do not say it.
 
-The digit rule catches ordinary phrasing too, so write around it:
+The rule catches ordinary phrasing too, so write around it. A number word CARRYING A UNIT is a quantity and is refused — "five years", "fifteen percent", "three billion", "twenty times". The hyphenated adjective form is not, because it names which window you mean rather than asserting a count:
 
-  "years 1-5"        ->  "the first five years"
-  "at 8%, 10%, 12%"  ->  "at each of the three policy discount rates", or reference the rate slots
-  "the 10-year CAGR" ->  "the ten-year CAGR"
-  "M7's grid"        ->  "the reverse-DCF grid"
+  "years 1-5"                ->  "the five-year horizon"     (hyphenated, not "five years")
+  "the 10-year CAGR"         ->  "the ten-year CAGR"
+  "compounded for 13 years"  ->  "compounded for {{gates.gate1.filedYearsCount}} years"
+  "at 8%, 10%, 12%"          ->  reference the three policy rate slots
+  "M7's grid"                ->  "the reverse-DCF grid"
+
+Where you want an actual count — how many filed years, how long the history window is — there is a slot for it. Use the slot; do not spell the number out.
 
 An output containing one digit outside a slot reference is refused ENTIRELY — every sentence in it, not just the offending one. There is no repair pass and no partial acceptance, so check each sentence before you finish.
 
@@ -224,13 +227,19 @@ const PAGE_ONE_KEYS = ["mainFinding", "whatSupportsTheCase", "whatWorriesCalboar
 export async function runInterpretation(result: AnalysisResult, call: AnalystCall): Promise<InterpretationResult> {
   const catalogue = buildSlotCatalogue(result);
 
-  const raw = await call({
-    label: "interpretation",
-    system: SYSTEM_PROMPT,
-    user: buildUserMessage(result, catalogue),
-    responseSchema: RESPONSE_SCHEMA,
-  });
+  return callWithOneRegeneration(
+    call,
+    {
+      label: "interpretation",
+      system: SYSTEM_PROMPT,
+      user: buildUserMessage(result, catalogue),
+      responseSchema: RESPONSE_SCHEMA,
+    },
+    (raw) => interpretResponse(raw, catalogue)
+  );
+}
 
+function interpretResponse(raw: unknown, catalogue: SlotCatalogue): InterpretationResult {
   const response = readResponse(raw);
 
   const statements = response.statements.map((s, i) => {

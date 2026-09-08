@@ -57,17 +57,34 @@ export interface TraceDefect {
   detail: string;
 }
 
+/**
+ * A refusal, in two registers.
+ *
+ * `message` REACHES THE SCREEN — reportAnalysis carries it into Section I as
+ * the reason there is no prose. So it names the failure and where it happened
+ * and stops there. It must not quote the offending text: a message reading
+ * "NUMERAL FROM MODEL (14.2%)" would put a figure with no field behind it onto
+ * the report, smuggled in as the reason for refusing that very thing —
+ * §10.0.2 rule 3, defeated by its own enforcement.
+ *
+ * `diagnostic` carries the values, for the server log and the command line.
+ * Whoever is debugging this needs to see what the model actually wrote; the
+ * reader of the report does not.
+ */
 export class UntraceableFigureError extends Error {
   readonly defects: TraceDefect[];
+  readonly diagnostic: string;
 
   constructor(where: string, defects: TraceDefect[]) {
+    const kinds = [...new Set(defects.map((d) => d.kind))].join(", ");
     super(
-      `${where}: ${defects.length} figure(s) in [C] output do not trace to the Analysis Result — ` +
-        defects.map((d) => `${d.kind} (${d.detail})`).join("; ") +
-        `. §8.3 limit 3: any figure in [C] output that is not traceable to the acquired fact set is a defect.`
+      `${where}: ${defects.length} figure(s) in [C] output do not trace to the Analysis Result (${kinds}). ` +
+        `§8.3 limit 3: any figure in [C] output that is not traceable to the acquired fact set is a defect. ` +
+        `The whole output was refused; no part of it was kept.`
     );
     this.name = "UntraceableFigureError";
     this.defects = defects;
+    this.diagnostic = `${where}: ` + defects.map((d) => `${d.kind} ("${d.detail}")`).join("; ");
   }
 }
 

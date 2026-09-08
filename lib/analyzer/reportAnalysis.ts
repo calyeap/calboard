@@ -47,6 +47,22 @@ function messageOf(err: unknown): string {
 }
 
 /**
+ * The full refusal, to the server log — never to the page.
+ *
+ * A refusal has two audiences with opposite needs. Whoever is debugging must
+ * see what the model actually wrote; the reader of the report must not, because
+ * the offending text is precisely a figure with no field behind it (§10.0.2
+ * rule 3). The error classes carry both registers, and this is the one place
+ * the unsafe one is read.
+ */
+function logDiagnostic(err: unknown): void {
+  const diagnostic = (err as { diagnostic?: unknown }).diagnostic;
+  if (typeof diagnostic === "string" && diagnostic !== "") {
+    console.error(`[analyzer] AI layer refused — ${diagnostic}`);
+  }
+}
+
+/**
  * The analysis as the report renders it.
  *
  * The call is a parameter so tests can drive it without a network or a key,
@@ -91,6 +107,7 @@ export async function analysisForReport(
       aiLayer: { status: "COMPLETED", model: ANALYST_MODEL, detail: null },
     };
   } catch (err) {
+    logDiagnostic(err);
     // Nothing is stored, so a later view retries rather than inheriting a
     // failure. The analysis itself is returned untouched.
     return {

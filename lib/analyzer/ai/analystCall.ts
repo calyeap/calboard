@@ -41,8 +41,58 @@ export class AnalystCallUnavailableError extends Error {
 }
 
 export class MalformedAnalystResponseError extends Error {
+  readonly diagnostic: string;
+
   constructor(label: string, detail: string) {
     super(`The ${label} call returned a response this analyzer cannot read: ${detail}`);
     this.name = "MalformedAnalystResponseError";
+    this.diagnostic = detail;
+  }
+}
+
+/** Any refusal that can say, to the model, what was wrong with its output. */
+function diagnosticOf(err: unknown): string | null {
+  const value = (err as { diagnostic?: unknown }).diagnostic;
+  return typeof value === "string" && value !== "" ? value : null;
+}
+
+/**
+ * Calls once; on a refusal, tells the model exactly what failed and calls once
+ * more. Two attempts, then the refusal stands.
+ *
+ * THIS IS NOT A REPAIR PASS, and the distinction is the one §10.7 rule 3
+ * insists on: "a numeral emitted by [C] is a defect rather than a value to be
+ * checked". A refused output is discarded WHOLE — nothing is patched, nothing
+ * is salvaged, and no sentence from it survives into the second attempt. What
+ * happens is that the same request is asked again with the defects named.
+ *
+ * Why retry at all: unlike everything else in this analyzer, these calls are
+ * not a function of their inputs, so a single unlucky wording would otherwise
+ * cost the report its entire prose layer. Why only once: a loop that retries
+ * until something passes is selecting for output that satisfies the checker,
+ * which is a different objective from output that is true, and the difference
+ * would be invisible.
+ */
+export async function callWithOneRegeneration<T>(
+  call: AnalystCall,
+  request: AnalystCallRequest,
+  interpret: (raw: unknown) => T
+): Promise<T> {
+  try {
+    return interpret(await call(request));
+  } catch (err) {
+    const diagnostic = diagnosticOf(err);
+    if (diagnostic === null) throw err;
+
+    const corrected: AnalystCallRequest = {
+      ...request,
+      user:
+        `${request.user}\n\n` +
+        `YOUR PREVIOUS ANSWER WAS REFUSED IN FULL AND DISCARDED. It failed on:\n\n  ${diagnostic}\n\n` +
+        `Write the whole answer again from the beginning. Do not try to repair the previous one — you cannot ` +
+        `see it and it no longer exists. Every figure must be a slot reference from the catalogue above, and ` +
+        `no digit may appear anywhere outside one.`,
+    };
+    return interpret(await call(corrected));
   }
 }

@@ -3,7 +3,7 @@ import { assertChallengerPayloadClean, type ChallengerPayload } from "./challeng
 import { buildFactSlotCatalogue } from "./slots";
 import { renderText, traceText, UntraceableFigureError, type SlotCatalogue } from "./traceability";
 import { scanProhibitedCopy, ProhibitedCopyError } from "./prohibitions";
-import { MalformedAnalystResponseError, type AnalystCall } from "./analystCall";
+import { callWithOneRegeneration, MalformedAnalystResponseError, type AnalystCall } from "./analystCall";
 
 // ---------------------------------------------------------------------------
 // §8.5 — the blind challenger.
@@ -38,7 +38,7 @@ HARD LIMITS.
 
 HOW YOU REFERENCE NUMBERS. You may not emit a numeral — not one digit, anywhere. Every figure is referenced by its slot id in double braces: {{facts.some-fact-id}}. Quantities spelled out in words ("twenty percent") are numerals too. If no slot carries the number you want, make the point qualitatively or do not make it.
 
-The digit rule catches ordinary phrasing too: write "the last five years", not "the last 5 years"; "the ten-year window", not "the 10-year window". An output containing one digit outside a slot reference is refused ENTIRELY, every finding in it, with no repair pass.
+The rule catches ordinary phrasing too. A number word CARRYING A UNIT is a quantity and is refused — "five years", "twenty percent", "three billion". The hyphenated adjective form is fine, because it names a window rather than asserting a count: write "the five-year window" and "the ten-year record", never "five years" or "ten years". An output containing one digit, or one spelled-out quantity, outside a slot reference is refused ENTIRELY — every finding in it, with nothing salvaged.
 
 The claimOrFactId field is the one exception — it is an id, not prose, and you copy it exactly as given even where it contains digits.
 
@@ -140,13 +140,23 @@ export async function runChallenger(payload: ChallengerPayload, call: AnalystCal
   const catalogue = buildFactSlotCatalogue(payload.facts);
   const factsById = new Map(payload.facts.map((f) => [f.id, f]));
 
-  const raw = await call({
-    label: "challenger",
-    system: SYSTEM_PROMPT,
-    user: buildUserMessage(payload),
-    responseSchema: RESPONSE_SCHEMA,
-  });
+  return callWithOneRegeneration(
+    call,
+    {
+      label: "challenger",
+      system: SYSTEM_PROMPT,
+      user: buildUserMessage(payload),
+      responseSchema: RESPONSE_SCHEMA,
+    },
+    (raw) => interpretResponse(raw, catalogue, factsById)
+  );
+}
 
+function interpretResponse(
+  raw: unknown,
+  catalogue: SlotCatalogue,
+  factsById: Map<string, FactRecord>
+): ChallengerResult {
   const findings: ChallengerFinding[] = readResponse(raw).map((finding, i) => {
     const where = `challenger finding ${i + 1}`;
     const fact = factsById.get(finding.claimOrFactId);

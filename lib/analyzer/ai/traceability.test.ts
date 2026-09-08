@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { traceText, renderText, slotIdsIn, type SlotCatalogue, type FigureSlot } from "./traceability";
+import {
+  traceText,
+  renderText,
+  slotIdsIn,
+  UntraceableFigureError,
+  type SlotCatalogue,
+  type FigureSlot,
+} from "./traceability";
 
 // §8.3 limit 3 — "Any figure in [C] output that is not traceable to the
 // acquired fact set is a defect" — and §10.7 rule 3 — "[A [C] call] may
@@ -57,6 +64,25 @@ describe("traceText", () => {
     expect(defects).toEqual([{ kind: "SPELLED-OUT QUANTITY", detail: "fifteen percent" }]);
   });
 
+  it("leaves the hyphenated horizon adjective alone — it names a window, it does not count one", () => {
+    const catalogue = catalogueOf(slot("price", "$499.70"));
+
+    // "the ten-year CAGR" and "the five-year horizon" are the methodology's own
+    // vocabulary for WHICH figure is meant, not a quantity being asserted. A
+    // rule that refused them would leave [C] unable to say which cell it was
+    // talking about — so the prompts steer to this form, and this test is what
+    // makes that steer safe to give.
+    expect(traceText("Over the ten-year horizon the five-year growth path dominates.", catalogue)).toEqual([]);
+  });
+
+  it("still refuses the counted form, which asserts a quantity", () => {
+    const catalogue = catalogueOf(slot("price", "$499.70"));
+
+    expect(traceText("The company has compounded for thirteen years.", catalogue)).toEqual([
+      { kind: "SPELLED-OUT QUANTITY", detail: "thirteen years" },
+    ]);
+  });
+
   it("leaves ordinary counting words alone — they are prose, not figures", () => {
     const catalogue = catalogueOf(slot("price", "$499.70"));
 
@@ -70,6 +96,34 @@ describe("traceText", () => {
 
     expect(defects).toHaveLength(2);
     expect(defects.map((d) => d.kind).sort()).toEqual(["NUMERAL FROM MODEL", "UNKNOWN SLOT"]);
+  });
+});
+
+describe("UntraceableFigureError", () => {
+  // The refusal message reaches the SCREEN (reportAnalysis carries it into
+  // Section I). If it quoted the figure the model invented, the report would
+  // carry a number with no field behind it — §10.0.2 rule 3 — smuggled in as
+  // the reason for refusing that very thing.
+  it("names what failed and where, without reproducing the figure the model wrote", () => {
+    const err = new UntraceableFigureError("interpretation statement 1", [
+      { kind: "NUMERAL FROM MODEL", detail: "14.2%" },
+      { kind: "NUMERAL FROM MODEL", detail: "0" },
+      { kind: "UNKNOWN SLOT", detail: "made.up.slot" },
+    ]);
+
+    expect(err.message).toContain("interpretation statement 1");
+    expect(err.message).toContain("NUMERAL FROM MODEL");
+    expect(err.message).not.toContain("14.2%");
+    expect(err.message).not.toContain("made.up.slot");
+  });
+
+  it("keeps the offending text on the error for the log and the command line, where it belongs", () => {
+    const err = new UntraceableFigureError("challenger finding 7 evidence", [
+      { kind: "NUMERAL FROM MODEL", detail: "0" },
+    ]);
+
+    expect(err.diagnostic).toContain("0");
+    expect(err.defects).toEqual([{ kind: "NUMERAL FROM MODEL", detail: "0" }]);
   });
 });
 
@@ -115,6 +169,14 @@ describe("renderText", () => {
   it("refuses to render an unknown slot rather than leaving the braces on the page", () => {
     const catalogue = catalogueOf(slot("price", "$499.70"));
 
-    expect(() => renderText("{{not.a.slot}}", catalogue)).toThrow(/not\.a\.slot/);
+    expect(() => renderText("{{not.a.slot}}", catalogue)).toThrow(UntraceableFigureError);
+    // The invented id is model-authored text, so it stays out of the message
+    // that reaches the screen and lives on the diagnostic instead.
+    try {
+      renderText("{{not.a.slot}}", catalogue);
+    } catch (err) {
+      expect((err as UntraceableFigureError).message).not.toContain("not.a.slot");
+      expect((err as UntraceableFigureError).diagnostic).toContain("not.a.slot");
+    }
   });
 });

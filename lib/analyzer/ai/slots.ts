@@ -1,4 +1,6 @@
 import Decimal from "decimal.js";
+import { formatFactValue, formatUsd } from "../factDisplay";
+import { factUnit } from "../acquisition/factUnit";
 import type { AnalysisResult, FactRecord, Figure } from "../types";
 import type { FigureSlot, SlotCatalogue } from "./traceability";
 
@@ -23,8 +25,26 @@ function pct(v: Decimal, dp = 1): string {
   return `${v.mul(100).toFixed(dp)}%`;
 }
 
+/**
+ * A per-share figure, with its cents. Read against a quote, so it keeps them.
+ */
 function money(v: Decimal, dp = 2): string {
   return v.isNegative() ? `−$${v.abs().toFixed(dp)}` : `$${v.toFixed(dp)}`;
+}
+
+/**
+ * A company-scale aggregate, at the magnitude a filing states it — through the
+ * SAME rule the fact card uses (factDisplay.formatUsd, ruled 8 September 2026).
+ *
+ * One report cannot carry two money conventions. The first real MSFT run
+ * printed "$67.0B" in a challenger finding and "$66987000000" in an
+ * interpretation statement for the same quantity, because fact slots went
+ * through the display rule and computed ones did not. Both are [C] prose on
+ * one page, and a reader comparing them would reasonably conclude they were
+ * different figures.
+ */
+function bigMoney(v: Decimal): string {
+  return formatUsd(v);
 }
 
 function multiple(v: Decimal): string {
@@ -64,12 +84,18 @@ class CatalogueBuilder {
 }
 
 /**
- * A fact's value as it is displayed — the same `toString()` Section B renders,
- * so the fact card and any [C] sentence citing it cannot disagree.
+ * A fact's value as it is displayed — through `formatFactValue`, the same rule
+ * the fact card uses (ruled by Calvin, 8 September 2026).
+ *
+ * Not `toString()`. Acquisition holds the exact figure, and the ruling
+ * separates that from what is shown: an operating margin is 46.8%, not
+ * 0.46780818408927220731. A [C] sentence substituting the raw Decimal would put
+ * the unshown form onto the page through a door the ruling did not know about,
+ * and it would be the one number on the report in a form no filing states.
  */
 function factValue(fact: FactRecord): string {
   if (fact.value === null) return "";
-  return typeof fact.value === "string" ? fact.value : fact.value.toString();
+  return formatFactValue(fact.value, factUnit(fact.id));
 }
 
 function addFacts(b: CatalogueBuilder, facts: readonly FactRecord[]): void {
@@ -116,8 +142,8 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
   });
 
   // --- §10 E — price-implied diagnostics ----------------------------------
-  b.figure("priceImplied.steadyStateEv", "steady-state enterprise value", priceImplied.steadyStateEv, (v) => money(v, 0));
-  b.figure("priceImplied.pvgo", "present value of growth opportunities", priceImplied.pvgo, (v) => money(v, 0));
+  b.figure("priceImplied.steadyStateEv", "steady-state enterprise value", priceImplied.steadyStateEv, bigMoney);
+  b.figure("priceImplied.pvgo", "present value of growth opportunities", priceImplied.pvgo, bigMoney);
   b.figure("priceImplied.pvgoShareOfEv", "PVGO share of enterprise value", priceImplied.pvgoShareOfEv, (v) => pct(v));
   b.figure(
     "priceImplied.impliedExitMultiple",
@@ -126,12 +152,12 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
     multiple
   );
   if (priceImplied.nopatGap !== null) {
-    b.value("priceImplied.nopatGap.current", "NOPAT at the current margin", priceImplied.nopatGap.current, (v) => money(v, 0));
+    b.value("priceImplied.nopatGap.current", "NOPAT at the current margin", priceImplied.nopatGap.current, bigMoney);
     b.value(
       "priceImplied.nopatGap.medianMargin",
       "NOPAT at the median margin",
       priceImplied.nopatGap.medianMargin,
-      (v) => money(v, 0)
+      bigMoney
     );
   }
 
@@ -140,13 +166,13 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
     const key = `priceImplied.reverseDcf.${cell.marginLevel}@${cell.rate}`;
     b.figure(`${key}.fiveYearGrowth`, `price-implied growth for years 1-5, ${at}`, cell.fiveYearGrowth, (v) => pct(v));
     b.figure(`${key}.tenYearCagr`, `price-implied ten-year CAGR, ${at}`, cell.tenYearCagr, (v) => pct(v));
-    b.figure(`${key}.year10Revenue`, `price-implied year-10 revenue, ${at}`, cell.year10Revenue, (v) => money(v, 0));
+    b.figure(`${key}.year10Revenue`, `price-implied year-10 revenue, ${at}`, cell.year10Revenue, bigMoney);
     b.figure(`${key}.ronic`, `return on new invested capital, ${at}`, cell.ronic, (v) => pct(v));
   }
 
   // --- §10 D — deterministic diagnostics -----------------------------------
   b.figure("diagnostics.enterpriseValue", "enterprise value", figureOf(diagnostics.enterpriseValue, (v) => v.enterpriseValue), (v) =>
-    money(v, 0)
+    bigMoney(v)
   );
   b.figure("diagnostics.multiples.peTrailing", "trailing price/earnings", diagnostics.multiples.peTrailing, multiple);
   b.figure("diagnostics.multiples.evToEbit", "EV/EBIT", diagnostics.multiples.evToEbit, multiple);
@@ -169,6 +195,30 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
     figureOf(diagnostics.marginHistory, (v) => v.currentMargin),
     (v) => pct(v)
   );
+  // The window's own LENGTH, not just what was measured over it. §6.2 is
+  // explicit that the window is "never described as ten-year unless it is", so
+  // a sentence about the history has to be able to say how long it actually
+  // was — and the traceability rule refuses a spelled-out year count, which
+  // leaves a slot as the only way to say it.
+  b.figure(
+    "diagnostics.marginHistory.windowYears",
+    "length of the margin-history window, in years",
+    figureOf(diagnostics.marginHistory, (v) => new Decimal(v.windowYears)),
+    (v) => v.toFixed(0)
+  );
+  b.value(
+    "gates.gate1.filedYearsCount",
+    "number of filed years this company has",
+    new Decimal(result.gates.gate1.filedYearsCount),
+    (v) => v.toFixed(0)
+  );
+  b.value(
+    "policy.preRevenueConstructionLeadYears",
+    "construction lead assumed by policy, in years",
+    new Decimal(policy.constants.preRevenueConstructionLeadYears),
+    (v) => v.toFixed(0)
+  );
+
   b.figure(
     "diagnostics.marginHistory.median",
     "median operating margin over the history window",
@@ -187,8 +237,8 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
     figureOf(diagnostics.marginHistory, (v) => v.worstSingleYearChange),
     (v) => pct(v)
   );
-  b.figure("diagnostics.fcf.cashFcf", "cash free cash flow", diagnostics.fcf.cashFcf, (v) => money(v, 0));
-  b.figure("diagnostics.fcf.unleveredFcf", "unlevered free cash flow", diagnostics.fcf.unleveredFcf, (v) => money(v, 0));
+  b.figure("diagnostics.fcf.cashFcf", "cash free cash flow", diagnostics.fcf.cashFcf, bigMoney);
+  b.figure("diagnostics.fcf.unleveredFcf", "unlevered free cash flow", diagnostics.fcf.unleveredFcf, bigMoney);
   b.figure(
     "diagnostics.impliedReturnOnNewCapital",
     "implied return on new capital, current fiscal year",
@@ -213,7 +263,7 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
     diagnostics.rateSensitivity.minusOnePoint,
     (v) => pct(v)
   );
-  b.value("diagnostics.runRate.ttm", "trailing twelve-month revenue", diagnostics.runRate.ttm, (v) => money(v, 0));
+  b.value("diagnostics.runRate.ttm", "trailing twelve-month revenue", diagnostics.runRate.ttm, bigMoney);
   b.value(
     "diagnostics.shapeMismatch.gapPoints",
     "gap between guided and price-implied growth",
@@ -222,14 +272,14 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
   );
 
   // --- §10 G — scenario outputs --------------------------------------------
-  b.value("scenarioOutputs.values.bear", "bear scenario value", scenarioOutputs.values.bear, (v) => money(v, 0));
-  b.value("scenarioOutputs.values.base", "base scenario value", scenarioOutputs.values.base, (v) => money(v, 0));
-  b.value("scenarioOutputs.values.bull", "bull scenario value", scenarioOutputs.values.bull, (v) => money(v, 0));
+  b.value("scenarioOutputs.values.bear", "bear scenario value", scenarioOutputs.values.bear, bigMoney);
+  b.value("scenarioOutputs.values.base", "base scenario value", scenarioOutputs.values.base, bigMoney);
+  b.value("scenarioOutputs.values.bull", "bull scenario value", scenarioOutputs.values.bull, bigMoney);
   b.value(
     "scenarioOutputs.weightedDistribution",
     "probability-weighted value, shown inside the range and never as a headline",
     scenarioOutputs.weightedDistribution,
-    (v) => money(v, 0)
+    bigMoney
   );
   b.value(
     "scenarioOutputs.priceLocationWithinRange",
@@ -246,13 +296,13 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
 
   // --- §10 H — the fair-value range, in whichever form this profile takes ---
   if (fairValueRange.kind === "range") {
-    b.value("fairValueRange.bear", "bottom of the fair-value range", fairValueRange.bear, (v) => money(v, 0));
-    b.value("fairValueRange.bull", "top of the fair-value range", fairValueRange.bull, (v) => money(v, 0));
+    b.value("fairValueRange.bear", "bottom of the fair-value range", fairValueRange.bear, bigMoney);
+    b.value("fairValueRange.bull", "top of the fair-value range", fairValueRange.bull, bigMoney);
     b.value(
       "fairValueRange.weightedValueInside",
       "weighted value shown inside the range",
       fairValueRange.weightedValueInside,
-      (v) => money(v, 0)
+      bigMoney
     );
   } else if (fairValueRange.kind === "pre-revenue-distribution") {
     b.value("fairValueRange.failure", "value per share if this fails", fairValueRange.failure, money);
@@ -282,10 +332,10 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
   // --- §7.2 M16 — the pre-revenue module -----------------------------------
   if (preRevenue !== null) {
     b.value("preRevenue.cashPerShare", "cash per share", preRevenue.cashPerShare, money);
-    b.value("preRevenue.quarterlyBurn", "quarterly cash burn", preRevenue.quarterlyBurn, (v) => money(v, 0));
+    b.value("preRevenue.quarterlyBurn", "quarterly cash burn", preRevenue.quarterlyBurn, bigMoney);
     b.value("preRevenue.runway", "quarters of runway", preRevenue.runway, (v) => v.toFixed(0));
     b.value("preRevenue.dilutionRequired", "dilution required on the back-loaded ramp", preRevenue.dilutionRequired, (v) =>
-      money(v, 0)
+      bigMoney(v)
     );
     b.figure(
       "preRevenue.unitEconomicsBreakeven",

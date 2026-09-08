@@ -150,6 +150,56 @@ describe("runInterpretation", () => {
     await expect(runInterpretation(msft, fakeCall(response))).rejects.toThrow(UntraceableFigureError);
   });
 
+  // --- one regeneration, never a repair --------------------------------
+
+  describe("when the first output is refused", () => {
+    function badThenGood(seen: AnalystCallRequest[]): AnalystCall {
+      let n = 0;
+      return async (request) => {
+        seen.push(request);
+        n += 1;
+        return n === 1
+          ? statementsOf(["Today's price implies growth of 14.2% a year."])
+          : statementsOf([`Today's price implies {{${CLEAN_CAGR_SLOT}}} a year.`]);
+      };
+    }
+
+    it("regenerates once and keeps the second output", async () => {
+      const seen: AnalystCallRequest[] = [];
+
+      const interpretation = await runInterpretation(msft, badThenGood(seen));
+
+      expect(seen).toHaveLength(2);
+      expect(interpretation.statements[0].referencesValueIds).toEqual([CLEAN_CAGR_SLOT]);
+    });
+
+    it("keeps nothing from the refused attempt — the output is regenerated whole, never patched", async () => {
+      const interpretation = await runInterpretation(msft, badThenGood([]));
+
+      expect(JSON.stringify(interpretation)).not.toContain("14.2");
+    });
+
+    it("tells the model what failed, so the second attempt is informed rather than a re-roll", async () => {
+      const seen: AnalystCallRequest[] = [];
+
+      await runInterpretation(msft, badThenGood(seen));
+
+      expect(seen[0].user).not.toContain("NUMERAL FROM MODEL");
+      expect(seen[1].user).toContain("NUMERAL FROM MODEL");
+    });
+
+    it("gives up after the second refusal rather than retrying until something passes", async () => {
+      const seen: AnalystCallRequest[] = [];
+      const alwaysBad: AnalystCall = async (request) => {
+        seen.push(request);
+        return statementsOf(["Growth of 14.2% is implied."]);
+      };
+
+      await expect(runInterpretation(msft, alwaysBad)).rejects.toThrow(UntraceableFigureError);
+      expect(seen).toHaveLength(2);
+    });
+  });
+
   it("REFUSES a responsibility outside §8.2's five", async () => {
     const call = fakeCall({
       statements: [{ responsibility: "OVERALL VERDICT", text: "Nothing numeric." }],

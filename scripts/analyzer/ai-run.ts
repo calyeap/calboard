@@ -2,7 +2,12 @@ import { config as loadEnv } from "dotenv";
 loadEnv({ path: ".env.local" });
 
 import { getPool } from "../../lib/db";
-import { createRun, recordFactDecision, recordProfileDecision } from "../../lib/analyzer/runStore";
+import {
+  createRun,
+  recordFactDecision,
+  recordJudgment,
+  recordProfileDecision,
+} from "../../lib/analyzer/runStore";
 import { loadGateState } from "../../lib/analyzer/gate";
 import { analysisForReport } from "../../lib/analyzer/reportAnalysis";
 import { buildSlotCatalogue } from "../../lib/analyzer/ai/slots";
@@ -88,6 +93,28 @@ async function main(): Promise<void> {
   console.log(`Step 2: ${gateState.queuedCount} fact(s) queued for spot-check`);
   for (const factId of gateState.outstandingFactIds) {
     await recordFactDecision(runId, factId, "CONFIRMED", null);
+  }
+
+  // §4.4's second judgment — WHICH INVESTMENTS ARE NON-OPERATING. No tag says,
+  // so the software does not choose: left unrecorded, enterprise value is
+  // INCOMPLETE and everything built on it reports that state, which is the
+  // correct answer to a question nobody has answered.
+  //
+  // It is a FLAG here rather than a default for the same reason. Passing
+  // --nonoperating records a judgment; the value printed below says which one
+  // was recorded, so a run's output can never be read as though the analyzer
+  // had decided this itself.
+  const nonOperating = process.argv.find((a) => a.startsWith("--nonoperating="))?.split("=")[1];
+  if (nonOperating !== undefined) {
+    const candidates = gateState.acquired.acquired.acquisition.candidateNonOperatingInvestments;
+    const selection =
+      nonOperating === "none"
+        ? "None of these are non-operating"
+        : candidates.map((c) => c.tag).join(" + ");
+    await recordJudgment(runId, "NON-OPERATING INVESTMENTS", selection, "Recorded for a verification run.");
+    console.log(`§4.4 judgment: NON-OPERATING INVESTMENTS = ${selection}`);
+  } else {
+    console.log("§4.4 judgment: NON-OPERATING INVESTMENTS not recorded — enterprise value reports INCOMPLETE");
   }
 
   // Step 6. Confirming the recommendation, which is what keeps trust CLEAN

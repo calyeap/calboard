@@ -20,17 +20,26 @@ export interface ProhibitionDefect {
   detail: string;
 }
 
+/**
+ * Split for the same reason as UntraceableFigureError: `message` reaches the
+ * screen, so it names the kind of prohibited pattern and not the wording. A
+ * refusal that reprinted "the shares look CHEAP" would put a [C]-authored
+ * position on the page under the heading of having refused it.
+ */
 export class ProhibitedCopyError extends Error {
   readonly defects: ProhibitionDefect[];
+  readonly diagnostic: string;
 
   constructor(where: string, defects: ProhibitionDefect[]) {
+    const kinds = [...new Set(defects.map((d) => d.kind))].join(", ");
     super(
-      `${where}: [C] copy carries ${defects.length} prohibited pattern(s) — ` +
-        defects.map((d) => `${d.kind} ("${d.detail}")`).join("; ") +
-        `. §8.3 limit 1: [C] issues no verdict, no target and no recommendation, and may not author a position.`
+      `${where}: [C] copy carries ${defects.length} prohibited pattern(s) (${kinds}). ` +
+        `§8.3 limit 1: [C] issues no verdict, no target and no recommendation, and may not author a position. ` +
+        `The whole output was refused; no part of it was kept.`
     );
     this.name = "ProhibitedCopyError";
     this.defects = defects;
+    this.diagnostic = `${where}: ` + defects.map((d) => `${d.kind} ("${d.detail}")`).join("; ");
   }
 }
 

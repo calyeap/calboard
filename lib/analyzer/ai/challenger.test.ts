@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { assembleAnalysisResult } from "../assemble";
+import { formatFactValue } from "../factDisplay";
+import { factUnit } from "../acquisition/factUnit";
 import { MSFT_FIXTURE } from "../fixtures/msft";
 import type { AnalystCall, AnalystCallRequest } from "./analystCall";
 import { buildChallengerPayload, ChallengerBlindingError } from "./challengerPayload";
@@ -44,15 +46,18 @@ describe("runChallenger", () => {
     expect(Date.parse(result.completedAt)).not.toBeNaN();
   });
 
-  it("substitutes a cited fact's value from the supplied fact set", async () => {
-    const factValue = msft.facts.find((f) => f.value !== null)!;
-    const call = fakeCall(
-      findings([{ claimOrFactId: factValue.id, evidence: `The record reads {{facts.${factValue.id}}}.` }])
-    );
+  it("substitutes a cited fact's value from the supplied fact set, in its displayed form", async () => {
+    const fact = msft.facts.find((f) => f.value !== null)!;
+    const call = fakeCall(findings([{ claimOrFactId: fact.id, evidence: `The record reads {{facts.${fact.id}}}.` }]));
 
     const result = await runChallenger(payload, call);
 
-    expect(result.findings[0].evidence).toBe(`The record reads ${factValue.value!.toString()}.`);
+    // The displayed form, not the exact acquired Decimal — the 8 September
+    // ruling separates the two, and a challenger finding is a report surface
+    // like any other.
+    expect(result.findings[0].evidence).toBe(
+      `The record reads ${formatFactValue(fact.value, factUnit(fact.id))}.`
+    );
   });
 
   it("sends the payload and nothing else — the prompt carries no analyst reasoning to disregard", async () => {

@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
+import Decimal from "decimal.js";
 import { assembleAnalysisResult } from "../assemble";
+import { formatUsd } from "../factDisplay";
 import { MSFT_FIXTURE } from "../fixtures/msft";
 import { OKLO_FIXTURE } from "../fixtures/oklo";
 import { buildSlotCatalogue, buildFactSlotCatalogue } from "./slots";
@@ -25,6 +27,44 @@ describe("buildSlotCatalogue", () => {
     expect(factsWithValues.length).toBeGreaterThan(0);
     for (const fact of factsWithValues) {
       expect(catalogue.has(`facts.${fact.id}`)).toBe(true);
+    }
+  });
+
+  it("renders a fact through the same display rule the fact card uses (ruled 8 September 2026)", () => {
+    const catalogue = buildSlotCatalogue(msft);
+    const margin = msft.facts.find((f) => f.id === "current-operating-margin");
+
+    // Acquisition holds the exact figure — 0.46780818408927220731 — and the
+    // ruling separates that from what is shown. A [C] sentence substituting
+    // the raw Decimal would put a twenty-decimal margin on the page, which is
+    // the form the ruling exists to prevent, arriving through a new door.
+    expect(margin).toBeDefined();
+    expect(catalogue.get(`facts.${margin!.id}`)?.formatted).toBe("46.8%");
+  });
+
+  it("states a computed aggregate at the same magnitude a fact of the same size gets", () => {
+    // A report cannot carry two money conventions. The first real MSFT run
+    // printed "$67.0B" in a challenger finding and "$66987000000" in an
+    // interpretation statement — the same quantity, because the fact slots go
+    // through the 8 September display rule and the computed ones did not.
+    const catalogue = buildSlotCatalogue(msft);
+    const cashFcf = msft.diagnostics.fcf.cashFcf;
+
+    expect(cashFcf.suppressed).toBe(false);
+    expect(catalogue.get("diagnostics.fcf.cashFcf")?.formatted).toBe(
+      formatUsd((cashFcf as { value: Decimal }).value)
+    );
+    // A per-share figure keeps its cents — it is read against a quote.
+    expect(catalogue.get("price")?.formatted).toBe(`$${msft.price.value.toFixed(2)}`);
+  });
+
+  it("never puts an unrounded figure into a fact slot, for either company", () => {
+    for (const result of [msft, oklo]) {
+      for (const [id, slot] of buildSlotCatalogue(result)) {
+        if (!id.startsWith("facts.")) continue;
+        const fraction = /\.(\d+)/.exec(slot.formatted)?.[1] ?? "";
+        expect(fraction.length, `${id} rendered as ${slot.formatted}`).toBeLessThanOrEqual(2);
+      }
     }
   });
 
