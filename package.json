@@ -12,6 +12,7 @@
     "record-reconciliation": "tsx scripts/record-reconciliation.ts",
     "evidence": "tsx scripts/evidence/run.ts",
     "acquire": "tsx scripts/analyzer/acquire-run.ts",
+    "ai-run": "tsx scripts/analyzer/ai-run.ts",
     "acquire:capture": "tsx scripts/analyzer/capture-companyfacts.ts"
   },
   "dependencies": {
