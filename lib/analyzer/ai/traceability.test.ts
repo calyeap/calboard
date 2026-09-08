@@ -137,6 +137,26 @@ describe("traceText", () => {
     ]);
   });
 
+  it("REFUSES a gate identifier — the exemption was not widened to cover it (ruled)", () => {
+    // "Gate 1" is a genuine refusal, not a false positive to be exempted. The
+    // state-name exemption is safe because state names derive from a closed
+    // set checked against a union at compile time; gate identifiers have no
+    // such property, and widening the exemption a third time is how an
+    // exception surface grows. The model writes around it instead — "the
+    // history-sufficiency gate" — which reads better anyway.
+    const catalogue = catalogueOf(slot("price", "$499.70"), slot("gates.gate1.filedYearsCount", "13"));
+
+    expect(traceText("Gate 1 returned SHORT HISTORY.", catalogue)).toMatchObject([
+      { kind: "NUMERAL FROM MODEL", detail: "1" },
+    ]);
+  });
+
+  it("accepts the same point written by what the gate tests", () => {
+    const catalogue = catalogueOf(slot("price", "$499.70"), slot("gates.gate1.filedYearsCount", "13"));
+
+    expect(traceText("The history-sufficiency gate returned SHORT HISTORY.", catalogue)).toEqual([]);
+  });
+
   it("leaves ordinary counting words alone — they are prose, not figures", () => {
     const catalogue = catalogueOf(slot("price", "$499.70"));
 

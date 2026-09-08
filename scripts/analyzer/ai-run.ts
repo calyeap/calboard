@@ -10,6 +10,8 @@ import {
 } from "../../lib/analyzer/runStore";
 import { loadGateState } from "../../lib/analyzer/gate";
 import { analysisForReport } from "../../lib/analyzer/reportAnalysis";
+import { analystCallIfConfigured } from "../../lib/analyzer/ai/anthropicCall";
+import type { AnalystCall } from "../../lib/analyzer/ai/analystCall";
 import { buildSlotCatalogue } from "../../lib/analyzer/ai/slots";
 import type { AnalysisResult } from "../../lib/analyzer/types";
 
@@ -125,11 +127,54 @@ async function main(): Promise<void> {
   console.log(`Step 6: profile CONFIRMED as ${recommended}`);
 
   // Steps 8-10, including the two M8-b calls.
-  const report = await analysisForReport(runId);
+  //
+  // The call is wrapped so this script can report what a run actually cost:
+  // how many model calls were made, how long each took, and how much of the
+  // wall time was a REGENERATION after a refusal rather than one generation
+  // running slowly. Those have different fixes, so the number decides which
+  // problem this is. The wrapper only observes — it changes no behaviour.
+  const attempts: { label: string; ms: number }[] = [];
+  const live = analystCallIfConfigured();
+  const instrumented: AnalystCall | null =
+    live === null
+      ? null
+      : async (request) => {
+          const started = Date.now();
+          try {
+            return await live(request);
+          } finally {
+            attempts.push({ label: request.label, ms: Date.now() - started });
+          }
+        };
+
+  const startedAt = Date.now();
+  const report = await analysisForReport(runId, instrumented);
+  const totalMs = Date.now() - startedAt;
 
   heading(`AI layer — ${report.aiLayer.status}`);
   if (report.aiLayer.model !== null) console.log(`model: ${report.aiLayer.model}`);
   if (report.aiLayer.detail !== null) console.log(report.aiLayer.detail);
+
+  // One call per label is a clean generation. A second is a REGENERATION after
+  // a refusal — the whole output was discarded and asked for again — so the
+  // gap between the two counts is what a refusal costs in latency.
+  const byLabel = new Map<string, number[]>();
+  for (const a of attempts) byLabel.set(a.label, [...(byLabel.get(a.label) ?? []), a.ms]);
+
+  console.log(`\nmodel calls:   ${attempts.length}`);
+  for (const [label, durations] of byLabel) {
+    const regenerations = durations.length - 1;
+    console.log(
+      `  ${label.padEnd(15)} ${durations.length} call(s) — ${durations.map((d) => `${(d / 1000).toFixed(1)}s`).join(" + ")}` +
+        (regenerations > 0 ? `   [${regenerations} regeneration after a refusal]` : "")
+    );
+  }
+  const firstAttemptMs = [...byLabel.values()].reduce((max, d) => Math.max(max, d[0]), 0);
+  const retryMs = attempts.reduce((sum, a) => sum + a.ms, 0) - [...byLabel.values()].reduce((s, d) => s + d[0], 0);
+  console.log(`\nwall time:     ${(totalMs / 1000).toFixed(1)}s`);
+  console.log(`  the two calls run concurrently, so one clean generation costs about the slower of the two:`);
+  console.log(`  slowest first attempt   ${(firstAttemptMs / 1000).toFixed(1)}s`);
+  console.log(`  spent on regenerations  ${(retryMs / 1000).toFixed(1)}s`);
 
   heading("Section I — interpretation [C]");
   if (report.result.interpretation.statements.length === 0) {

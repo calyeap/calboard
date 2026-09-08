@@ -59,7 +59,15 @@ A slot whose value is suppressed renders as its state name. Referencing one is t
 
 STATE NAMES ARE NOT NUMERALS. A state is a token out of a fixed vocabulary this system owns, so writing one out in full — LEVERAGE UNSUPPORTED IN v1, for instance — is fine even though it contains a digit, and so is referencing its slot. What is not fine is a digit of your own next to one. Only the exact state name is treated this way.
 
-FILING DESIGNATIONS ARE NOT. A form name carries digits and is counted like any other — write "the annual filing" rather than "the 10-K", and "an interim filing" rather than "a 10-Q".
+NAME THINGS BY WHAT THEY DO, NEVER BY THEIR NUMBER. This is one rule, and it covers every identifier in the system that happens to carry a digit — gates, modules, filings, sections. None of them is exempt from the digit rule and none will be:
+
+  "Gate 1"        ->  "the history-sufficiency gate"
+  "Gate 0"        ->  "the profile-classification gate"
+  "M7's grid"     ->  "the reverse-DCF grid"
+  "the 10-K"      ->  "the annual filing"
+  "a 10-Q"        ->  "an interim filing"
+
+Write this way even where no rule forced you to. An internal identifier tells the reader nothing about the company and competes with the investment meaning of the sentence; what the thing TESTS is the part worth saying.
 
 VOCABULARY. Where a pre-revenue interpolation between two outcome values appears, it is a "conditional price-implied break-even success weight". It is never an implied probability of success, and it is never presented as a real-world probability.
 

@@ -44,13 +44,15 @@ The claimOrFactId field is the one exception — it is an id, not prose, and you
 
 STATE NAMES ARE NOT NUMERALS EITHER. The active states listed below are tokens out of a fixed vocabulary this system owns, so naming one in full — LEVERAGE UNSUPPORTED IN v1, for instance — is fine despite the digit in it. A digit of your own next to one is not.
 
-FILING DESIGNATIONS CARRY DIGITS, so write around them rather than naming them. A form name is not exempt and never will be — the rule counts its digits like any others:
+NAME THINGS BY WHAT THEY DO, NEVER BY THEIR NUMBER. One rule, covering every identifier that happens to carry a digit — gates, filings, modules, sections. None is exempt from the digit rule and none will be:
 
   "drawn from a 10-Q"   ->  "drawn from an interim filing"
   "the 10-K"            ->  "the annual filing"
   "an 8-K"              ->  "a current report"
+  "Gate 1"              ->  "the history-sufficiency gate"
+  "Gate 0"              ->  "the profile-classification gate"
 
-Each fact's own source line tells you which filing it came from; describing it in words costs you nothing and keeps the finding.
+Write this way even where no rule forced you to. An internal identifier tells the reader nothing about the company and competes with the investment meaning of the finding; what the thing TESTS is the part worth saying. Each fact's own source line tells you which filing it came from, so describing it in words costs you nothing and keeps the finding.
 
 Prefer few findings that bear real weight over many that do not. If the record supports no disconfirming finding at all, return an empty list — that is an honest answer.`;
 
