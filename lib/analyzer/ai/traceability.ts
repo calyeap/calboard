@@ -199,6 +199,56 @@ function withoutSystemVocabulary(text: string, catalogue: SlotCatalogue): string
 }
 
 /**
+ * Edit distance, capped: anything past `limit` is reported as `limit + 1`,
+ * since a far-off candidate is not worth measuring precisely.
+ */
+function editDistance(a: string, b: string, limit: number): number {
+  if (Math.abs(a.length - b.length) > limit) return limit + 1;
+
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      current[j] = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+    }
+    if (Math.min(...current) > limit) return limit + 1;
+    previous = current;
+  }
+  return previous[b.length];
+}
+
+/**
+ * The catalogue id an unknown reference most likely meant, or null.
+ *
+ * This does NOT soften the refusal — an unknown slot is still a defect and the
+ * whole output is still discarded. It exists because the refusal is fed back to
+ * the model for its one regeneration, and a live run refused on
+ * "facts.operating-operating-cash-flow", a doubled token: naming the near miss
+ * turns a guess into a correction. Null when nothing is close, because pointing
+ * confidently at the wrong field is worse than saying nothing.
+ */
+function nearestSlotId(unknown: string, catalogue: SlotCatalogue): string | null {
+  // A third of the id may differ, no more. Loose enough for a doubled token or
+  // a dropped segment, tight enough that unrelated ids do not match.
+  const limit = Math.max(2, Math.floor(unknown.length / 3));
+  let best: string | null = null;
+  let bestDistance = limit + 1;
+
+  for (const id of catalogue.keys()) {
+    const distance = editDistance(unknown, id, limit);
+    if (distance < bestDistance) {
+      best = id;
+      bestDistance = distance;
+    }
+  }
+  return bestDistance <= limit ? best : null;
+}
+
+/**
  * Every way this text fails to trace, in one pass.
  *
  * Returns all defects rather than the first: a report-back that names one
@@ -209,7 +259,13 @@ export function traceText(text: string, catalogue: SlotCatalogue): TraceDefect[]
 
   for (const match of text.matchAll(SLOT_REFERENCE)) {
     const id = match[1];
-    if (!catalogue.has(id)) defects.push({ kind: "UNKNOWN SLOT", detail: id });
+    if (catalogue.has(id)) continue;
+    const nearest = nearestSlotId(id, catalogue);
+    defects.push({
+      kind: "UNKNOWN SLOT",
+      detail: id,
+      ...(nearest === null ? {} : { context: `did you mean ${nearest}?` }),
+    });
   }
 
   // Two removals before anything is scanned, and they are the same idea twice:

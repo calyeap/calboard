@@ -153,6 +153,31 @@ describe("traceText", () => {
   });
 });
 
+describe("an unknown slot names its nearest match", () => {
+  it("points at the id the model probably meant", () => {
+    // A live MSFT run refused on facts.operating-operating-cash-flow — the
+    // model doubled a token. The refusal is correct and stays: a figure with
+    // no field behind it does not reach the page. But the regeneration is
+    // told what failed, and "unknown slot" alone leaves it guessing at which
+    // of a hundred ids was intended.
+    const catalogue = catalogueOf(slot("facts.operating-cash-flow", "$182.9B"), slot("price", "$499.70"));
+
+    const defects = traceText("Cash generation reads {{facts.operating-operating-cash-flow}}.", catalogue);
+
+    expect(defects).toMatchObject([{ kind: "UNKNOWN SLOT", detail: "facts.operating-operating-cash-flow" }]);
+    expect(defects[0].context).toContain("facts.operating-cash-flow");
+  });
+
+  it("offers nothing when nothing is close, rather than pointing somewhere wrong", () => {
+    const catalogue = catalogueOf(slot("price", "$499.70"));
+
+    const defects = traceText("It reads {{completely.unrelated.identifier.here}}.", catalogue);
+
+    expect(defects[0].kind).toBe("UNKNOWN SLOT");
+    expect(defects[0].context).toBeUndefined();
+  });
+});
+
 describe("UntraceableFigureError", () => {
   // The refusal message reaches the SCREEN (reportAnalysis carries it into
   // Section I). If it quoted the figure the model invented, the report would
