@@ -57,7 +57,7 @@ v1 has been validated on three companies in three profiles. Within the supported
 |---|---|---|
 | Mature, profitable, stable FCF | Microsoft | DCF + reverse DCF |
 | High-growth, profitable, uncertain durability | NVIDIA | Reverse DCF + scenario DCF with explicit revenue paths |
-| Pre-revenue / unprofitable **owner-operator infrastructure** | OKLO | Implied probability of success + "what has to be true" reverse calc |
+| Pre-revenue / unprofitable **owner-operator infrastructure** | OKLO | Conditional price-implied break-even success weight + "what has to be true" reverse calc |
 
 The **asset-based row** (banks, insurers, brokers, balance-sheet asset managers, REITs, reserve-based resources) appears in the methodology's §1 table for completeness and **has been validated on nothing**. Gate 0 refuses it deterministically.
 
@@ -520,7 +520,7 @@ Hard auto-assignment is explicitly rejected by the methodology: a cyclical in a 
 |---|---|---|---|
 | Mature, profitable, stable FCF | DCF + reverse DCF | FCF yield, P/E vs own history, EV/EBIT vs peers | EV/Revenue, P/B |
 | High-growth, profitable, uncertain durability | Reverse DCF + scenario DCF with explicit revenue paths | Median-margin P/E, EV/EBIT, market-cap vs addressable-profit-pool | Trailing P/E at peak margins, EV/Revenue standalone |
-| Pre-revenue / unprofitable | Implied probability of success + "what has to be true" reverse calc | Cash-per-share floor, runway and dilution path, unit-economics breakeven, implied future revenue at exit multiple | DCF as a point estimate, any current multiple |
+| Pre-revenue / unprofitable | Conditional price-implied break-even success weight + "what has to be true" reverse calc | Cash-per-share floor, runway and dilution path, unit-economics breakeven, implied future revenue at exit multiple | DCF as a point estimate, any current multiple |
 | Asset-based | *Not validated. Caught by Gate 0.* | — | — |
 
 ### 6.4 Triggers A and B — evaluated separately [S]
@@ -701,7 +701,7 @@ The base-year rule (§3.1) fires where sequential revenue growth exceeds ~10%. *
 
 **M15 — Scenario outputs.** Scenario values; probability-weighted distribution **as display only, never a headline**; location of current price within the scenario range; the discount rate at which the base case equals the price; the fair-value range per §10.
 
-**M16 — Pre-revenue module.** Cash per share on the latest share count adjusted for burn to today; quarterly burn; runway; unit-economics breakeven; the four-line funding stack under **both ramps**; dilution required; implied probability per success definition.
+**M16 — Pre-revenue module.** Cash per share on the latest share count adjusted for burn to today; quarterly burn; runway; unit-economics breakeven; the four-line funding stack under **both ramps**; dilution required; the conditional price-implied break-even success weight per success definition.
 
 Funding stack order, all four lines displayed:
 
@@ -720,19 +720,21 @@ Retained cash flow is computed after cash operating costs, corporate overhead, i
 
 **Unit-economics breakeven runs BEFORE solving for scale.** If each unit destroys value, the "what has to be true" solver returns **NOT ACHIEVABLE AT ANY SCALE** rather than a very large number.
 
-**Implied probability, three defined states:**
+**Conditional price-implied break-even success weight, three defined states:**
 
 | Condition | State returned |
 |---|---|
-| V_fail < Price < V_success | the probability, rounded to the nearest 5% |
+| V_fail < Price < V_success | the weight, rounded to the nearest 5% |
 | Price ≥ V_success > V_fail | **PRICE NOT JUSTIFIABLE BY THIS OUTCOME** |
 | V_success ≤ V_fail | **THIS SUCCESS IS WORTH LESS THAN FAILURE** |
 
 **Basis rule:** V_fail and V_success must be on the same basis — both a present value as of today, both per **current** share, both after the same dilution treatment. Each is discounted at **the rate appropriate to its own risk**, and both rates are displayed. Same basis means same date, same share base, same dilution treatment — **not** the same discount rate.
 
+**This is not a probability of success.** It is the weight at which the two modelled outcomes break even at today's price — a statement about what the price implies, conditional on those two outcomes being the only ones and on their values being right. It carries no claim about how likely success actually is. Reporting it as a probability would attribute to the model a view it does not hold (CalFinance Methodology v2).
+
 **The third state is a finding, not an error.** In the OKLO rerun two of six success definitions returned it. Rows in that state are the most informative output the model produced and **must be displayed, not dropped**.
 
-**Probability is reported per success definition, never as one number.**
+**The weight is reported per success definition, never as one number, and never described as a probability of success.**
 
 **Per I7:** where the pre-revenue reference issue price is an assumption, the caveat text is displayed: *"Success values use an assumed future issue price. The grid is the output; the reference row is not a forecast."*
 
@@ -874,7 +876,7 @@ Five of the six are implemented in v1. Only R4 is deferred, and only because the
 | **NOT COMPUTABLE / NO SOLUTION IN RANGE / DEGENERATE** | §3.3 degenerate solver outputs | the affected reverse-DCF cell |
 | **PRECONDITION FAILED** | §8.2 | FCF yield + growth |
 | **NOT ACHIEVABLE AT ANY SCALE** | §8.6 | the "what has to be true" solve |
-| **SUCCESS WORTH LESS THAN FAILURE / PRICE NOT JUSTIFIABLE** | §2.9 | the implied probability for that definition |
+| **SUCCESS WORTH LESS THAN FAILURE / PRICE NOT JUSTIFIABLE** | §2.9 | the conditional price-implied break-even success weight for that definition |
 | **SEASONAL — RUN-RATE SUPPRESSED** | §7.2 M12 seasonality test (I4) | the annualised run-rate for revenue, NOPAT, every multiple and the steady-state value |
 | **INCOMPLETE** | missing REQUIRED input (I14) | every dependent output |
 
@@ -1041,7 +1043,7 @@ Authorised by Calvin's recorded override of 6 September 2026 (§1.1, §14). One 
 
 #### 10.6.1 Vocabulary
 
-The three values are **CHEAP · FAIR · EXPENSIVE**. Not bull / bear / hold, for two reasons that are not stylistic:
+The four values are **CHEAP · FAIR · EXPENSIVE · INCONCLUSIVE**, per CalFinance Methodology v2. Each is a positive claim about what the evidence supports — CHEAP undervaluation, FAIR roughly fair valuation, EXPENSIVE overvaluation, and INCONCLUSIVE that material valuation evidence conflicts or is insufficient. **INCONCLUSIVE is not FAIR**, and the distinction is the point: FAIR asserts the company is roughly fairly valued, which is a finding, while INCONCLUSIVE reports that no finding is supported. This vocabulary lives here and deliberately not in §9: §9 catalogues what the analysis could not do, and a position — INCONCLUSIVE included — is the analysis succeeding and reporting a finding, not a limitation; a CLEAN run with complete data can return INCONCLUSIVE, and that is the machinery working as designed, not a trust or suppression event (ruled, amendment M8). Not bull / bear / hold, for two reasons that are not stylistic:
 
 - **HOLD collides with a portfolio-layer state.** The Investment Methodology's HOLD is an output about a position, requiring position size, cost basis and portfolio context — which §1.4 forbids this analyzer from receiving. Reusing the word would make a one-company statement look like a portfolio one.
 - **Bull and bear are sentiment words for what is arithmetic.** The position is a comparison of price against a computed range and a computed gap. CHEAP / FAIR / EXPENSIVE is price-scoped, one-company, and free of any implied action on its own.
@@ -1060,7 +1062,11 @@ Both inputs are fields the analyzer already computes. Nothing new is measured an
 **Bands and the disagreement rule are policy constants**, recorded in `policy` (§10.0.1) and marked **PROVISIONAL** with what they were calibrated on. Two rules are fixed here and are not configuration:
 
 1. **The same inputs always produce the same position.** No per-company adjustment, no override, no model in the path.
-2. **Where the two inputs point in opposite directions the position is FAIR.** Disagreement is not resolved by preferring one input; the neutral value is the honest reading of a genuine split, and it fails toward saying less.
+2. **Every position requires positive agreement from both inputs.** CHEAP requires both to read cheap, FAIR requires both to read fair, EXPENSIVE requires both to read expensive. **Anything else is INCONCLUSIVE** — whether the two point in opposite directions or one is simply not enough to support a finding.
+
+   This corrects an earlier rule that sent disagreement to FAIR. FAIR is a claim that a company is roughly fairly valued; making it the fallback meant asserting that claim on the strength of two inputs that agreed about nothing — a finding produced by silence. Under CalFinance Methodology v2, INCONCLUSIVE carries that case and says what is true: the evidence does not support a position.
+
+   It still fails toward saying less. It now does so without saying something else instead.
 
 **Why deterministic and not an AI call, recorded because it will be asked again:** an AI-authored headline verdict would be unreproducible and unauditable. Two runs on identical inputs could differ, and neither could be traced. That is the failure §3 exists to prevent, applied to the loudest sentence in the report.
 
@@ -1180,7 +1186,7 @@ Eight cases. The first three are the red team's recommended software validation 
 
 **Confirm:** two of six success definitions return **THIS SUCCESS IS WORTH LESS THAN FAILURE** ($0 and $1 against a $3.10 failure value) and those rows are **displayed, not dropped**.
 
-**Confirm:** implied probability reported per success definition, never as one number.
+**Confirm:** the conditional price-implied break-even success weight is reported per success definition, never as one number, and never described as a probability of success.
 
 **Confirm:** funding stack shows all four lines including retained operating cash flow from assets in service; solved year by year; both ramps shown; 8 GW utility-multiple case at $31 back-loaded and $48 steady.
 
