@@ -38,3 +38,14 @@ if (typeof window !== "undefined" && !window.matchMedia) {
     dispatchEvent: () => false,
   }) as MediaQueryList;
 }
+
+// The analyzer acquires its facts from SEC EDGAR (milestone M8-a). Tests run
+// against the committed captures instead: real filing data, taken once by
+// scripts/analyzer/capture-companyfacts.ts, so the suite neither depends on
+// the SEC being reachable nor spends EDGAR's published rate budget on every
+// run. Offline mode also fetches no price quote.
+//
+// This is set HERE rather than defaulted in gate.ts on purpose: application
+// code must fail closed on a live acquisition failure, never fall back to
+// captured data that would look fresh and be months old.
+process.env.ANALYZER_OFFLINE = "1";

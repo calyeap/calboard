@@ -104,20 +104,57 @@ export function isExemptFromQueue(fact: FactRecord): boolean {
 }
 
 /**
- * The Step 2 queue: material facts that are not exempt. Order is the fact
- * set's own order, so the queue is stable across refreshes and a run resumed
- * from its URL presents the same fact in the same place.
+ * Fact ids a §3.8.2 cross-check failed on.
+ *
+ * Passed separately rather than stored on FactRecord because §3.8.2 is
+ * emphatic that a failed cross-check "never corrects the figure" — the record
+ * that came out of acquisition is left exactly as acquired, and the failure
+ * travels beside it as a state. Threading it as a parameter also keeps the
+ * queue a pure function of (facts, cross-check outcomes), which is what makes
+ * the forcing behaviour testable without a database.
  */
-export function queuedFacts(facts: readonly FactRecord[]): FactRecord[] {
-  return facts.filter((f) => materialityOf(f).material && !isExemptFromQueue(f));
+export type CrossCheckFailedFactIds = ReadonlySet<string>;
+
+const NO_FAILURES: CrossCheckFailedFactIds = new Set<string>();
+
+/**
+ * The Step 2 queue: material facts that are not exempt, PLUS any fact a
+ * §3.8.2 cross-check failed on.
+ *
+ * The second limb is not a refinement of the first. §3.8.2: a failed
+ * cross-check "forces that fact into the Step 2 queue WHATEVER ITS ACQUISITION
+ * PATH" — so a tag-mapped fact that would otherwise carry SPOT-CHECK NOT
+ * REQUIRED is queued, and the §3.8.1 exemption does not survive a failure. The
+ * exemption rests on the compensating control; it cannot outrank it.
+ *
+ * Order is the fact set's own order, so the queue is stable across refreshes
+ * and a run resumed from its URL presents the same fact in the same place.
+ */
+export function queuedFacts(
+  facts: readonly FactRecord[],
+  crossCheckFailedFactIds: CrossCheckFailedFactIds = NO_FAILURES
+): FactRecord[] {
+  return facts.filter(
+    (f) =>
+      crossCheckFailedFactIds.has(f.id) ||
+      (materialityOf(f).material && !isExemptFromQueue(f))
+  );
 }
 
 /**
  * Facts shown but not queued (§3.8.1): "It is not spot-checked; it is not
  * hidden." Screen 2 renders these with SPOT-CHECK NOT REQUIRED beside them.
+ *
+ * A fact whose cross-check failed is no longer exempt, so it leaves this set
+ * as it enters the queue. The two functions must not both claim it — a fact
+ * displayed as SPOT-CHECK NOT REQUIRED while sitting in the queue is exactly
+ * the screen/data disagreement deriveVerificationState was written to end.
  */
-export function exemptFacts(facts: readonly FactRecord[]): FactRecord[] {
-  return facts.filter((f) => isExemptFromQueue(f));
+export function exemptFacts(
+  facts: readonly FactRecord[],
+  crossCheckFailedFactIds: CrossCheckFailedFactIds = NO_FAILURES
+): FactRecord[] {
+  return facts.filter((f) => isExemptFromQueue(f) && !crossCheckFailedFactIds.has(f.id));
 }
 
 /**
@@ -135,9 +172,10 @@ export function exemptFacts(facts: readonly FactRecord[]): FactRecord[] {
  */
 export function isSpotCheckComplete(
   facts: readonly FactRecord[],
-  decidedFactIds: ReadonlySet<string>
+  decidedFactIds: ReadonlySet<string>,
+  crossCheckFailedFactIds: CrossCheckFailedFactIds = NO_FAILURES
 ): boolean {
-  return queuedFacts(facts).every((f) => decidedFactIds.has(f.id));
+  return queuedFacts(facts, crossCheckFailedFactIds).every((f) => decidedFactIds.has(f.id));
 }
 
 /**
@@ -146,9 +184,10 @@ export function isSpotCheckComplete(
  */
 export function undecidedFacts(
   facts: readonly FactRecord[],
-  decidedFactIds: ReadonlySet<string>
+  decidedFactIds: ReadonlySet<string>,
+  crossCheckFailedFactIds: CrossCheckFailedFactIds = NO_FAILURES
 ): FactRecord[] {
-  return queuedFacts(facts).filter((f) => !decidedFactIds.has(f.id));
+  return queuedFacts(facts, crossCheckFailedFactIds).filter((f) => !decidedFactIds.has(f.id));
 }
 
 /**
@@ -212,10 +251,11 @@ export type FactDecisionState = Extract<
  */
 export function applyDecisions(
   facts: readonly FactRecord[],
-  decisions: ReadonlyMap<string, FactDecisionState>
+  decisions: ReadonlyMap<string, FactDecisionState>,
+  crossCheckFailedFactIds: CrossCheckFailedFactIds = NO_FAILURES
 ): FactRecord[] {
-  const exemptIds = new Set(exemptFacts(facts).map((f) => f.id));
-  const queuedIds = new Set(queuedFacts(facts).map((f) => f.id));
+  const exemptIds = new Set(exemptFacts(facts, crossCheckFailedFactIds).map((f) => f.id));
+  const queuedIds = new Set(queuedFacts(facts, crossCheckFailedFactIds).map((f) => f.id));
 
   return facts.map((fact) => {
     // A fact is queued, exempt, or neither (immaterial and unmapped); only the

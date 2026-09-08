@@ -10,7 +10,9 @@
     "migrate": "tsx scripts/migrate.ts",
     "record-split": "tsx scripts/record-corporate-action.ts",
     "record-reconciliation": "tsx scripts/record-reconciliation.ts",
-    "evidence": "tsx scripts/evidence/run.ts"
+    "evidence": "tsx scripts/evidence/run.ts",
+    "acquire": "tsx scripts/analyzer/acquire-run.ts",
+    "acquire:capture": "tsx scripts/analyzer/capture-companyfacts.ts"
   },
   "dependencies": {
     "decimal.js": "^10.4.3",

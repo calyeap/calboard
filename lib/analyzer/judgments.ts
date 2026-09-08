@@ -1,4 +1,6 @@
 import type { JudgmentKey } from "./decisions";
+import type { CandidateInvestment } from "./acquisition/acquire";
+import { optionsFromCandidates } from "./acquisition/nonOperatingJudgment";
 
 // ---------------------------------------------------------------------------
 // §4.4's three judgments, as Screen 2 presents them.
@@ -13,18 +15,21 @@ import type { JudgmentKey } from "./decisions";
 // mock-human-steps.html. None of it is composed here. Where the mock does not
 // supply options, this file says so rather than inventing them.
 //
-// FOR THE M8 CROSS-CHECK. NON-OPERATING INVESTMENTS has no options because no
-// mock enumerates them and no fixture can supply them: the company's
-// non-operating investments are carried as a single derived figure and the
-// individual holdings behind it are not separately recorded. Composing a
-// candidate list would put invented line items on the one screen whose purpose
-// is checking figures against their sources, where they would read as filed
-// data rather than as a reconstruction — which is why this is a stated gap
-// rather than a synthetic list.
+// RESOLVED AT M8-a. NON-OPERATING INVESTMENTS used to have no options, because
+// no mock enumerated them and no fixture could supply them: the company's
+// non-operating investments were carried as a single derived figure with the
+// individual holdings not separately recorded. Real filings DO supply them —
+// Microsoft tags equity-method investments and equity securities without a
+// readily determinable fair value as separate elements, each at book — so
+// `judgmentsForRun` below fills the options from acquisition.
 //
-// This is the third item waiting on real acquisition, alongside
-// NAMED_MATERIAL_FACT_IDS and §3.8's "any figure classified UNVERIFIED" limb
-// (both in spotCheck.ts). All three should be re-read together when M8 lands.
+// The static entry keeps its null options and its gap text, and that is
+// deliberate: it is what a filer who tags none still gets, and it is the
+// honest answer in that case. What changed is that the list is no longer
+// unavailable in principle, only unavailable for some companies.
+//
+// The software still does not choose. §4.4 calls this "a classification, not a
+// reported line", and no tag says which investments are non-operating.
 // ---------------------------------------------------------------------------
 
 export interface JudgmentOption {
@@ -114,3 +119,36 @@ export const JUDGMENTS: readonly JudgmentDefinition[] = [
     gap: null,
   },
 ];
+
+/**
+ * The three judgments as THIS run presents them.
+ *
+ * NON-OPERATING INVESTMENTS gets its options from acquisition. Before M8-a it
+ * had none, and the comment at the head of this file recorded why: the fixture
+ * carried a single derived aggregate and the holdings behind it were not
+ * separately recorded, so any list would have been invented. Real filings tag
+ * the line items individually, so the list is now real.
+ *
+ * The gap text survives for a filer that tags none. That is not a defect in
+ * acquisition — some companies genuinely hold no separately tagged investments
+ * — and saying so is better than offering an empty select.
+ */
+export function judgmentsForRun(
+  candidateNonOperatingInvestments: readonly CandidateInvestment[]
+): readonly JudgmentDefinition[] {
+  const options = optionsFromCandidates(candidateNonOperatingInvestments);
+
+  return JUDGMENTS.map((judgment) => {
+    if (judgment.key !== "NON-OPERATING INVESTMENTS" || options === null) return judgment;
+    return {
+      ...judgment,
+      options,
+      gap: null,
+      note:
+        "These are the investment line items this company tags separately, each " +
+        "at its carrying value. Which of them are non-operating is a " +
+        "classification, not a reported line — the software presents them and " +
+        "does not choose. Book value is the floor for a holding carried at cost.",
+    };
+  });
+}

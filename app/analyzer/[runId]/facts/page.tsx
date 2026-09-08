@@ -4,7 +4,7 @@ import { AnalyzerShell } from "@/app/components/AnalyzerShell";
 import { FactCard } from "@/app/components/FactCard";
 import { loadGateState, RunNotFoundError } from "@/lib/analyzer/gate";
 import { getFactDecisions, getJudgments } from "@/lib/analyzer/runStore";
-import { JUDGMENTS } from "@/lib/analyzer/judgments";
+import { judgmentsForRun } from "@/lib/analyzer/judgments";
 import { JudgmentSelector } from "@/app/components/JudgmentSelector";
 import { queuedFacts, exemptFacts } from "@/lib/analyzer/spotCheck";
 import type { FactRecord } from "@/lib/analyzer/types";
@@ -28,9 +28,24 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
   const decisionByFactId = new Map(decisions.map((d) => [d.factId, d]));
   const judgmentByKey = new Map(judgments.map((j) => [j.judgmentKey, j]));
 
-  const queued = queuedFacts(state.fixture.facts).map(toPlainFact);
-  const exempt = exemptFacts(state.fixture.facts).map(toPlainFact);
+  // §3.8.2: a failed cross-check forces its fact into the queue whatever its
+  // acquisition path, so both lists are computed against the same outcomes the
+  // gate used. Reading them without the failures would show a fact as exempt
+  // on the screen while the gate held it in the queue.
+  const failed = state.crossCheckFailedFactIds;
+  const queued = queuedFacts(state.fixture.facts, failed).map(toPlainFact);
+  const exempt = exemptFacts(state.fixture.facts, failed).map(toPlainFact);
   const outstanding = state.outstandingFactIds.length;
+
+  const runJudgments = judgmentsForRun(
+    state.acquired.acquired.acquisition.candidateNonOperatingInvestments
+  );
+  const crossChecks = state.acquired.acquired.crossChecks;
+  const crossCheckCounts = {
+    pass: crossChecks.results.filter((r) => r.outcome === "PASS").length,
+    fail: crossChecks.results.filter((r) => r.outcome === "FAIL").length,
+    na: crossChecks.results.filter((r) => r.outcome === "NOT APPLICABLE").length,
+  };
 
   return (
     <AnalyzerShell>
@@ -51,6 +66,22 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
             {state.run.resolvedCompanyName} · {state.run.ticker} · {queued.length} queued for
             spot-check, {exempt.length} shown but exempt.
           </p>
+
+          {/* §3.8.2: "a cross-check suite whose results are not reported is not
+              a control." The outcome is reported where the analyst decides,
+              not in a log. */}
+          <p className="note">
+            Input cross-checks (§3.8.2): {crossCheckCounts.pass} pass · {crossCheckCounts.fail} fail
+            · {crossCheckCounts.na} not applicable, across {crossChecks.inputFactIds.length} inputs.
+            A failed check never rewrites a figure — it forces the fact into this queue and returns
+            INCOMPLETE for its dependents.
+          </p>
+
+          {state.acquired.disclosures.map((line) => (
+            <p className="note" key={line.slice(0, 48)}>
+              {line}
+            </p>
+          ))}
 
           {queued.map((fact) => (
             <FactCard
@@ -98,7 +129,7 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
               open, rather than inheriting them from a default nobody chose.
             </p>
 
-            {JUDGMENTS.map((judgment) => (
+            {runJudgments.map((judgment) => (
               <JudgmentSelector
                 key={judgment.key}
                 runId={runId}
