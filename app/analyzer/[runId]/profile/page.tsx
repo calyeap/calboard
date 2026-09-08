@@ -1,8 +1,11 @@
+import { Fragment } from "react";
 import { notFound, redirect } from "next/navigation";
 import { AnalyzerShell } from "@/app/components/AnalyzerShell";
 import { ProfileDecisionForm } from "@/app/components/ProfileDecisionForm";
 import { loadGateState, RunNotFoundError } from "@/lib/analyzer/gate";
 import { PROFILE_LABELS } from "@/lib/analyzer/profileLabels";
+import { evaluateGate0, evaluateGate1 } from "@/lib/analyzer/gates";
+import { gate0Heading, gate0TestRows, gate0ExplanationIfFailed } from "@/lib/analyzer/gateBand";
 
 // Screen 3 — Steps 3–5 displayed, Step 6 input.
 //
@@ -27,9 +30,17 @@ export default async function ProfilePage({ params }: { params: Promise<{ runId:
     redirect(`/analyzer/${runId}/facts`);
   }
 
-  // Read from the run's own inputs rather than computing: the recommendation
-  // is a classification the fixture carries, and running the module set here
-  // would run Step 8 before Steps 6 and 7 have happened.
+  // Steps 3–5 are this screen's own subject, so the gates are EVALUATED here
+  // rather than having their inputs printed under a hard-coded verdict. §2's
+  // ordering rule forbids a calculation module before Step 2; Gate 0 is Step 3
+  // and a pure function of inputs already acquired, and no valuation arithmetic
+  // is reachable from it. The profile RECOMMENDATION below is still read from
+  // the run's inputs — running the module set here would run Step 8 before
+  // Steps 6 and 7 have happened.
+  const gate0 = evaluateGate0(state.fixture.gate0);
+  const gate0Explanation = gate0ExplanationIfFailed(gate0);
+  const gate1 = evaluateGate1(state.fixture.gate1);
+
   const recommended = state.fixture.profile.recommended;
   const recommendedLabel = PROFILE_LABELS[recommended];
   const inputs = state.fixture.profile.classificationInputs;
@@ -45,15 +56,42 @@ export default async function ProfilePage({ params }: { params: Promise<{ runId:
           <hr className="rule" />
 
           <div className="judgment">
-            <h3>Gate 0 — supported profile</h3>
-            <p className="why">
-              Sector classification: {state.fixture.gate0.sectorClassification} ·{" "}
-              {state.fixture.gate0.industryClassification}
-            </p>
+            {/* The heading is the gate's RESULT. It used to be the literal
+                "Gate 0 — supported profile" printed above the gate's inputs,
+                which read as a verdict over a company the gate may have
+                refused. Design §5.1: result, then the four tests with their
+                evaluated values. */}
+            <h3>{gate0Heading(gate0)}</h3>
+            <div className="idsource">
+              <dl>
+                {gate0TestRows(gate0).map((row) => (
+                  <Fragment key={row.label}>
+                    <dt>{row.label}</dt>
+                    <dd>
+                      {row.value}
+                      {row.fired && <span className="typetag">Fired</span>}
+                    </dd>
+                  </Fragment>
+                ))}
+              </dl>
+            </div>
+            {gate0Explanation !== null && (
+              <div className="state" style={{ marginTop: 14 }}>
+                <span className="name">{gate0.result}</span>
+                <span className="cause">{gate0Explanation}</span>
+              </div>
+            )}
+
             <h3 style={{ marginTop: 18 }}>Gate 1 — history sufficiency</h3>
             <p className="why">
-              {state.fixture.gate1.filedYearsCount} filed years. Gate 1 never stops the analysis;
-              it sets suppression and labelling state.
+              {gate1.filedYearsCount} filed years
+              {gate1.state !== null && ` · ${gate1.state}`}. Gate 1 never stops the analysis; it
+              sets suppression and labelling state.
+              {gate1.state === "HISTORY INSUFFICIENT" &&
+                " The own-history multiple percentile and history-based normalisation are" +
+                  " suppressed; the margin and stress diagnostics still run."}
+              {gate1.state === "SHORT HISTORY" &&
+                " Every history statistic is labelled with the window actually used."}
             </p>
           </div>
 
