@@ -5,6 +5,8 @@ import { MSFT_FIXTURE } from "@/lib/analyzer/fixtures/msft";
 import { queuedFacts } from "@/lib/analyzer/spotCheck";
 import type { StoredFactDecision } from "@/lib/analyzer/decisions";
 import type { FactRecord } from "@/lib/analyzer/types";
+import { formatFactValue } from "@/lib/analyzer/factDisplay";
+import { factUnit } from "@/lib/analyzer/acquisition/factUnit";
 import Decimal from "decimal.js";
 
 // The server action reaches lib/db and therefore `pg`, which must not load
@@ -24,7 +26,8 @@ function renderQueue() {
   return render(
     <>
       {QUEUED.map((fact) => (
-        <FactCard key={fact.id} runId={RUN_ID} fact={fact} decision={undefined} queued />
+        <FactCard key={fact.id} runId={RUN_ID} fact={fact} decision={undefined} queued       displayValue={formatFactValue((fact).value, factUnit((fact).id))}
+    />
       ))}
     </>
   );
@@ -151,7 +154,8 @@ describe("Step 2 fact cards hold independent decisions", () => {
     function renderDecided(decision: StoredFactDecision = DECIDED) {
       // The record carries the state the run derived, as loadGateState leaves it.
       const fact = { ...QUEUED[0], verificationState: decision.decision };
-      return render(<FactCard runId={RUN_ID} fact={fact} decision={decision} queued />);
+      return render(<FactCard runId={RUN_ID} fact={fact} decision={decision} queued       displayValue={formatFactValue((fact).value, factUnit((fact).id))}
+    />);
     }
 
     it("does not show a decision state and a live no-decision control at once", () => {
@@ -193,7 +197,8 @@ describe("Step 2 fact cards hold independent decisions", () => {
     // is the record, not a default, and hiding it is what produced the
     // contradiction.
     it("still pre-selects nothing on a fact that has no decision", () => {
-      render(<FactCard runId={RUN_ID} fact={QUEUED[0]} decision={undefined} queued />);
+      render(<FactCard runId={RUN_ID} fact={QUEUED[0]} decision={undefined} queued       displayValue={formatFactValue((QUEUED[0]).value, factUnit((QUEUED[0]).id))}
+    />);
       const radios = screen.getAllByRole("radio") as HTMLInputElement[];
       expect(radios.every((r) => !r.checked)).toBe(true);
       expect(screen.getByText(/Neither option is selected/)).not.toBeNull();
@@ -219,6 +224,7 @@ describe("Step 2 fact cards hold independent decisions", () => {
           fact={fact}
           decision={decision as StoredFactDecision | undefined}
           queued
+                  displayValue={formatFactValue((fact).value, factUnit((fact).id))}
         />
       );
 
@@ -268,11 +274,17 @@ describe("Step 2 fact cards hold independent decisions", () => {
       } as FactRecord;
 
       const { container } = render(
-        <FactCard runId={RUN_ID} fact={fact} decision={decision} queued={queued} />
+        <FactCard runId={RUN_ID} fact={fact} decision={decision} queued={queued}       displayValue={formatFactValue((fact).value, factUnit((fact).id))}
+    />
       );
 
-      // The value is on screen...
-      expect(container.querySelector(".value")?.textContent).toBe("24.6");
+      // The value is on screen — as the analyst reads it, which since the
+      // 8 Sept formatting ruling is "$24.6M" rather than the raw 24.6. What
+      // this case is about is that a value IS shown, so it asserts against
+      // the same formatter the page uses rather than a written-in string.
+      const shown = container.querySelector(".value")?.textContent;
+      expect(shown).toBe(formatFactValue(fact.value, factUnit(fact.id)));
+      expect(shown).not.toBe("—");
       // ...so nothing in this card may claim there is no value here.
       expect(container.querySelector(".state")).toBeNull();
       expect(container.querySelector(".decided")).toBeNull();
@@ -290,6 +302,7 @@ describe("Step 2 fact cards hold independent decisions", () => {
           fact={fact}
           decision={{ factId: fact.id, decision: "CONFIRMED", reasonCode: null }}
           queued
+                  displayValue={formatFactValue((fact).value, factUnit((fact).id))}
         />
       );
       expect(container.querySelector(".qualifier")?.textContent).toMatch(/Confirmed/);
@@ -306,6 +319,7 @@ describe("Step 2 fact cards hold independent decisions", () => {
           fact={fact}
           decision={{ factId: fact.id, decision: "CONFIRMED", reasonCode: null }}
           queued
+                  displayValue={formatFactValue((fact).value, factUnit((fact).id))}
         />
       );
       expect(container.querySelector(".value")?.textContent).toBe("—");
@@ -326,5 +340,86 @@ describe("Step 2 fact cards hold independent decisions", () => {
     expect(data.get("decision")).toBe("NOT CONFIRMED");
     expect(data.get("factId")).toBe(QUEUED[0].id);
     expect(data.get("runId")).toBe(RUN_ID);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The two routes out of the queue must not describe themselves the same way.
+//
+// DESIGN's gate found every card in the computed group carrying the tag-exempt
+// group's sentence verbatim — "Acquired through a fixed, versioned tag
+// mapping" — on figures that were DERIVED, not acquired. A false statement
+// about how a figure was obtained, on the screen whose purpose is establishing
+// exactly that, contradicting the header directly above it.
+// ---------------------------------------------------------------------------
+
+describe("a tag-exempt card and a computed card are distinguishable at card level", () => {
+  const base = { ...QUEUED[0], value: new Decimal("30045000000") } as FactRecord;
+
+  const tagExempt = {
+    ...base,
+    id: "total-debt",
+    name: "Total debt",
+    tagMappingVersion: "calboard-secmap-2026-09-1",
+    derivedFrom: null,
+    verificationState: "SPOT-CHECK NOT REQUIRED",
+  } as FactRecord;
+
+  const computed = {
+    ...base,
+    id: "net-debt",
+    name: "Net debt (including finance leases)",
+    tagMappingVersion: null,
+    derivedFrom: ["total-debt", "finance-lease-liabilities", "cash-and-marketable-debt-securities"],
+    verificationState: "SPOT-CHECK NOT REQUIRED",
+  } as FactRecord;
+
+  function renderCard(fact: FactRecord) {
+    return render(
+      <FactCard
+        runId={RUN_ID}
+        fact={fact}
+        decision={undefined}
+        queued={false}
+        displayValue={formatFactValue(fact.value, factUnit(fact.id))}
+      />
+    );
+  }
+
+  it("does not tell a computed figure it was acquired through a tag mapping", () => {
+    const { container } = renderCard(computed);
+    expect(container.textContent).not.toMatch(/Acquired through a fixed, versioned tag mapping/);
+  });
+
+  it("still tells a tag-mapped figure exactly that", () => {
+    const { container } = renderCard(tagExempt);
+    expect(container.textContent).toMatch(/Acquired through a fixed, versioned tag mapping/);
+  });
+
+  it("names the components a computed figure was worked out from", () => {
+    const { container } = renderCard(computed);
+    expect(container.textContent).toMatch(/total debt/);
+    expect(container.textContent).toMatch(/finance lease liabilities/);
+    expect(container.textContent).toMatch(/cash and marketable debt securities/);
+  });
+
+  it("gives the two cards different kickers and different state names", () => {
+    const a = renderCard(tagExempt).container;
+    cleanup();
+    const b = renderCard(computed).container;
+
+    expect(a.querySelector(".requiredfor")?.textContent).not.toBe(
+      b.querySelector(".requiredfor")?.textContent
+    );
+    expect(a.querySelector(".qualifier .name")?.textContent).not.toBe(
+      b.querySelector(".qualifier .name")?.textContent
+    );
+  });
+
+  it("offers a computed figure no document to open, and promises no milestone", () => {
+    const { container } = renderCard(computed);
+    // FIX 5: this used to read "Document retrieval arrives at milestone M8".
+    expect(container.textContent).not.toMatch(/milestone M8/);
+    expect(container.textContent).toMatch(/worked out here from the facts named above/);
   });
 });

@@ -7,6 +7,8 @@ import { getFactDecisions, getJudgments } from "@/lib/analyzer/runStore";
 import { judgmentsForRun } from "@/lib/analyzer/judgments";
 import { JudgmentSelector } from "@/app/components/JudgmentSelector";
 import { queuedFacts, exemptFacts, derivedExemptFacts } from "@/lib/analyzer/spotCheck";
+import { formatFactValue } from "@/lib/analyzer/factDisplay";
+import { factUnit } from "@/lib/analyzer/acquisition/factUnit";
 import type { FactRecord } from "@/lib/analyzer/types";
 
 // Screen 2 — Step 2, fact acquisition and human spot-check.
@@ -73,10 +75,10 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
               a control." The outcome is reported where the analyst decides,
               not in a log. */}
           <p className="note">
-            Input cross-checks (§3.8.2): {crossCheckCounts.pass} pass · {crossCheckCounts.fail} fail
-            · {crossCheckCounts.na} not applicable, across {crossChecks.inputFactIds.length} inputs.
-            A failed check never rewrites a figure — it forces the fact into this queue and returns
-            INCOMPLETE for its dependents.
+            Automatic checks on the figures: {crossCheckCounts.pass} passed, {crossCheckCounts.fail}{" "}
+            failed, {crossCheckCounts.na} did not apply, across {crossChecks.inputFactIds.length}{" "}
+            inputs. A failed check never rewrites a figure — it puts that fact in front of you here,
+            and anything computed from it reports incomplete until it is re-acquired.
           </p>
 
           {state.acquired.disclosures.map((line) => (
@@ -91,6 +93,7 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
               runId={runId}
               fact={fact}
               decision={decisionByFactId.get(fact.id)}
+              displayValue={displayValueFor(fact)}
               queued
             />
           ))}
@@ -113,6 +116,7 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
                   runId={runId}
                   fact={fact}
                   decision={decisionByFactId.get(fact.id)}
+                  displayValue={displayValueFor(fact)}
                   queued={false}
                 />
               ))}
@@ -127,11 +131,11 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
               </div>
               <hr className="rule" />
               <p className="whythisfact">
-                These were derived from figures above that all came through the tag mapping, and
-                §3.8.2 has recomputed each one against its components and reported the outcome.
-                There is no line in a filing to match them against — checking one would mean
-                agreeing with a treatment rather than confirming a figure — so they are shown with
-                their components named, and not queued.
+                These were worked out here from figures above, all of which came through the tag
+                mapping, and an automatic check has recomputed each one from its components and
+                agreed. No filing states them as a line, so checking one would mean agreeing with
+                a treatment rather than comparing a number against a document — they are shown
+                with their components named, and not queued.
               </p>
               {derivedExempt.map((fact) => (
                 <FactCard
@@ -139,6 +143,7 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
                   runId={runId}
                   fact={fact}
                   decision={decisionByFactId.get(fact.id)}
+                  displayValue={displayValueFor(fact)}
                   queued={false}
                 />
               ))}
@@ -208,6 +213,20 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
  * keeps operating on the real Decimal, server-side, where it belongs — no
  * figure is ever recomputed from this string.
  */
+/**
+ * The value as the card shows it, formatted here on the SERVER.
+ *
+ * Same boundary as toPlainFact below and for the same reason: the exact
+ * figure stays a Decimal on this side, and only a string crosses. Formatting
+ * here also keeps decimal.js out of the client bundle.
+ *
+ * The unit comes from acquisition, never from this layer guessing — see
+ * lib/analyzer/acquisition/factUnit.ts.
+ */
+function displayValueFor(fact: FactRecord): string {
+  return formatFactValue(fact.value, factUnit(fact.id));
+}
+
 function toPlainFact(fact: FactRecord): FactRecord {
   return { ...fact, value: fact.value === null ? null : String(fact.value) };
 }

@@ -34,10 +34,10 @@ export interface AnalystInputBundle {
 }
 
 const NOTE =
-  "Scenarios, scenario values and the four undefined §7.1 policy constants on " +
-  "this run are NOT acquired. They are carried from the M5/M7 validation " +
-  "fixture because Step 7 (analyst scenarios) is not built. Every fact, gate " +
-  "and margin figure on this run comes from SEC filings.";
+  "The three scenarios, the values they produce and four unset policy constants " +
+  "on this run were NOT acquired. They are carried from the validation set, " +
+  "because the screen where you enter scenarios is not built yet. Every fact, " +
+  "gate and margin figure on this run comes from SEC filings.";
 
 function bundleFrom(fixture: typeof MSFT_FIXTURE): AnalystInputBundle {
   return {

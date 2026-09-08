@@ -174,9 +174,22 @@ describe("a real MSFT run, from filings to an Analysis Result", () => {
   it("discloses what on the run was not acquired", async () => {
     const run = await msftRun();
     const joined = run.disclosures.join(" ");
-    expect(joined).toContain("Scenarios");
+
+    // The substance, in the analyst's vocabulary.
+    expect(joined).toContain("scenarios");
     expect(joined).toContain("NOT acquired");
-    expect(joined).toContain("§4.4");
+    expect(joined).toMatch(/non-operating/i);
+    expect(joined).toMatch(/SEC filings/);
+  });
+
+  it("puts no section reference in front of the analyst", async () => {
+    // Gate-2's fix, undone by M8-a's new copy and restored here. Section
+    // numbers address the contract, not the reader — the report layer already
+    // strips them from its own prose, and Screen 2 must not reintroduce them.
+    const run = await msftRun();
+    for (const line of run.disclosures) {
+      expect(line).not.toMatch(/§/);
+    }
   });
 });
 

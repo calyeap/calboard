@@ -89,16 +89,16 @@ export async function buildAcquiredRun(
   const disclosures = [acquired.provenanceNote, bundle.note];
   if (options.nonOperatingInvestments == null) {
     disclosures.push(
-      "§4.4's non-operating-investments judgment has not been made on this run, " +
-        "so enterprise value and every EV-based output return INCOMPLETE. No tag " +
-        "says which investments are non-operating; the candidate line items are " +
-        "presented for classification."
+      "You have not yet said which of this company's investments are non-operating, " +
+        "so enterprise value and everything built on it reports incomplete. No tag in " +
+        "the filings answers that question — the candidate line items are below, with " +
+        "what each is carried at."
     );
   }
   if (options.price === null) {
     disclosures.push(
-      "No price quote on this run, so price-dependent outputs return INCOMPLETE. " +
-        "Price is never estimated (§3.4, §5.1)."
+      "No price was available for this run, so anything that needs one reports " +
+        "incomplete. A price is never estimated or carried forward from an earlier day."
     );
   }
 

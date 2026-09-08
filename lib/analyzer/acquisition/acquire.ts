@@ -156,7 +156,11 @@ function derivedFactRecord(
     name,
     type: "FACT",
     value,
-    source: `Derived deterministically from ${fromFactIds.join(", ")} — inputs recorded per §3.1`,
+    // Reader-facing: this string renders as the card's Document citation.
+    // The components are named because §3.1 requires a derived figure's own
+    // inputs to be recorded — the requirement is the contract's, the sentence
+    // is the analyst's.
+    source: `Computed from ${fromFactIds.join(", ")}, each acquired for this run`,
     sourceUrl: null,
     sourceClass: "PRIMARY",
     extractionType: "DETERMINISTIC/STRUCTURED",
