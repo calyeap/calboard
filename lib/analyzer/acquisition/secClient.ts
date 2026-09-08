@@ -234,6 +234,16 @@ export interface CompanyFactsDocument {
 export interface SubmissionsDocument {
   cik: string;
   name: string;
+  /**
+   * The SEC's assigned Standard Industrial Classification CODE, e.g. "6021".
+   *
+   * §6.1's sector and industry tests are classification lookups, and the code
+   * is the only form of this classification that can be looked up: the
+   * description beside it is free text the gate's vocabulary never matches
+   * ("National Commercial Banks" is not "Financials").
+   */
+  sic?: string;
+  sicDescription?: string;
   filings?: {
     recent?: {
       accessionNumber?: string[];

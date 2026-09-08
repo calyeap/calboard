@@ -1,10 +1,13 @@
 {
   "__capture": {
     "endpoint": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001849056.json",
-    "capturedAt": "2026-09-08T03:59:51.013Z",
+    "submissionsEndpoint": "https://data.sec.gov/submissions/CIK0001849056.json",
+    "capturedAt": "2026-09-08T14:32:54.059Z",
     "ticker": "OKLO",
     "cik": "0001849056",
-    "note": "Real SEC XBRL company facts, trimmed to the tags calboard's tag mapping touches and to periods ending in the last twelve calendar years. Every retained row is exactly as EDGAR returned it; nothing here was written by hand."
+    "sic": "4911",
+    "sicDescription": "Electric Services",
+    "note": "Real SEC XBRL company facts, trimmed to the tags calboard's tag mapping touches and to periods ending in the last twelve calendar years. Every retained row is exactly as EDGAR returned it; nothing here was written by hand. The SIC code and description are from the submissions endpoint at the same capture time, so Gate 0 evaluates offline exactly as it does live."
   },
   "cik": 1849056,
   "entityName": "Oklo Inc.",

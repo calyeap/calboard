@@ -187,7 +187,6 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
   // --- Gates + triggers (Milestone 3, unchanged) ---------------------------
   const gate0 = evaluateGate0(fixture.gate0);
   const gate1 = evaluateGate1(fixture.gate1);
-  const leverage = evaluateLeverage(fixture.leverage);
   const triggerA = evaluateTriggerA(fixture.triggerMargins);
   const triggerB = evaluateTriggerB(fixture.triggerMargins);
 
@@ -197,6 +196,26 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
     ? null
     : sourced(enterpriseValueBridge.value.enterpriseValue);
   const baseRevenueSourced = fixture.reverseDcf.baseYearRevenue;
+
+  // --- §6.5 — the leverage precondition, AFTER M1 ---------------------------
+  //
+  // The ratio's denominator is enterprise value, so the precondition cannot be
+  // evaluated before M1 has produced one. It used to be evaluated first, which
+  // meant an acquired run — where companyInputs.ts supplies
+  // `leverage.enterpriseValue` as null precisely because "it is filled by
+  // assemble from M1's own output" — failed the test closed on a missing input
+  // whatever the company's actual leverage. V4 pins Microsoft at "Leverage PASS
+  // at 0.8%", and a run that cannot reach a ratio cannot reach that.
+  //
+  // The fixture's own EV still wins where it supplies one, so a fixture that
+  // states the bridge directly is unaffected. Where it supplies null and M1
+  // computed a value, M1's is used; where M1 is itself suppressed,
+  // `currentEnterpriseValue` is null and the precondition fails closed exactly
+  // as before (§5.3, §6.5, V8).
+  const leverage = evaluateLeverage({
+    ...fixture.leverage,
+    enterpriseValue: fixture.leverage.enterpriseValue ?? currentEnterpriseValue?.value ?? null,
+  });
 
   // --- M2 — multiples --------------------------------------------------------
   const multiples = computeMultiples({

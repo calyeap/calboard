@@ -1,10 +1,13 @@
 {
   "__capture": {
     "endpoint": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json",
-    "capturedAt": "2026-09-08T03:59:50.781Z",
+    "submissionsEndpoint": "https://data.sec.gov/submissions/CIK0000789019.json",
+    "capturedAt": "2026-09-08T14:32:53.468Z",
     "ticker": "MSFT",
     "cik": "0000789019",
-    "note": "Real SEC XBRL company facts, trimmed to the tags calboard's tag mapping touches and to periods ending in the last twelve calendar years. Every retained row is exactly as EDGAR returned it; nothing here was written by hand."
+    "sic": "7372",
+    "sicDescription": "Services-Prepackaged Software",
+    "note": "Real SEC XBRL company facts, trimmed to the tags calboard's tag mapping touches and to periods ending in the last twelve calendar years. Every retained row is exactly as EDGAR returned it; nothing here was written by hand. The SIC code and description are from the submissions endpoint at the same capture time, so Gate 0 evaluates offline exactly as it does live."
   },
   "cik": 789019,
   "entityName": "MICROSOFT CORPORATION",
