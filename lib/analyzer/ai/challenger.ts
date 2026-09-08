@@ -44,6 +44,14 @@ The claimOrFactId field is the one exception — it is an id, not prose, and you
 
 STATE NAMES ARE NOT NUMERALS EITHER. The active states listed below are tokens out of a fixed vocabulary this system owns, so naming one in full — LEVERAGE UNSUPPORTED IN v1, for instance — is fine despite the digit in it. A digit of your own next to one is not.
 
+FILING DESIGNATIONS CARRY DIGITS, so write around them rather than naming them. A form name is not exempt and never will be — the rule counts its digits like any others:
+
+  "drawn from a 10-Q"   ->  "drawn from an interim filing"
+  "the 10-K"            ->  "the annual filing"
+  "an 8-K"              ->  "a current report"
+
+Each fact's own source line tells you which filing it came from; describing it in words costs you nothing and keeps the finding.
+
 Prefer few findings that bear real weight over many that do not. If the record supports no disconfirming finding at all, return an empty list — that is an honest answer.`;
 
 const RESPONSE_SCHEMA: Record<string, unknown> = {

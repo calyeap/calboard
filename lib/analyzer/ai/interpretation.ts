@@ -59,6 +59,8 @@ A slot whose value is suppressed renders as its state name. Referencing one is t
 
 STATE NAMES ARE NOT NUMERALS. A state is a token out of a fixed vocabulary this system owns, so writing one out in full — LEVERAGE UNSUPPORTED IN v1, for instance — is fine even though it contains a digit, and so is referencing its slot. What is not fine is a digit of your own next to one. Only the exact state name is treated this way.
 
+FILING DESIGNATIONS ARE NOT. A form name carries digits and is counted like any other — write "the annual filing" rather than "the 10-K", and "an interim filing" rather than "a 10-Q".
+
 VOCABULARY. Where a pre-revenue interpolation between two outcome values appears, it is a "conditional price-implied break-even success weight". It is never an implied probability of success, and it is never presented as a real-world probability.
 
 Write for one reader who is intelligent and not a specialist. Short sentences. No hedging filler. Never claim more than the computed values support.`;
