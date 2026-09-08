@@ -139,6 +139,7 @@ export async function driveRun(
   const slug = ticker.toLowerCase();
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1200 } });
   const page = await ctx.newPage();
+  const captured = new Map<string, ProbeDocument>();
   let runId: string;
 
   try {
@@ -158,6 +159,22 @@ export async function driveRun(
     const cardFor = (factId: string) =>
       page.locator(`form:has(input[name="factId"][value="${factId}"])`);
     await assertCardsForQueue(ticker, queue, async (factId) => (await cardFor(factId).count()) > 0);
+
+    // Captured here — immediately after Begin analysis, before this run's
+    // queue carries a single decision. A fresh context navigating straight to
+    // the persisted, still-undecided run, exactly as the decided screens below
+    // navigate fresh contexts to the persisted, worked run: this is a real run
+    // in the undecided state, not the decided run with something reset.
+    const factsUrl = new URL(`/analyzer/${runId}/facts`, baseUrl).toString();
+    for (const width of WIDTHS) {
+      const undecidedDoc = await captureAt(browser, {
+        target: `s2-facts-${slug}-undecided`,
+        width,
+        url: factsUrl,
+        outDir,
+      });
+      captured.set(`s2-facts-${slug}-undecided|${width}`, undecidedDoc);
+    }
 
     for (const [index, factId] of queue.entries()) {
       const card = cardFor(factId);
@@ -189,7 +206,6 @@ export async function driveRun(
 
   // Step 6 is never submitted. The profile screen therefore captures with
   // nothing selected — the state §6.3 requires and the one DESIGN needs to see.
-  const captured = new Map<string, ProbeDocument>();
   const screens = [
     [`s2-facts-${slug}`, `/analyzer/${runId}/facts`],
     [`s3-profile-${slug}`, `/analyzer/${runId}/profile`],

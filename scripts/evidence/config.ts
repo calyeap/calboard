@@ -35,8 +35,10 @@ export const STATE_MARKERS: Readonly<Record<string, string>> = {
   "s1-resolved": "Listed operating company",
   "s1-unknown": "Unknown — no provider evidence for ZXQY",
   "s1-unsupported": "Unsupported — not an operating company",
+  "s2-facts-msft-undecided": "Fact acquisition and spot-check",
   "s2-facts-msft": "Fact acquisition and spot-check",
   "s3-profile-msft": "PROFILE CONFIRMATION",
+  "s2-facts-oklo-undecided": "Fact acquisition and spot-check",
   "s2-facts-oklo": "Fact acquisition and spot-check",
   "s3-profile-oklo": "PROFILE CONFIRMATION",
 };
