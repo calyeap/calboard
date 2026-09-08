@@ -39,11 +39,37 @@ export type MaterialityReason =
   | "NAMED IN §3.8"
   | "CLASSIFIED SECONDARY"
   | "CLASSIFIED AI-EXTRACTED"
-  | "UNRECOGNISED — FAIL-CLOSED";
+  | "UNRECOGNISED — FAIL-CLOSED"
+  // Not material: a software-derived figure whose every component is itself
+  // exempt and which a §3.8.2 cross-check constrained and passed. Named
+  // distinctly so it is never confused with a fact §3.8 simply does not
+  // mention — the first was recognised and ruled on, the second was not
+  // recognised at all.
+  | "DERIVED — COMPONENTS EXEMPT AND CROSS-CHECKED";
 
 export interface Materiality {
   material: boolean;
   reason: MaterialityReason | "NOT MATERIAL";
+}
+
+/**
+ * What materialityOf needs beyond the fact itself to apply the derived-fact
+ * exemption (Command Center ruling, 8 September 2026).
+ *
+ * OPTIONAL EVERYWHERE. Called without it, materialityOf behaves exactly as it
+ * did before the ruling and a derived figure falls through to the fail-closed
+ * default. That direction is deliberate: a caller that cannot supply the
+ * evidence must not be able to exempt anything.
+ */
+export interface MaterialityContext {
+  /** Ids of the facts in this run that are tag-exempt (§3.8.1). */
+  exemptFactIds: ReadonlySet<string>;
+  /**
+   * Ids a §3.8.2 cross-check constrained against other facts AND passed —
+   * `constrainedAndPassedFactIds` from the cross-check report. Never "a check
+   * appeared", never "nothing failed".
+   */
+  crossCheckConstrainedFactIds: ReadonlySet<string>;
 }
 
 /**
@@ -53,7 +79,7 @@ export interface Materiality {
  * situation from one queued because §3.8 names it, and only the first is a
  * signal that this mapping needs extending.
  */
-export function materialityOf(fact: FactRecord): Materiality {
+export function materialityOf(fact: FactRecord, context?: MaterialityContext): Materiality {
   if (NAMED_MATERIAL_FACT_IDS.has(fact.id)) {
     return { material: true, reason: "NAMED IN §3.8" };
   }
@@ -62,6 +88,28 @@ export function materialityOf(fact: FactRecord): Materiality {
   }
   if (fact.extractionType === "AI-EXTRACTED") {
     return { material: true, reason: "CLASSIFIED AI-EXTRACTED" };
+  }
+
+  // The derived-fact exemption. Command Center, 8 September 2026, on the
+  // evidence from the first real MSFT and OKLO runs.
+  //
+  // WHERE IT SITS IS THE WHOLE DESIGN. It comes after the three limbs above
+  // and before the fail-closed default, so it can only ever refine "we did not
+  // recognise this fact" — never overrule §3.8. current-operating-margin is
+  // derived, has exempt components and passes a reconciliation rule, and it
+  // still queues, because §3.8 names it and the first branch catches it. That
+  // is not an accident of ordering to be tidied later; moving this block above
+  // the NAMED test would silently drop a figure the spec names.
+  //
+  // The ruling's reasoning, so it is not re-argued: net-debt and cash-fcf are
+  // computed by this software from components it has already exempted, and
+  // §3.8.2 already recomputes both identities and reports the outcome. A card
+  // asking an analyst to confirm one cannot be answered by matching a number
+  // against a filing — there is no such line — only by agreeing with a
+  // treatment, which §3.8.3 does not ask for and which invites a
+  // Cannot-verify every time.
+  if (context !== undefined && isDerivedAndAlreadyChecked(fact, context)) {
+    return { material: false, reason: "DERIVED — COMPONENTS EXEMPT AND CROSS-CHECKED" };
   }
   // §3.8's third classification limb is "any figure classified UNVERIFIED".
   // There is deliberately no test for it here, because since amendment M7
@@ -84,6 +132,39 @@ export function materialityOf(fact: FactRecord): Materiality {
   // deterministic, verified and unnamed by §3.8 — plausibly immaterial, but
   // "plausibly" is not the standard this milestone works to.
   return { material: true, reason: "UNRECOGNISED — FAIL-CLOSED" };
+}
+
+/**
+ * Both conditions of the derived-fact exemption, in order.
+ *
+ * 1. It is a derived figure, and EVERY component it derives from is itself
+ *    exempt. A component that is queued means a human is still looking at an
+ *    input, and the aggregate over it is not settled.
+ * 2. A §3.8.2 cross-check CONSTRAINED this fact against other facts and
+ *    PASSED.
+ *
+ * Condition 2 is the one that matters, and it is written as a positive
+ * requirement rather than as "did not fail". Absence of a cross-check is not
+ * evidence of one — the same shape as §3.8.1 guard 1, where absence of a
+ * recorded mapping version is not evidence of a mapping. A derived figure that
+ * no rule reaches has been looked at by nobody and nothing, so it keeps
+ * queueing.
+ *
+ * A FAILING cross-check never reaches here: §3.8.2 forces such a fact into the
+ * queue in queuedFacts before materiality is consulted at all, and it is
+ * absent from the constrained-and-passed set as well. Two independent reasons,
+ * neither relied on alone.
+ */
+function isDerivedAndAlreadyChecked(fact: FactRecord, context: MaterialityContext): boolean {
+  const components = fact.derivedFrom;
+  // null or empty means "not derived", which is the fail-closed reading of a
+  // record that did not declare its inputs.
+  if (components === null || components.length === 0) return false;
+
+  const everyComponentExempt = components.every((id) => context.exemptFactIds.has(id));
+  if (!everyComponentExempt) return false;
+
+  return context.crossCheckConstrainedFactIds.has(fact.id);
 }
 
 /**
@@ -118,6 +199,37 @@ export type CrossCheckFailedFactIds = ReadonlySet<string>;
 const NO_FAILURES: CrossCheckFailedFactIds = new Set<string>();
 
 /**
+ * Evidence for the derived-fact exemption, supplied per run.
+ *
+ * Optional on every function below. Omitted, no derived fact is exempted and
+ * the queue behaves exactly as it did before the 8 September ruling — so a
+ * caller that has not run the cross-checks cannot exempt anything by
+ * forgetting to pass this.
+ */
+export interface DerivedExemptionEvidence {
+  /** `constrainedAndPassedFactIds(report)` from crosschecks/run.ts. */
+  crossCheckConstrainedFactIds: ReadonlySet<string>;
+}
+
+/**
+ * Builds the materiality context for a fact set.
+ *
+ * The exempt-component test is computed from THIS fact set's own tag mappings
+ * rather than taken from a caller, so a component cannot be declared exempt by
+ * anyone but §3.8.1.
+ */
+function materialityContextFor(
+  facts: readonly FactRecord[],
+  evidence: DerivedExemptionEvidence | undefined
+): MaterialityContext | undefined {
+  if (evidence === undefined) return undefined;
+  return {
+    exemptFactIds: new Set(facts.filter(isExemptFromQueue).map((f) => f.id)),
+    crossCheckConstrainedFactIds: evidence.crossCheckConstrainedFactIds,
+  };
+}
+
+/**
  * The Step 2 queue: material facts that are not exempt, PLUS any fact a
  * §3.8.2 cross-check failed on.
  *
@@ -132,12 +244,17 @@ const NO_FAILURES: CrossCheckFailedFactIds = new Set<string>();
  */
 export function queuedFacts(
   facts: readonly FactRecord[],
-  crossCheckFailedFactIds: CrossCheckFailedFactIds = NO_FAILURES
+  crossCheckFailedFactIds: CrossCheckFailedFactIds = NO_FAILURES,
+  evidence?: DerivedExemptionEvidence
 ): FactRecord[] {
+  const context = materialityContextFor(facts, evidence);
   return facts.filter(
     (f) =>
+      // A failed cross-check comes FIRST and is unconditional. The derived-fact
+      // exemption cannot rescue a fact whose own check failed, whatever its
+      // components look like.
       crossCheckFailedFactIds.has(f.id) ||
-      (materialityOf(f).material && !isExemptFromQueue(f))
+      (materialityOf(f, context).material && !isExemptFromQueue(f))
   );
 }
 
@@ -158,6 +275,32 @@ export function exemptFacts(
 }
 
 /**
+ * Facts exempted by the derived-fact rule rather than by a tag mapping.
+ *
+ * Shown but not queued, on the same principle §3.8.1 guard 2 states for the
+ * tag exemption: "it changes what is queued, not what is carried. It is not
+ * spot-checked; it is not hidden." These are deliberately NOT folded into
+ * `exemptFacts`, whose section on Screen 2 is headed "Acquired through a tag
+ * mapping" — a derived figure was not, and putting it under that heading would
+ * be a false claim about its provenance on the one screen that exists to make
+ * provenance checkable.
+ */
+export function derivedExemptFacts(
+  facts: readonly FactRecord[],
+  crossCheckFailedFactIds: CrossCheckFailedFactIds = NO_FAILURES,
+  evidence?: DerivedExemptionEvidence
+): FactRecord[] {
+  const context = materialityContextFor(facts, evidence);
+  if (context === undefined) return [];
+  return facts.filter(
+    (f) =>
+      !crossCheckFailedFactIds.has(f.id) &&
+      !isExemptFromQueue(f) &&
+      materialityOf(f, context).reason === "DERIVED — COMPONENTS EXEMPT AND CROSS-CHECKED"
+  );
+}
+
+/**
  * §3.8.1's operative definition, and the one the route gate enforces:
  * "spot-check complete means every queued material fact carries a decision."
  *
@@ -173,9 +316,12 @@ export function exemptFacts(
 export function isSpotCheckComplete(
   facts: readonly FactRecord[],
   decidedFactIds: ReadonlySet<string>,
-  crossCheckFailedFactIds: CrossCheckFailedFactIds = NO_FAILURES
+  crossCheckFailedFactIds: CrossCheckFailedFactIds = NO_FAILURES,
+  evidence?: DerivedExemptionEvidence
 ): boolean {
-  return queuedFacts(facts, crossCheckFailedFactIds).every((f) => decidedFactIds.has(f.id));
+  return queuedFacts(facts, crossCheckFailedFactIds, evidence).every((f) =>
+    decidedFactIds.has(f.id)
+  );
 }
 
 /**
@@ -185,9 +331,12 @@ export function isSpotCheckComplete(
 export function undecidedFacts(
   facts: readonly FactRecord[],
   decidedFactIds: ReadonlySet<string>,
-  crossCheckFailedFactIds: CrossCheckFailedFactIds = NO_FAILURES
+  crossCheckFailedFactIds: CrossCheckFailedFactIds = NO_FAILURES,
+  evidence?: DerivedExemptionEvidence
 ): FactRecord[] {
-  return queuedFacts(facts, crossCheckFailedFactIds).filter((f) => !decidedFactIds.has(f.id));
+  return queuedFacts(facts, crossCheckFailedFactIds, evidence).filter(
+    (f) => !decidedFactIds.has(f.id)
+  );
 }
 
 /**
@@ -214,8 +363,20 @@ export function deriveVerificationState(
   // NOT CONFIRMED additionally drives §5's INCOMPLETE propagation.
   if (decision !== undefined) return decision;
 
-  // §3.8.1 — acquired through a fixed, versioned tag mapping. Not queued, so
-  // there is no decision to wait for.
+  // Not queued, so there is no decision to wait for.
+  //
+  // A READING, recorded because §3.2's gloss on this value names only the
+  // §3.8.1 tag-mapping route ("Exempt from the queue because the figure came
+  // through a fixed, versioned tag mapping"). Since the 8 September ruling a
+  // second route reaches here: a derived figure whose components are exempt
+  // and which a §3.8.2 cross-check constrained and passed.
+  //
+  // SPOT-CHECK NOT REQUIRED is used anyway, because criterion A24 fixes this
+  // field at exactly four values and inventing a fifth would break it. The
+  // value names the state — exempt from the queue, and expressly "not a human
+  // confirmation" — even where §3.2's example of how a fact got there is not
+  // the route this one took. Flagged for Command Center rather than resolved
+  // here.
   if (!queued) return "SPOT-CHECK NOT REQUIRED";
 
   // Queued and undecided. §3.2 defines SPOT-CHECK PENDING as exactly this —
@@ -252,10 +413,13 @@ export type FactDecisionState = Extract<
 export function applyDecisions(
   facts: readonly FactRecord[],
   decisions: ReadonlyMap<string, FactDecisionState>,
-  crossCheckFailedFactIds: CrossCheckFailedFactIds = NO_FAILURES
+  crossCheckFailedFactIds: CrossCheckFailedFactIds = NO_FAILURES,
+  evidence?: DerivedExemptionEvidence
 ): FactRecord[] {
   const exemptIds = new Set(exemptFacts(facts, crossCheckFailedFactIds).map((f) => f.id));
-  const queuedIds = new Set(queuedFacts(facts, crossCheckFailedFactIds).map((f) => f.id));
+  const queuedIds = new Set(
+    queuedFacts(facts, crossCheckFailedFactIds, evidence).map((f) => f.id)
+  );
 
   return facts.map((fact) => {
     // A fact is queued, exempt, or neither (immaterial and unmapped); only the

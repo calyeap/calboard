@@ -27,6 +27,7 @@ function fact(over: Partial<FactRecord> = {}): FactRecord {
     retrievalTimestamp: "2026-09-04T21:04:00-04:00",
     supersedesFactId: null,
     tagMappingVersion: null,
+    derivedFrom: null,
     ...over,
   };
 }

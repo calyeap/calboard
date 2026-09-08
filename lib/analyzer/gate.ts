@@ -1,9 +1,13 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import Decimal from "decimal.js";
 import { assembleAnalysisResult, type CompanyFixture } from "./assemble";
 import type { AnalysisResult } from "./types";
 import { isSpotCheckComplete, queuedFacts, undecidedFacts, applyDecisions } from "./spotCheck";
 import { getRun, getFactDecisions, getJudgments, type AnalyzerRun } from "./runStore";
 import { buildAcquiredRun, type AcquiredRunInputs } from "./acquiredRun";
+import { constrainedAndPassedFactIds } from "./crosschecks/run";
+import type { DerivedExemptionEvidence } from "./spotCheck";
 import { TICKERS_WITH_ANALYST_INPUTS } from "./acquisition/analystInputs";
 import { selectionToNonOperatingInvestments } from "./acquisition/nonOperatingJudgment";
 import { activeProvider } from "../marketdata";
@@ -42,7 +46,8 @@ export function isSupportedTicker(ticker: string): boolean {
 }
 
 /**
- * Offline mode: acquire from the committed SEC captures and fetch no price.
+ * Offline mode: acquire from the committed SEC captures and the recorded
+ * quotes beside them, calling nothing.
  *
  * Explicit configuration, never a fallback. The test suite runs here so it
  * neither depends on EDGAR being up nor spends the published rate budget on
@@ -66,6 +71,43 @@ export function fixtureForTicker(ticker: string): { ticker: string } | null {
   return isSupportedTicker(ticker) ? { ticker: ticker.toUpperCase() } : null;
 }
 
+interface CapturedPriceRow {
+  close: number;
+  date: string;
+  source: string;
+}
+
+/**
+ * The recorded quote for a ticker, for offline runs only.
+ *
+ * Read lazily and never cached across calls to keep this out of the live path
+ * entirely: an online run does not touch this file.
+ */
+function capturedPrice(
+  ticker: string
+): { value: Decimal; timestamp: string; source: string } | null {
+  try {
+    const path = join(
+      process.cwd(),
+      "lib",
+      "analyzer",
+      "acquisition",
+      "captures",
+      "prices.json"
+    );
+    const rows = JSON.parse(readFileSync(path, "utf8")) as Record<string, CapturedPriceRow>;
+    const row = rows[ticker.toUpperCase()];
+    if (row === undefined) return null;
+    return {
+      value: roundMoney(new Decimal(row.close)),
+      timestamp: row.date,
+      source: row.source,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The latest close, with its timestamp (§3.4).
  *
@@ -78,10 +120,20 @@ export function fixtureForTicker(ticker: string): { ticker: string } | null {
 async function latestPrice(
   ticker: string
 ): Promise<{ value: Decimal; timestamp: string; source: string } | null> {
-  // Offline mode fetches no quote at all. Price-dependent outputs then return
-  // INCOMPLETE and the run says so in its disclosures — never a stale or
-  // stand-in price, which §3.4 and §5.1 both forbid.
-  if (isOffline()) return null;
+  // Offline mode reads a RECORDED quote rather than calling the provider — the
+  // same treatment the filing facts get, and for the same reason: real data,
+  // taken once, labelled as a capture rather than passed off as live.
+  //
+  // It exists so an offline run has the same fact-set SHAPE as a live one.
+  // Without it the price fact is simply absent, which quietly shrinks the Step
+  // 2 queue and left the gate's own integration tests unable to reach a
+  // partly-decided queue at all. A test environment that cannot reach the
+  // state under test is the failure mode this project keeps finding.
+  //
+  // Absent from the capture file, this returns null and price-dependent
+  // outputs are INCOMPLETE — never a stale or stand-in figure, which §3.4 and
+  // §5.1 both forbid.
+  if (isOffline()) return capturedPrice(ticker);
 
   try {
     const provider = activeProvider();
@@ -154,6 +206,12 @@ export interface GateState {
   acquired: AcquiredRunInputs;
   /** Forced into the queue by a failed §3.8.2 cross-check, whatever their path. */
   crossCheckFailedFactIds: Set<string>;
+  /**
+   * Evidence for the derived-fact queue exemption on THIS run. Carried on the
+   * state so every screen reads the same queue the gate enforced, rather than
+   * recomputing it from a different set of facts.
+   */
+  derivedExemption: DerivedExemptionEvidence;
 }
 
 /**
@@ -200,10 +258,21 @@ export async function loadGateState(runId: string): Promise<GateState> {
   const crossCheckFailedFactIds = acquired.acquired.crossCheckFailedFactIds;
   const fixture = acquired.fixture;
 
+  // The evidence the derived-fact exemption rests on (Command Center, 8
+  // September 2026): which facts a §3.8.2 cross-check actually constrained
+  // against other facts and passed. Derived here, from this run's own report,
+  // so a stale or absent report cannot exempt anything.
+  const derivedExemption = {
+    crossCheckConstrainedFactIds: constrainedAndPassedFactIds(acquired.acquired.crossChecks),
+  };
+
   const decidedFactIds = new Set(decisions.map((d) => d.factId));
-  const outstanding = undecidedFacts(fixture.facts, decidedFactIds, crossCheckFailedFactIds).map(
-    (f) => f.id
-  );
+  const outstanding = undecidedFacts(
+    fixture.facts,
+    decidedFactIds,
+    crossCheckFailedFactIds,
+    derivedExemption
+  ).map((f) => f.id);
 
   // Every fact leaves this function carrying the verification state THIS run
   // gives it, derived from the decisions AND the cross-check outcomes — never
@@ -215,18 +284,25 @@ export async function loadGateState(runId: string): Promise<GateState> {
   const facts = applyDecisions(
     fixture.facts,
     new Map(decisions.map((d) => [d.factId, d.decision])),
-    crossCheckFailedFactIds
+    crossCheckFailedFactIds,
+    derivedExemption
   );
 
   return {
     run,
     fixture: { ...fixture, facts },
     decidedFactIds,
-    queuedCount: queuedFacts(fixture.facts, crossCheckFailedFactIds).length,
+    queuedCount: queuedFacts(fixture.facts, crossCheckFailedFactIds, derivedExemption).length,
     outstandingFactIds: outstanding,
-    spotCheckComplete: isSpotCheckComplete(fixture.facts, decidedFactIds, crossCheckFailedFactIds),
+    spotCheckComplete: isSpotCheckComplete(
+      fixture.facts,
+      decidedFactIds,
+      crossCheckFailedFactIds,
+      derivedExemption
+    ),
     acquired,
     crossCheckFailedFactIds,
+    derivedExemption,
   };
 }
 

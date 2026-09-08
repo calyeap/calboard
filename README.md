@@ -71,7 +71,7 @@ Then edit `.env.local`:
 | `EODHD_API_KEY` | Only if `MARKET_DATA_PROVIDER=EODHD` | The default provider, Yahoo Finance, needs no key. |
 | `ALPACA_API_KEY_ID`, `ALPACA_API_SECRET_KEY`, `RENDER_API_KEY` | No | Reserved for future milestones; not read by the current build. |
 | `SEC_USER_AGENT` | Yes, to run the analyzer | EDGAR requires a User-Agent identifying the requester: `Product/Version (you@example.com)`. Acquisition refuses to start without it. |
-| `ANALYZER_OFFLINE` | No | Set to `1` to acquire from the committed SEC captures and skip the price fetch. Explicit offline mode, never a fallback. |
+| `ANALYZER_OFFLINE` | No | Set to `1` to acquire from the committed SEC captures and the recorded quotes beside them, calling nothing. Explicit offline mode, never a fallback. |
 
 ### 4. Create the test database
 

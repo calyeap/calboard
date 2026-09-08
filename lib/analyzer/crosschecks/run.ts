@@ -64,6 +64,32 @@ export function runCrossChecks(
 }
 
 /**
+ * Fact ids a §3.8.2 cross-check actually constrained against other facts, and
+ * which passed.
+ *
+ * This is the evidence the derived-fact queue exemption rests on
+ * (spotCheck.materialityOf). Three things it deliberately is not:
+ *
+ *  - Not "appeared in the report". Every input appears in every family, most
+ *    of them NOT APPLICABLE.
+ *  - Not "some row passed". A monetary figure with no prior period passes a
+ *    RANGE SANITY row that reads "admits either sign", which is not a check.
+ *  - Not "did not fail". Absence of a check is not evidence of one — the same
+ *    shape as §3.8.1 guard 1, where absence of a recorded mapping version is
+ *    not evidence of a mapping.
+ *
+ * A fact reaching none of these rules is simply absent from the set, and the
+ * queue keeps it.
+ */
+export function constrainedAndPassedFactIds(report: CrossCheckReport): Set<string> {
+  return new Set(
+    report.results
+      .filter((r) => r.constrainsAgainstRelatedFacts === true && r.outcome === "PASS")
+      .map((r) => r.factId)
+  );
+}
+
+/**
  * Asserts the report actually covers every input in every family.
  *
  * This exists because the failure mode being defended against is a suite that

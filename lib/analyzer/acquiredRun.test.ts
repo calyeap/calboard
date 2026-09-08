@@ -3,7 +3,14 @@ import Decimal from "decimal.js";
 import { buildAcquiredRun, AnalystInputsUnavailableError } from "./acquiredRun";
 import { __resetAcquisitionCache } from "./acquisition/provider";
 import { assembleAnalysisResult } from "./assemble";
-import { queuedFacts, exemptFacts, isSpotCheckComplete, applyDecisions } from "./spotCheck";
+import {
+  queuedFacts,
+  exemptFacts,
+  derivedExemptFacts,
+  isSpotCheckComplete,
+  applyDecisions,
+} from "./spotCheck";
+import { constrainedAndPassedFactIds } from "./crosschecks/run";
 import { evaluateCompleteness } from "./requiredInputs";
 
 // ---------------------------------------------------------------------------
@@ -125,6 +132,42 @@ describe("a real MSFT run, from filings to an Analysis Result", () => {
       // the weighted-average diluted count (§3.5).
       const expectedShares = new Decimal("7425545491").plus("24000000");
       expect(bridge.marketCap.toString()).toBe(expectedShares.mul(PRICE.value).toString());
+    }
+  });
+
+  it("queues price and current-operating-margin, and nothing else", async () => {
+    // The 8 September ruling, on the real fact set. price is guard 1 — a feed
+    // with no tag mapping. current-operating-margin is named in §3.8. Both are
+    // spec requirements and the derived-fact exemption must not touch either,
+    // even though the margin satisfies both its conditions.
+    const run = await msftRun();
+    const evidence = {
+      crossCheckConstrainedFactIds: constrainedAndPassedFactIds(run.acquired.crossChecks),
+    };
+    const queued = queuedFacts(
+      run.fixture.facts,
+      run.acquired.crossCheckFailedFactIds,
+      evidence
+    ).map((f) => f.id);
+
+    expect(queued.sort()).toEqual(["current-operating-margin", "price"]);
+  });
+
+  it("exempts net-debt and cash-fcf, shown but not queued", async () => {
+    const run = await msftRun();
+    const evidence = {
+      crossCheckConstrainedFactIds: constrainedAndPassedFactIds(run.acquired.crossChecks),
+    };
+    const shown = derivedExemptFacts(
+      run.fixture.facts,
+      run.acquired.crossCheckFailedFactIds,
+      evidence
+    ).map((f) => f.id);
+
+    expect(shown.sort()).toEqual(["cash-fcf", "net-debt"]);
+    // Still carried, not hidden (§3.8.1 guard 2's principle).
+    for (const id of shown) {
+      expect(run.fixture.facts.some((f) => f.id === id)).toBe(true);
     }
   });
 

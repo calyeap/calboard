@@ -131,6 +131,7 @@ function taggedFactRecord(
     retrievalTimestamp: acquiredAt,
     supersedesFactId: null,
     tagMappingVersion: TAG_MAPPING_VERSION,
+    derivedFrom: null,
   };
 }
 
@@ -164,6 +165,8 @@ function derivedFactRecord(
     retrievalTimestamp: acquiredAt,
     supersedesFactId: null,
     tagMappingVersion: null,
+    // §3.1's "inputs are themselves recorded", as data rather than as prose.
+    derivedFrom: fromFactIds,
   };
 }
 
@@ -237,6 +240,8 @@ export function acquire(input: AcquisitionInput): AcquisitionResult {
       retrievalTimestamp: acquiredAt,
       supersedesFactId: null,
       tagMappingVersion: null,
+      // A feed value, not a computation.
+      derivedFrom: null,
     });
     crossCheckFacts.push({
       factId: "price",

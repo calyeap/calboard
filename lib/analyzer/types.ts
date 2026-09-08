@@ -87,6 +87,18 @@ export interface FactRecord {
   // Unpopulated in M7: the fixtures record null or a fixture mapping version,
   // and real mapping versions arrive with acquisition at M8.
   tagMappingVersion: string | null;
+  // §3.1 — the fact ids this figure was derived from, or null where it was
+  // acquired rather than computed.
+  //
+  // §3.1 admits a derived figure only where "its own inputs are themselves
+  // recorded", and recorded means recorded: a prose sentence naming them in
+  // `source` is for a reader, not for the software. This field is what lets
+  // the queue rule reason about a derived figure at all — whether every
+  // component is itself exempt (spotCheck.materialityOf).
+  //
+  // null is the fail-closed value. A computed figure that forgets to declare
+  // its components is treated as underived, which keeps it queued.
+  derivedFrom: string[] | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -34,6 +34,7 @@ function taggedFact(id: string, name: string, value: Decimal): FactRecord {
     retrievalTimestamp: "2026-09-08T10:00:00Z",
     supersedesFactId: null,
     tagMappingVersion: "calboard-secmap-2026-09-1",
+    derivedFrom: null,
   };
 }
 

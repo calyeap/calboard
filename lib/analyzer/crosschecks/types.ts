@@ -36,6 +36,21 @@ export interface CrossCheckResult {
   outcome: CrossCheckOutcome;
   /** The numbers. Always present, on a pass as well as a failure. */
   detail: string;
+  /**
+   * True only where this row tested the figure AGAINST OTHER ACQUIRED FACTS —
+   * a §3.8.2 reconciliation rule, not a units test or a period comparison.
+   *
+   * The distinction is load-bearing for the derived-fact queue exemption. Every
+   * fact carries a RANGE SANITY row, and for a monetary figure with no prior
+   * period that row is "a monetary figure admits either sign" — which passes
+   * for every number there has ever been. Treating "some check passed" as
+   * evidence that a figure was checked would rest the exemption on a test that
+   * cannot fail, which is the failure this project keeps finding.
+   *
+   * Absent (undefined) means the row constrained nothing, and absence is never
+   * read as presence.
+   */
+  constrainsAgainstRelatedFacts?: true;
 }
 
 /**

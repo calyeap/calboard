@@ -6,8 +6,18 @@ import { secClientFromEnv, cikForTicker } from "../../lib/analyzer/acquisition/s
 import type { CompanyFactsDocument, SubmissionsDocument } from "../../lib/analyzer/acquisition/secClient";
 import { acquire } from "../../lib/analyzer/acquisition/acquire";
 import { formatFallbackReport } from "../../lib/analyzer/acquisition/fallback";
-import { runCrossChecks, formatCrossCheckReport, assertEveryInputReported } from "../../lib/analyzer/crosschecks/run";
-import { queuedFacts, exemptFacts, materialityOf } from "../../lib/analyzer/spotCheck";
+import {
+  runCrossChecks,
+  formatCrossCheckReport,
+  assertEveryInputReported,
+  constrainedAndPassedFactIds,
+} from "../../lib/analyzer/crosschecks/run";
+import {
+  queuedFacts,
+  exemptFacts,
+  derivedExemptFacts,
+  materialityOf,
+} from "../../lib/analyzer/spotCheck";
 import { evaluateCompleteness } from "../../lib/analyzer/requiredInputs";
 import { annualSeries, operatingMarginSeries, filedAnnualYearsCount } from "../../lib/analyzer/acquisition/history";
 import { TAG_MAP } from "../../lib/analyzer/acquisition/tagMap";
@@ -107,8 +117,12 @@ async function runOne(ticker: string, offline: boolean): Promise<void> {
   assertEveryInputReported(crossChecks);
 
   const failed = new Set(crossChecks.failedFactIds);
-  const queued = queuedFacts(result.facts, failed);
+  const evidence = {
+    crossCheckConstrainedFactIds: constrainedAndPassedFactIds(crossChecks),
+  };
+  const queued = queuedFacts(result.facts, failed, evidence);
   const exempt = exemptFacts(result.facts, failed);
+  const derivedExempt = derivedExemptFacts(result.facts, failed, evidence);
 
   // Not every §4.2 REQUIRED input is a FactRecord. The history series, the
   // filed-year count and Gate 0's classification lookups are acquired too, and
@@ -149,11 +163,16 @@ async function runOne(ticker: string, offline: boolean): Promise<void> {
   queueLines.push(header);
   queueLines.push(`STEP 2 QUEUE — ${result.ticker}  (§3.8, §3.8.1)`);
   queueLines.push("");
+  const materialityContext = {
+    exemptFactIds: new Set(exempt.map((f) => f.id)),
+    crossCheckConstrainedFactIds: evidence.crossCheckConstrainedFactIds,
+  };
+
   queueLines.push(`Queued for spot-check: ${queued.length}`);
   for (const fact of queued) {
     const reason = failed.has(fact.id)
       ? "FORCED BY A FAILED CROSS-CHECK (§3.8.2)"
-      : materialityOf(fact).reason;
+      : materialityOf(fact, materialityContext).reason;
     queueLines.push(`  - ${fact.id} — ${fact.name}`);
     queueLines.push(`        why queued: ${reason}`);
     queueLines.push(`        value:      ${String(fact.value)}`);
@@ -164,6 +183,15 @@ async function runOne(ticker: string, offline: boolean): Promise<void> {
   for (const fact of exempt) {
     queueLines.push(`  - ${fact.id} — ${fact.name}  [${fact.tagMappingVersion}]`);
   }
+  queueLines.push("");
+  queueLines.push(
+    `Shown but exempt (derived, components exempt, cross-checked — 8 Sept ruling): ${derivedExempt.length}`
+  );
+  for (const fact of derivedExempt) {
+    queueLines.push(`  - ${fact.id} — ${fact.name}`);
+    queueLines.push(`        derived from: ${(fact.derivedFrom ?? []).join(", ")}`);
+  }
+
   queueLines.push("");
   queueLines.push(`§4.4 NON-OPERATING INVESTMENTS — candidate line items, for the analyst to classify:`);
   if (result.candidateNonOperatingInvestments.length === 0) {

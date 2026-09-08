@@ -173,6 +173,9 @@ export function reconciliationChecks(
       detail:
         `acquired ${formatNumber(left)} against ${describe} = ${formatNumber(right)} ` +
         `(difference ${formatNumber(left - right)}, tolerance ${formatNumber(tol)})`,
+      // A rule that actually evaluated: every fact it needs was present and
+      // the two sides were compared. This is the only place the flag is set.
+      constrainsAgainstRelatedFacts: true,
     });
   }
 

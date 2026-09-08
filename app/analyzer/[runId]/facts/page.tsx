@@ -6,7 +6,7 @@ import { loadGateState, RunNotFoundError } from "@/lib/analyzer/gate";
 import { getFactDecisions, getJudgments } from "@/lib/analyzer/runStore";
 import { judgmentsForRun } from "@/lib/analyzer/judgments";
 import { JudgmentSelector } from "@/app/components/JudgmentSelector";
-import { queuedFacts, exemptFacts } from "@/lib/analyzer/spotCheck";
+import { queuedFacts, exemptFacts, derivedExemptFacts } from "@/lib/analyzer/spotCheck";
 import type { FactRecord } from "@/lib/analyzer/types";
 
 // Screen 2 — Step 2, fact acquisition and human spot-check.
@@ -33,8 +33,10 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
   // gate used. Reading them without the failures would show a fact as exempt
   // on the screen while the gate held it in the queue.
   const failed = state.crossCheckFailedFactIds;
-  const queued = queuedFacts(state.fixture.facts, failed).map(toPlainFact);
+  const evidence = state.derivedExemption;
+  const queued = queuedFacts(state.fixture.facts, failed, evidence).map(toPlainFact);
   const exempt = exemptFacts(state.fixture.facts, failed).map(toPlainFact);
+  const derivedExempt = derivedExemptFacts(state.fixture.facts, failed, evidence).map(toPlainFact);
   const outstanding = state.outstandingFactIds.length;
 
   const runJudgments = judgmentsForRun(
@@ -106,6 +108,32 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
                 what is queued, not what is carried.
               </p>
               {exempt.map((fact) => (
+                <FactCard
+                  key={fact.id}
+                  runId={runId}
+                  fact={fact}
+                  decision={decisionByFactId.get(fact.id)}
+                  queued={false}
+                />
+              ))}
+            </>
+          )}
+
+          {derivedExempt.length > 0 && (
+            <>
+              <div className="sechead" style={{ marginTop: 44 }}>
+                <h2>Computed by the software, and already cross-checked</h2>
+                <span className="screenlabel">Shown · not queued</span>
+              </div>
+              <hr className="rule" />
+              <p className="whythisfact">
+                These were derived from figures above that all came through the tag mapping, and
+                §3.8.2 has recomputed each one against its components and reported the outcome.
+                There is no line in a filing to match them against — checking one would mean
+                agreeing with a treatment rather than confirming a figure — so they are shown with
+                their components named, and not queued.
+              </p>
+              {derivedExempt.map((fact) => (
                 <FactCard
                   key={fact.id}
                   runId={runId}
