@@ -32,6 +32,13 @@ import {
 import { evaluateGate0, evaluateGate1, evaluateLeverage, evaluateTriggerA, evaluateTriggerB } from "./gates";
 import type { Gate0Input, Gate1Input, LeverageInput, TriggerMarginInput } from "./gates";
 import { CLEAN_PROVENANCE } from "./provenance";
+import { computeTrustStatus } from "./trust";
+import {
+  gate0Cause,
+  leverageCause,
+  stateRemovingFairValueRange,
+  type ActiveSuppression,
+} from "./suppression";
 import type {
   AnalysisResult,
   FactRecord,
@@ -138,6 +145,18 @@ export interface CompanyFixture {
 
   configuredConstants: UndefinedPolicyConstants;
 
+  // §9.6 rule 2 needs two facts about the run that no calculation module
+  // produces: whether a human confirmed the profile (§6.3's *Cannot judge*
+  // raises PROFILE NOT CONFIRMED on the valuation path) and which facts failed
+  // a §3.8.2 cross-check. Both are already known where a real run is built —
+  // see gate.ts — and they arrive here rather than being guessed at, because
+  // guessing either way would make trust say something about a run that is not
+  // true of it.
+  trustInputs: {
+    profileHumanConfirmed: boolean;
+    crossCheckFailedFactIds: readonly string[];
+  };
+
   // Populated only for the pre-revenue profile.
   preRevenue: PreRevenueFixture | null;
 }
@@ -168,7 +187,6 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
   // --- Gates + triggers (Milestone 3, unchanged) ---------------------------
   const gate0 = evaluateGate0(fixture.gate0);
   const gate1 = evaluateGate1(fixture.gate1);
-  const leverage = evaluateLeverage(fixture.leverage);
   const triggerA = evaluateTriggerA(fixture.triggerMargins);
   const triggerB = evaluateTriggerB(fixture.triggerMargins);
 
@@ -178,6 +196,26 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
     ? null
     : sourced(enterpriseValueBridge.value.enterpriseValue);
   const baseRevenueSourced = fixture.reverseDcf.baseYearRevenue;
+
+  // --- §6.5 — the leverage precondition, AFTER M1 ---------------------------
+  //
+  // The ratio's denominator is enterprise value, so the precondition cannot be
+  // evaluated before M1 has produced one. It used to be evaluated first, which
+  // meant an acquired run — where companyInputs.ts supplies
+  // `leverage.enterpriseValue` as null precisely because "it is filled by
+  // assemble from M1's own output" — failed the test closed on a missing input
+  // whatever the company's actual leverage. V4 pins Microsoft at "Leverage PASS
+  // at 0.8%", and a run that cannot reach a ratio cannot reach that.
+  //
+  // The fixture's own EV still wins where it supplies one, so a fixture that
+  // states the bridge directly is unaffected. Where it supplies null and M1
+  // computed a value, M1's is used; where M1 is itself suppressed,
+  // `currentEnterpriseValue` is null and the precondition fails closed exactly
+  // as before (§5.3, §6.5, V8).
+  const leverage = evaluateLeverage({
+    ...fixture.leverage,
+    enterpriseValue: fixture.leverage.enterpriseValue ?? currentEnterpriseValue?.value ?? null,
+  });
 
   // --- M2 — multiples --------------------------------------------------------
   const multiples = computeMultiples({
@@ -303,6 +341,65 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
     revalueBaseCaseAtRate: fixture.revalueBaseCaseAtRate,
   });
 
+  // --- states summary, BEFORE the range that has to read it ----------------
+  //
+  // M8-d FIX 1. This block used to sit at the bottom of the function, after
+  // the fair-value range had already been built — so `gate0.result` was
+  // recorded here and never read again, and a range rendered beside a state
+  // saying there is no range. It is computed first now because the range is
+  // downstream of it, which is the actual dependency.
+  //
+  // Each entry carries the §9.3 scope of what it suppresses (defaulted from
+  // the state's own row by `scopeOf`) and its cause, so the output that gets
+  // removed can name why (§9.5).
+  const suppressing: ActiveSuppression[] = [];
+  const qualifying: { flag: QualifyingFlag; appliesTo: string }[] = [];
+
+  if (gate0.result !== "PASS") {
+    suppressing.push({
+      state: gate0.result,
+      appliesTo: "all valuation outputs",
+      cause: gate0Cause(gate0),
+    });
+  }
+  // Gate 1 never refuses: HISTORY INSUFFICIENT (<5 filed years) is the only
+  // SuppressingState it can return. SHORT HISTORY (5-9 years) is a
+  // QualifyingFlag — the window is labelled, not suppressed (§6.2).
+  if (gate1.state === "HISTORY INSUFFICIENT") {
+    suppressing.push({
+      state: "HISTORY INSUFFICIENT",
+      appliesTo: "own-history percentile and history-based normalisation",
+      cause: `${gate1.filedYearsCount} filed years`,
+    });
+  } else if (gate1.state === "SHORT HISTORY") {
+    qualifying.push({ flag: "SHORT HISTORY", appliesTo: `history statistics (${gate1.filedYearsCount}-year window)` });
+  }
+  if (leverage.result === "LEVERAGE UNSUPPORTED IN v1") {
+    suppressing.push({
+      state: leverage.result,
+      appliesTo: "every rate-dependent output",
+      cause: leverageCause(leverage),
+    });
+  }
+  if (fcfYieldGrowth.precondition === "PRECONDITION FAILED") {
+    suppressing.push({ state: "PRECONDITION FAILED", appliesTo: "FCF yield + growth" });
+  }
+  for (const cell of reverseDcfGrid) {
+    if (cell.fiveYearGrowth.suppressed) {
+      suppressing.push({
+        state: cell.fiveYearGrowth.state,
+        appliesTo: `reverse-DCF cell ${cell.marginLevel}/${cell.rate}`,
+        // One cell, never the grid and never the range (§9.3 row 5). MSFT
+        // renders its range with four of these active; OKLO renders its
+        // distribution summary with nine.
+        scope: "the affected reverse-DCF cell",
+        cause: cell.fiveYearGrowth.cause,
+      });
+    }
+  }
+  if (triggerA.fired) qualifying.push({ flag: "MARGIN AT HISTORICAL HIGH", appliesTo: "operating margin" });
+  if (reinvestmentRonic.capitalLight) qualifying.push({ flag: "CAPITAL-LIGHT", appliesTo: "reinvestment/RONIC" });
+
   // --- §10 H — fair-value range ------------------------------------------
   // `successAsCommonlyDescribed` is a RANGE (types.ts), not a single
   // Decimal — corrected per the approved OKLO design mock
@@ -316,7 +413,7 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
   const qualifyingSuccessValues = fixture.preRevenue?.successDefinitions
     .filter((d) => d.vSuccess.greaterThan(d.vFail))
     .map((d) => d.vSuccess);
-  const fairValueRange: AnalysisResult["fairValueRange"] =
+  const computedFairValueRange: AnalysisResult["fairValueRange"] =
     fixture.preRevenue !== null
       ? {
           kind: "pre-revenue-distribution",
@@ -339,6 +436,36 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
           drivingInputs: ["years 1-5 revenue growth", "operating margin path", "reinvestment as % of NOPAT"],
           scenarioLabelsWarning: triggerA.fired || triggerB.fired,
         };
+
+  // §10.3 / §9.5 — "Where any suppressing state is active there is no
+  // fair-value range. The state IS the output."
+  //
+  // The decision is the RULE in suppression.ts, over §9.3's own mapping of
+  // state to suppressed output — not a check against the states this file
+  // happens to know about. A state added to §9.3 later inherits this without
+  // anything here changing.
+  const rangeRemovedBy = stateRemovingFairValueRange(suppressing);
+  const fairValueRange: AnalysisResult["fairValueRange"] =
+    rangeRemovedBy === null
+      ? computedFairValueRange
+      : {
+          kind: "suppressed",
+          state: rangeRemovedBy.state,
+          cause: rangeRemovedBy.cause ?? `suppressed with ${rangeRemovedBy.appliesTo}`,
+        };
+
+  // The range's own removal is itself an active state bound to the range
+  // (§10.0.1: each state "bound to the output it applies to"), so the §10.2
+  // section A manifest says the range is gone and why — rather than leaving
+  // the reader to infer it from the absence.
+  if (rangeRemovedBy !== null) {
+    suppressing.push({
+      state: rangeRemovedBy.state,
+      appliesTo: "the fair-value range",
+      scope: "the fair-value range",
+      cause: rangeRemovedBy.cause,
+    });
+  }
 
   // --- M16 — pre-revenue module (populated only for that profile) --------
   const preRevenue =
@@ -380,26 +507,24 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
         })()
       : null;
 
-  // --- states summary --------------------------------------------------------
-  const suppressing: { state: SuppressingState; appliesTo: string }[] = [];
-  const qualifying: { flag: QualifyingFlag; appliesTo: string }[] = [];
-
-  if (gate0.result !== "PASS") suppressing.push({ state: gate0.result, appliesTo: "all valuation outputs" });
-  // Gate 1 never refuses: HISTORY INSUFFICIENT (<5 filed years) is the only
-  // SuppressingState it can return. SHORT HISTORY (5-9 years) is a
-  // QualifyingFlag — the window is labelled, not suppressed (§6.2).
-  if (gate1.state === "HISTORY INSUFFICIENT") {
-    suppressing.push({ state: "HISTORY INSUFFICIENT", appliesTo: "own-history percentile and history-based normalisation" });
-  } else if (gate1.state === "SHORT HISTORY") {
-    qualifying.push({ flag: "SHORT HISTORY", appliesTo: `history statistics (${gate1.filedYearsCount}-year window)` });
-  }
-  if (leverage.result === "LEVERAGE UNSUPPORTED IN v1") suppressing.push({ state: leverage.result, appliesTo: "every rate-dependent output" });
-  if (fcfYieldGrowth.precondition === "PRECONDITION FAILED") suppressing.push({ state: "PRECONDITION FAILED", appliesTo: "FCF yield + growth" });
-  for (const cell of reverseDcfGrid) {
-    if (cell.fiveYearGrowth.suppressed) suppressing.push({ state: cell.fiveYearGrowth.state, appliesTo: `reverse-DCF cell ${cell.marginLevel}/${cell.rate}` });
-  }
-  if (triggerA.fired) qualifying.push({ flag: "MARGIN AT HISTORICAL HIGH", appliesTo: "operating margin" });
-  if (reinvestmentRonic.capitalLight) qualifying.push({ flag: "CAPITAL-LIGHT", appliesTo: "reinvestment/RONIC" });
+  // Named rather than inlined into the return, because §9.6 reads it: a
+  // REQUIRED input of any other output being INCOMPLETE is one of PARTIAL's
+  // conditions, and trust scans these figures for it.
+  const diagnostics: AnalysisResult["diagnostics"] = {
+    enterpriseValue: enterpriseValueBridge,
+    multiples,
+    marginHistory,
+    fcf,
+    reinvestmentRonic,
+    impliedReturnOnNewCapital,
+    terminal,
+    impliedExitMultiple,
+    rateSensitivity,
+    fcfYieldGrowth,
+    runRate,
+    shapeMismatch,
+    sensitivity,
+  };
 
   return {
     schemaVersion: fixture.schemaVersion,
@@ -411,22 +536,13 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
     provenance: [],
     gates: { gate0, gate1, leverage, triggerA, triggerB },
     profile: fixture.profile,
-    states: { suppressing, qualifying },
-    diagnostics: {
-      enterpriseValue: enterpriseValueBridge,
-      multiples,
-      marginHistory,
-      fcf,
-      reinvestmentRonic,
-      impliedReturnOnNewCapital,
-      terminal,
-      impliedExitMultiple,
-      rateSensitivity,
-      fcfYieldGrowth,
-      runRate,
-      shapeMismatch,
-      sensitivity,
+    // The §9.3 scope and the cause are assembly's working detail; the contract
+    // member is the state and what it is bound to (§10.0.1).
+    states: {
+      suppressing: suppressing.map(({ state, appliesTo }) => ({ state, appliesTo })),
+      qualifying,
     },
+    diagnostics,
     scenarios: fixture.scenarios,
     scenarioOutputs,
     priceImplied: {
@@ -438,6 +554,17 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
       impliedExitMultiple,
     },
     fairValueRange,
+    // §9.6, computed LAST of the deterministic members because every input it
+    // reads is one of them — and reading `fairValueRange` rather than
+    // re-deriving §10.3 is what keeps the status and the refusal one fact.
+    trust: computeTrustStatus({
+      fairValueRange,
+      states: { suppressing, qualifying },
+      facts: fixture.facts,
+      diagnostics,
+      profileHumanConfirmed: fixture.trustInputs.profileHumanConfirmed,
+      crossCheckFailedFactIds: fixture.trustInputs.crossCheckFailedFactIds,
+    }),
     preRevenue,
     // Both members are the AI layer's, and the AI layer runs AFTER this
     // function: §8.1 puts calculation on one side of the boundary and

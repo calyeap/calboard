@@ -28,7 +28,7 @@ import type { AnalystInputs } from "./companyInputs";
 // ---------------------------------------------------------------------------
 
 export interface AnalystInputBundle {
-  inputs: Omit<AnalystInputs, "nonOperatingInvestments" | "gate0" | "fiftyTwoWeek">;
+  inputs: Omit<AnalystInputs, "nonOperatingInvestments" | "gate0" | "fiftyTwoWeek" | "trustInputs">;
   /** Rendered to the analyst. Not a comment — a disclosure. */
   note: string;
 }

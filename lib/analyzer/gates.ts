@@ -11,8 +11,8 @@ import type { Gate0Result, Gate1Result, LeverageResult, OverrideRecord, TriggerR
 // §6.1 — Gate 0, supported profile
 // ---------------------------------------------------------------------------
 
-const ASSET_BASED_SECTORS = new Set(["Financials", "Real Estate"]);
-const RESERVE_BASED_INDUSTRIES = new Set([
+export const ASSET_BASED_SECTORS = new Set(["Financials", "Real Estate"]);
+export const RESERVE_BASED_INDUSTRIES = new Set([
   "Oil & Gas Exploration & Production",
   "Mining",
 ]);

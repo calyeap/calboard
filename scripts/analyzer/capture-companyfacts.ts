@@ -6,6 +6,7 @@ import {
   TAG_MAP,
   CANDIDATE_NON_OPERATING_INVESTMENT_TAGS,
 } from "../../lib/analyzer/acquisition/tagMap";
+import { INSURANCE_PREMIUM_OR_RESERVE_TAGS } from "../../lib/analyzer/acquisition/gate0Inputs";
 import type { CompanyFactsDocument } from "../../lib/analyzer/acquisition/secClient";
 
 config({ path: ".env.local" });
@@ -24,6 +25,17 @@ config({ path: ".env.local" });
 // ---------------------------------------------------------------------------
 
 const EXTRA_TAGS: { ns: "us-gaap" | "dei"; tag: string }[] = [
+  // §6.1's Gate 0 tests. Retained so offline mode can evaluate the gate at all:
+  // the capture is trimmed to the tags this mapping touches, and a trim that
+  // dropped these left the suite unable to reproduce the live gate.
+  //
+  // The insurance list is the presence test — every element of it, because
+  // "absent" is the answer the gate reads and a trimmed-away element would
+  // read as absent for the wrong reason.
+  ...INSURANCE_PREMIUM_OR_RESERVE_TAGS.map((tag) => ({ ns: "us-gaap" as const, tag })),
+  { ns: "us-gaap", tag: "InterestIncomeOperating" },
+  { ns: "us-gaap", tag: "InterestAndDividendIncomeOperating" },
+  { ns: "us-gaap", tag: "InterestIncomeExpenseNet" },
   // Footing components.
   { ns: "us-gaap", tag: "LongTermDebtCurrent" },
   { ns: "us-gaap", tag: "LongTermDebtNoncurrent" },
@@ -107,17 +119,31 @@ async function main(): Promise<void> {
     // period-over-period comparator need at the far end of the window.
     const trimmed = trim(doc, wantedTags(), new Date().getFullYear() - 12);
 
+    // The classification, captured alongside the facts.
+    //
+    // Without it, offline mode had no classification at all, Gate 0 failed
+    // closed on every captured run, and the suite could never reach the
+    // populated case — "a test environment that cannot reproduce the live one
+    // is a check that cannot fail." This is the same submissions endpoint the
+    // live path reads, taken at the same moment as the facts beside it.
+    const submissions = await client.submissions(found.cik);
+
     const capture = {
       __capture: {
         endpoint: `https://data.sec.gov/api/xbrl/companyfacts/CIK${found.cik}.json`,
+        submissionsEndpoint: `https://data.sec.gov/submissions/CIK${found.cik}.json`,
         capturedAt: new Date().toISOString(),
         ticker: ticker.toUpperCase(),
         cik: found.cik,
+        sic: submissions.sic ?? null,
+        sicDescription: submissions.sicDescription ?? null,
         note:
           "Real SEC XBRL company facts, trimmed to the tags calboard's tag mapping " +
           "touches and to periods ending in the last twelve calendar years. Every " +
           "retained row is exactly as EDGAR returned it; nothing here was written " +
-          "by hand.",
+          "by hand. The SIC code and description are from the submissions endpoint " +
+          "at the same capture time, so Gate 0 evaluates offline exactly as it " +
+          "does live.",
       },
       ...trimmed,
     };

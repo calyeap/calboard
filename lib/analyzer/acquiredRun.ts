@@ -2,6 +2,12 @@ import Decimal from "decimal.js";
 import { acquireCompany, type AcquiredCompany, type AcquisitionSource } from "./acquisition/provider";
 import { buildCompanyInputs, type NonOperatingInvestmentSelection } from "./acquisition/companyInputs";
 import { analystInputsFor } from "./acquisition/analystInputs";
+import {
+  sectorClassificationFromSic,
+  industryClassificationFromSic,
+  interestIncomeOverRevenue,
+  hasInsurancePremiumOrReserveLineItems,
+} from "./acquisition/gate0Inputs";
 import type { CompanyFixture } from "./assemble";
 
 // ---------------------------------------------------------------------------
@@ -12,6 +18,48 @@ import type { CompanyFixture } from "./assemble";
 // carries how it was obtained. The analyst-side inputs still come from the
 // validation bundle, and analystInputs.ts is where that is stated plainly.
 // ---------------------------------------------------------------------------
+
+/**
+ * §6.1's five REQUIRED inputs, all four testable ones acquired.
+ *
+ * THE DEFECT THIS REPLACES had two halves, and fixing either alone would have
+ * been worse than fixing neither:
+ *
+ *  1. `interestIncomeOverRevenue` and `hasInsurancePremiumOrReserveLineItems`
+ *     were hard-coded null, so Gate 0 failed closed on every run for every
+ *     company.
+ *  2. Both classification fields were the SIC DESCRIPTION, which is never the
+ *     vocabulary §6.1 tests against — so once the two nulls were filled, the
+ *     sector and industry tests would still never fire and a bank would pass
+ *     Gate 0. Supplying the nulls without fixing the lookup would have turned a
+ *     gate that refused everything into a gate that refused nothing.
+ */
+function gate0InputsFrom(acquired: AcquiredCompany): CompanyFixture["gate0"] {
+  const revenueFact = acquired.acquisition.facts.find((f) => f.id === "current-revenue");
+  const revenue =
+    revenueFact?.value instanceof Decimal
+      ? revenueFact.value
+      : revenueFact?.value != null
+        ? new Decimal(String(revenueFact.value))
+        : null;
+
+  return {
+    // Looked up from the SIC CODE. A company with a code has a classification,
+    // so only a failed submissions lookup leaves these null — and then Gate 0
+    // fails closed, which is §6.1's instruction rather than a gap.
+    sectorClassification: sectorClassificationFromSic(acquired.sic, acquired.sicDescription),
+    industryClassification: industryClassificationFromSic(acquired.sic, acquired.sicDescription),
+    // Zero where no operating interest-income line appears; null only where
+    // revenue is unavailable, which leaves the test genuinely unevaluable.
+    interestIncomeOverRevenue: interestIncomeOverRevenue(acquired.companyFacts, revenue),
+    // Read off the company's own reported elements. Null only where the fact
+    // document itself is missing.
+    hasInsurancePremiumOrReserveLineItems: hasInsurancePremiumOrReserveLineItems(
+      acquired.companyFacts
+    ),
+    override: null,
+  };
+}
 
 export class AnalystInputsUnavailableError extends Error {
   constructor(ticker: string) {
@@ -44,6 +92,15 @@ export interface BuildAcquiredRunOptions {
   fiftyTwoWeek?: { low: Decimal; high: Decimal } | null;
   source?: AcquisitionSource;
   acquiredAt?: string;
+  /**
+   * §6.3. False after *Cannot judge* — the profile was used provisionally and
+   * nobody confirmed it, which §9.6 rule 2 reads as PARTIAL.
+   *
+   * Defaults to false, the fail-closed direction: an unanswered run has not
+   * been confirmed by anybody, and claiming otherwise would overstate how much
+   * of the analysis can be used.
+   */
+  profileHumanConfirmed?: boolean;
 }
 
 export async function buildAcquiredRun(
@@ -65,19 +122,13 @@ export async function buildAcquiredRun(
       ...bundle.inputs,
       nonOperatingInvestments: options.nonOperatingInvestments ?? null,
       fiftyTwoWeek: options.fiftyTwoWeek ?? null,
-      gate0: {
-        // Gate 0 fails closed on a missing classification (§6.1, §5.3). The SEC
-        // SIC description is the only classification acquired; where the
-        // submissions lookup returned nothing, this stays null and Gate 0
-        // returns UNSUPPORTED PROFILE — CLASSIFICATION UNAVAILABLE rather than
-        // defaulting to mature-profitable.
-        sectorClassification: acquired.sicDescription,
-        industryClassification: acquired.sicDescription,
-        // Not mapped in this version. Null, so Gate 0's interest-income test
-        // cannot pass by absence.
-        interestIncomeOverRevenue: null,
-        hasInsurancePremiumOrReserveLineItems: null,
-        override: null,
+      gate0: gate0InputsFrom(acquired),
+      // §9.6 rule 2. The cross-check outcomes come off the acquisition that
+      // just ran, so trust reads this run's own failures rather than a
+      // remembered set.
+      trustInputs: {
+        profileHumanConfirmed: options.profileHumanConfirmed ?? false,
+        crossCheckFailedFactIds: [...acquired.crossCheckFailedFactIds],
       },
     },
     {

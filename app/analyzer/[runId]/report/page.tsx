@@ -3,6 +3,7 @@ import { AnalyzerShell } from "@/app/components/AnalyzerShell";
 import { AnalyzerReport } from "@/app/components/AnalyzerReport";
 import { loadGateState, RunNotFoundError, SpotCheckIncompleteError } from "@/lib/analyzer/gate";
 import { analysisForReport } from "@/lib/analyzer/reportAnalysis";
+import { trustStatusLine, trustConsequenceLine } from "@/lib/analyzer/trustCopy";
 
 // Screen 4 — Steps 8–10, output. No human input.
 //
@@ -48,32 +49,51 @@ export default async function ReportPage({ params }: { params: Promise<{ runId: 
   // not human-confirmed.
   const profileNotConfirmed = !state.run.profileHumanConfirmed;
 
+  // §9.6, read off the Analysis Result rather than written here. The status
+  // used to be the literal "PARTIAL", which was true of the run this page was
+  // built against and false of any run whose fair-value range was suppressed.
+  const trust = report.result.trust;
+
+  // The block renders on every run now, not only unconfirmed ones: §9.6 puts
+  // one status per run on page one, and a status that appeared only when
+  // something else was also wrong would be missing exactly where UNUSABLE
+  // needs saying.
+  const positionSuppressedBy =
+    trust.status === "UNUSABLE"
+      ? `TRUST STATUS UNUSABLE · ${trust.determinedBy[0]?.detail ?? ""}`
+      : profileNotConfirmed
+        ? "PROFILE NOT CONFIRMED"
+        : null;
+
   return (
     <AnalyzerShell>
-      {profileNotConfirmed && (
+      {(profileNotConfirmed || trust.status !== "CLEAN") && (
         <div className="cb-steps">
           <div className="wrap" style={{ paddingBottom: 0 }}>
             <div className="state">
-              <span className="plain">
-                The recommended profile was used provisionally. Nobody confirmed that it describes
-                this company.
-              </span>
-              <span className="name">Profile not confirmed · trust status PARTIAL</span>
-              <span className="cause">
-                The fair-value range below still renders. The valuation position and its action
-                clause do not — an unconfirmed profile would leave the loudest sentence in this
-                report resting on a judgment nobody made.
-              </span>
+              {profileNotConfirmed && (
+                <span className="plain">
+                  The recommended profile was used provisionally. Nobody confirmed that it
+                  describes this company.
+                </span>
+              )}
+              <span className="name">{trustStatusLine(trust.status, profileNotConfirmed)}</span>
+              <span className="cause">{trustConsequenceLine(trust.status)}</span>
             </div>
 
             {/* The §10.6 position slot, showing its state rather than a value.
-                The position itself (CHEAP / FAIR / EXPENSIVE) is not built in
-                M7: its band thresholds are PROVISIONAL and are calibrated at
-                M8. What M7 builds is this suppression path. */}
-            <div className="state" style={{ marginTop: 14 }}>
-              <span className="name">Valuation position — suppressed</span>
-              <span className="cause">PROFILE NOT CONFIRMED</span>
-            </div>
+                The position itself (CHEAP / FAIR / EXPENSIVE / INCONCLUSIVE) is
+                not built: its band thresholds are PROVISIONAL until M8-c. What
+                is built is this suppression path — and §10.6.3 gives it three
+                conditions, of which trust status is one, so the slot now names
+                whichever condition actually failed rather than assuming it was
+                the profile. */}
+            {positionSuppressedBy !== null && (
+              <div className="state" style={{ marginTop: 14 }}>
+                <span className="name">Valuation position — suppressed</span>
+                <span className="cause">{positionSuppressedBy}</span>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -781,6 +781,28 @@ export interface UndefinedPolicyConstants {
 }
 
 // ---------------------------------------------------------------------------
+// §10.0.1 member: trust — §9.6's one status per run
+// ---------------------------------------------------------------------------
+
+// Three values, all introduced by amendment M7. The third is named UNUSABLE
+// rather than DO NOT RELY because CLEAN and PARTIAL both answer "how much of
+// this analysis can I use", and an instruction to the reader would change
+// dimension halfway through a three-item set (§9.6).
+export type TrustStatus = "CLEAN" | "PARTIAL" | "UNUSABLE";
+
+/** What determined the status — §10.0.1 requires the states and facts with it. */
+export interface TrustDeterminant {
+  kind: "suppressing state" | "qualifying flag" | "fact" | "cross-check" | "incomplete input";
+  detail: string;
+}
+
+export interface TrustResult {
+  status: TrustStatus;
+  // Empty only under CLEAN, where by definition nothing qualified the run.
+  determinedBy: TrustDeterminant[];
+}
+
+// ---------------------------------------------------------------------------
 // §10.0.1 — the Analysis Result itself
 // ---------------------------------------------------------------------------
 
@@ -806,6 +828,10 @@ export interface AnalysisResult {
   scenarioOutputs: ScenarioOutputs;
   priceImplied: PriceImplied;
   fairValueRange: FairValueRange;
+  // §9.6, via §10.0.1's eleventh member. Computed by [S] from states this
+  // object already carries — never measured separately, and never worked out
+  // by the renderer (§10.0.2 rule 3).
+  trust: TrustResult;
   // Populated only for the pre-revenue profile.
   preRevenue: PreRevenueModule | null;
   // Populated only after the independent blind-challenger call completes

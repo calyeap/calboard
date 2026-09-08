@@ -26,6 +26,13 @@ export interface AcquiredCompany {
   crossChecks: CrossCheckReport;
   /** Fact ids a cross-check failed on — forced into the queue (§3.8.2). */
   crossCheckFailedFactIds: Set<string>;
+  /**
+   * The SEC-assigned SIC CODE, e.g. "7372". §6.1's sector and industry tests
+   * are looked up from this, not from the description beside it: no
+   * sicDescription is ever "Financials" or "Mining", so matching the
+   * description against the gate's vocabulary never fires.
+   */
+  sic: string | null;
   sicDescription: string | null;
   provenanceNote: string;
 }
@@ -93,7 +100,11 @@ function assemble(
   cik: string,
   companyName: string,
   companyFacts: CompanyFactsDocument,
-  sicDescription: string | null,
+  // Both halves travel together so neither path can carry one without the
+  // other: the code is what §6.1 looks up, the description is what the analyst
+  // reads, and a run showing one with the other missing would be telling the
+  // screen and the gate different things.
+  classification: { sic: string | null; sicDescription: string | null },
   provenanceNote: string,
   options: AcquireOptions
 ): AcquiredCompany {
@@ -118,7 +129,8 @@ function assemble(
     companyFacts,
     crossChecks,
     crossCheckFailedFactIds: new Set(crossChecks.failedFactIds),
-    sicDescription,
+    sic: classification.sic,
+    sicDescription: classification.sicDescription,
     provenanceNote,
   };
 }
@@ -126,15 +138,27 @@ function assemble(
 function fromCapture(ticker: string, options: AcquireOptions): AcquiredCompany {
   const doc = captureFor(ticker);
   if (doc === null) throw new Error(`No committed capture for ${ticker}`);
-  const meta = (doc as CompanyFactsDocument & { __capture?: { cik?: string; capturedAt?: string } })
-    .__capture;
+  const meta = (
+    doc as CompanyFactsDocument & {
+      __capture?: {
+        cik?: string;
+        capturedAt?: string;
+        sic?: string | null;
+        sicDescription?: string | null;
+      };
+    }
+  ).__capture;
 
   return assemble(
     ticker,
     meta?.cik ?? String(doc.cik).padStart(10, "0"),
     doc.entityName,
     doc,
-    null,
+    // The classification the capture recorded, from the same submissions
+    // endpoint the live path reads. This used to be a hard-coded null, which
+    // meant the whole test suite ran against a Gate 0 that had failed closed
+    // and could not have caught any defect in the populated path.
+    { sic: meta?.sic ?? null, sicDescription: meta?.sicDescription ?? null },
     `Committed SEC capture, taken ${meta?.capturedAt ?? "at an unrecorded time"}. ` +
       `Real filing data, not live — figures are as at the capture, not as at now.`,
     options
@@ -151,16 +175,20 @@ async function fromEdgar(ticker: string, options: AcquireOptions): Promise<Acqui
 
   const companyFacts = await client.companyFacts(found.cik);
 
-  let sicDescription: string | null = null;
+  let classification: { sic: string | null; sicDescription: string | null } = {
+    sic: null,
+    sicDescription: null,
+  };
   try {
-    const submissions = (await client.submissions(found.cik)) as SubmissionsDocument & {
-      sicDescription?: string;
+    const submissions: SubmissionsDocument = await client.submissions(found.cik);
+    classification = {
+      sic: submissions.sic ?? null,
+      sicDescription: submissions.sicDescription ?? null,
     };
-    sicDescription = submissions.sicDescription ?? null;
   } catch {
     // Gate 0 fails closed on a missing classification (§5.3, §6.1). A failed
-    // lookup leaves it null; it must never default to something classifiable.
-    sicDescription = null;
+    // lookup leaves both null; neither may default to something classifiable.
+    classification = { sic: null, sicDescription: null };
   }
 
   return assemble(
@@ -168,7 +196,7 @@ async function fromEdgar(ticker: string, options: AcquireOptions): Promise<Acqui
     found.cik,
     found.title,
     companyFacts,
-    sicDescription,
+    classification,
     `Live SEC EDGAR, fetched ${new Date().toISOString()}`,
     options
   );

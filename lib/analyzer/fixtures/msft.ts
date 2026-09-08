@@ -277,6 +277,10 @@ export const MSFT_FIXTURE: CompanyFixture = {
   // shows only "X.X%" as a placeholder for this figure).
   revalueBaseCaseAtRate: (rate: Decimal) => price.mul(new Decimal("0.1").dividedBy(rate)),
 
+  // §9.6 rule 2. Both design mocks state the profile as CONFIRMED on their
+  // own face, and these fixtures predate acquisition so no §3.8.2 cross-check
+  // ran against them — which is why the list is empty rather than unknown.
+  trustInputs: { profileHumanConfirmed: true, crossCheckFailedFactIds: [] },
   configuredConstants: {
     nopatTaxRate: new Decimal("0.2"),
     stressMarginLevel: new Decimal("0.38"),

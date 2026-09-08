@@ -291,6 +291,10 @@ export const OKLO_FIXTURE: CompanyFixture = {
   scenarioValues: { bear: cashPerShare, base: new Decimal(31), bull: new Decimal(48) },
   revalueBaseCaseAtRate: () => new Decimal(31),
 
+  // §9.6 rule 2. Both design mocks state the profile as CONFIRMED on their
+  // own face, and these fixtures predate acquisition so no §3.8.2 cross-check
+  // ran against them — which is why the list is empty rather than unknown.
+  trustInputs: { profileHumanConfirmed: true, crossCheckFailedFactIds: [] },
   configuredConstants: {
     nopatTaxRate: new Decimal("0.21"),
     stressMarginLevel: null,
