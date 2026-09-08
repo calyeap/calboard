@@ -8,6 +8,7 @@ import { verifyAppReachable, verifyDatabaseReady, verifyFrozenArtefacts } from "
 import { driveRun, driveScreen1 } from "./drive";
 import {
   checkConsoleErrors,
+  checkContinueGated,
   checkFont,
   checkOverflow,
   checkRendered,
@@ -103,6 +104,9 @@ async function main(): Promise<void> {
     results.push(checkFont(target, doc));
     results.push(checkConsoleErrors(target, doc));
     results.push(checkStatesAppeared(target, STATE_MARKERS[target], doc));
+    if (target.endsWith("-undecided")) {
+      results.push(checkContinueGated(target, doc));
+    }
   }
   // The gate-phase results, captured above rather than re-run, so the
   // archive carries evidence the app was reachable and the schema present —
