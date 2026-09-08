@@ -724,7 +724,7 @@ Retained cash flow is computed after cash operating costs, corporate overhead, i
 
 | Condition | State returned |
 |---|---|
-| V_fail < Price < V_success | the probability, rounded to the nearest 5% |
+| V_fail < Price < V_success | the weight, rounded to the nearest 5% |
 | Price ≥ V_success > V_fail | **PRICE NOT JUSTIFIABLE BY THIS OUTCOME** |
 | V_success ≤ V_fail | **THIS SUCCESS IS WORTH LESS THAN FAILURE** |
 
@@ -734,7 +734,7 @@ Retained cash flow is computed after cash operating costs, corporate overhead, i
 
 **The third state is a finding, not an error.** In the OKLO rerun two of six success definitions returned it. Rows in that state are the most informative output the model produced and **must be displayed, not dropped**.
 
-**Probability is reported per success definition, never as one number.**
+**The weight is reported per success definition, never as one number, and never described as a probability of success.**
 
 **Per I7:** where the pre-revenue reference issue price is an assumption, the caveat text is displayed: *"Success values use an assumed future issue price. The grid is the output; the reference row is not a forecast."*
 
