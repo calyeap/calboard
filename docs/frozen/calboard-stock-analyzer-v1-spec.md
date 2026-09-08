@@ -57,7 +57,7 @@ v1 has been validated on three companies in three profiles. Within the supported
 |---|---|---|
 | Mature, profitable, stable FCF | Microsoft | DCF + reverse DCF |
 | High-growth, profitable, uncertain durability | NVIDIA | Reverse DCF + scenario DCF with explicit revenue paths |
-| Pre-revenue / unprofitable **owner-operator infrastructure** | OKLO | Implied probability of success + "what has to be true" reverse calc |
+| Pre-revenue / unprofitable **owner-operator infrastructure** | OKLO | Conditional price-implied break-even success weight + "what has to be true" reverse calc |
 
 The **asset-based row** (banks, insurers, brokers, balance-sheet asset managers, REITs, reserve-based resources) appears in the methodology's §1 table for completeness and **has been validated on nothing**. Gate 0 refuses it deterministically.
 
@@ -520,7 +520,7 @@ Hard auto-assignment is explicitly rejected by the methodology: a cyclical in a 
 |---|---|---|---|
 | Mature, profitable, stable FCF | DCF + reverse DCF | FCF yield, P/E vs own history, EV/EBIT vs peers | EV/Revenue, P/B |
 | High-growth, profitable, uncertain durability | Reverse DCF + scenario DCF with explicit revenue paths | Median-margin P/E, EV/EBIT, market-cap vs addressable-profit-pool | Trailing P/E at peak margins, EV/Revenue standalone |
-| Pre-revenue / unprofitable | Implied probability of success + "what has to be true" reverse calc | Cash-per-share floor, runway and dilution path, unit-economics breakeven, implied future revenue at exit multiple | DCF as a point estimate, any current multiple |
+| Pre-revenue / unprofitable | Conditional price-implied break-even success weight + "what has to be true" reverse calc | Cash-per-share floor, runway and dilution path, unit-economics breakeven, implied future revenue at exit multiple | DCF as a point estimate, any current multiple |
 | Asset-based | *Not validated. Caught by Gate 0.* | — | — |
 
 ### 6.4 Triggers A and B — evaluated separately [S]
@@ -701,7 +701,7 @@ The base-year rule (§3.1) fires where sequential revenue growth exceeds ~10%. *
 
 **M15 — Scenario outputs.** Scenario values; probability-weighted distribution **as display only, never a headline**; location of current price within the scenario range; the discount rate at which the base case equals the price; the fair-value range per §10.
 
-**M16 — Pre-revenue module.** Cash per share on the latest share count adjusted for burn to today; quarterly burn; runway; unit-economics breakeven; the four-line funding stack under **both ramps**; dilution required; implied probability per success definition.
+**M16 — Pre-revenue module.** Cash per share on the latest share count adjusted for burn to today; quarterly burn; runway; unit-economics breakeven; the four-line funding stack under **both ramps**; dilution required; the conditional price-implied break-even success weight per success definition.
 
 Funding stack order, all four lines displayed:
 
@@ -876,7 +876,7 @@ Five of the six are implemented in v1. Only R4 is deferred, and only because the
 | **NOT COMPUTABLE / NO SOLUTION IN RANGE / DEGENERATE** | §3.3 degenerate solver outputs | the affected reverse-DCF cell |
 | **PRECONDITION FAILED** | §8.2 | FCF yield + growth |
 | **NOT ACHIEVABLE AT ANY SCALE** | §8.6 | the "what has to be true" solve |
-| **SUCCESS WORTH LESS THAN FAILURE / PRICE NOT JUSTIFIABLE** | §2.9 | the implied probability for that definition |
+| **SUCCESS WORTH LESS THAN FAILURE / PRICE NOT JUSTIFIABLE** | §2.9 | the conditional price-implied break-even success weight for that definition |
 | **SEASONAL — RUN-RATE SUPPRESSED** | §7.2 M12 seasonality test (I4) | the annualised run-rate for revenue, NOPAT, every multiple and the steady-state value |
 | **INCOMPLETE** | missing REQUIRED input (I14) | every dependent output |
 

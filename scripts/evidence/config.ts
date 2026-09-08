@@ -7,7 +7,7 @@ export const DEFAULT_BASE_URL = "http://127.0.0.1:3000";
 /** Frozen artefacts, byte-exact. A missing file is a STOP, never a hash. */
 export const FROZEN_HASHES: Readonly<Record<string, string>> = {
   "calboard-stock-analyzer-v1-spec.md":
-    "f56df122406e339813941d7cf7a834f72623ba00d334c66e0e5edc9774391ef9",
+    "9801dfef269c435d8be955db2099f097aba54f0fac1da3f6cf30c4430d01e3bc",
   "calboard-stock-analyzer-v1-design.md":
     "7cc5513b1cf241e140f714655829b302fbe3e40271d010886369a6fe7aa139c2",
   "mock-screen1-entry.html":
