@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>continue-enabled</title>
+<style>
+  :root { --font-ibm-plex-sans: "IBM Plex Sans"; }
+  body { margin: 0; }
+  .cb-analyzer {
+    font-family: var(--font-ibm-plex-sans), "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+</style></head>
+<body><div class="cb-analyzer">
+  <div class="continue">
+    <!-- Deliberately not disabled — stands in for the gate failing to hold
+         on an undecided run. The real, working disabled state is proven
+         separately by continue-gated.html. -->
+    <button class="act" type="button">Continue to gates</button>
+  </div>
+</div></body></html>

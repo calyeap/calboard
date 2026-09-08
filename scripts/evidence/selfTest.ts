@@ -7,6 +7,7 @@ import { chromium } from "playwright";
 import { captureAt } from "./capture";
 import {
   checkConsoleErrors,
+  checkContinueGated,
   checkFont,
   checkOverflow,
   checkRendered,
@@ -35,8 +36,8 @@ const FIXTURE_DIR = path.join(__dirname, "fixtures");
  *
  * Covers checkOverflow (both the node limb and the document limb),
  * checkFont, checkConsoleErrors, checkStatesAppeared (both directions),
- * checkRendered (both directions), and the dead-port limb of
- * verifyAppReachable.
+ * checkRendered (both directions), checkContinueGated (both directions), and
+ * the dead-port limb of verifyAppReachable.
  *
  * It does not cover verifyFrozenArtefacts or verifyDatabaseReady. Those are
  * documented residual gaps, both lower-value than they look: the frozen-hash
@@ -126,6 +127,24 @@ export async function runSelfTest(): Promise<SelfTestResult[]> {
       "states-appeared-fail",
       "FAIL",
       checkStatesAppeared("clean", "Listed operating company", clean)
+    );
+
+    // checkContinueGated was the sixth check with no fixture-driven proof.
+    // continue-gated.html is the working gate (disabled + reason); it is not
+    // reused from "clean" because the gate control is specific to this check
+    // and does not belong in the general-purpose control fixture.
+    // continue-enabled.html forces the gate open — Continue present but not
+    // disabled — which is exactly the failure this check exists to catch on a
+    // real undecided run, produced here without touching application code.
+    record(
+      "continue-gated",
+      "PASS",
+      checkContinueGated("continue-gated", await load("continue-gated"))
+    );
+    record(
+      "continue-enabled",
+      "FAIL",
+      checkContinueGated("continue-enabled", await load("continue-enabled"))
     );
 
     // checkRendered was the last check with no end-to-end case: both its
