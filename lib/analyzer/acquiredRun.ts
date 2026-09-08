@@ -44,6 +44,15 @@ export interface BuildAcquiredRunOptions {
   fiftyTwoWeek?: { low: Decimal; high: Decimal } | null;
   source?: AcquisitionSource;
   acquiredAt?: string;
+  /**
+   * §6.3. False after *Cannot judge* — the profile was used provisionally and
+   * nobody confirmed it, which §9.6 rule 2 reads as PARTIAL.
+   *
+   * Defaults to false, the fail-closed direction: an unanswered run has not
+   * been confirmed by anybody, and claiming otherwise would overstate how much
+   * of the analysis can be used.
+   */
+  profileHumanConfirmed?: boolean;
 }
 
 export async function buildAcquiredRun(
@@ -78,6 +87,13 @@ export async function buildAcquiredRun(
         interestIncomeOverRevenue: null,
         hasInsurancePremiumOrReserveLineItems: null,
         override: null,
+      },
+      // §9.6 rule 2. The cross-check outcomes come off the acquisition that
+      // just ran, so trust reads this run's own failures rather than a
+      // remembered set.
+      trustInputs: {
+        profileHumanConfirmed: options.profileHumanConfirmed ?? false,
+        crossCheckFailedFactIds: [...acquired.crossCheckFailedFactIds],
       },
     },
     {

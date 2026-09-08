@@ -302,7 +302,20 @@ export async function loadGateState(runId: string): Promise<GateState> {
 
   return {
     run,
-    fixture: { ...fixture, facts },
+    // §9.6's two run-level inputs are set HERE, for the reason the comment
+    // above gives about the facts: this is the single place a run is loaded,
+    // and a second derivation downstream is how the screen and the data came
+    // to disagree. `buildAcquiredRun` defaults profileHumanConfirmed to false
+    // because it cannot see the database; this is where the recorded answer
+    // and this run's own cross-check outcomes replace that default.
+    fixture: {
+      ...fixture,
+      facts,
+      trustInputs: {
+        profileHumanConfirmed: run.profileHumanConfirmed,
+        crossCheckFailedFactIds: [...crossCheckFailedFactIds],
+      },
+    },
     decidedFactIds,
     queuedCount: queuedFacts(fixture.facts, crossCheckFailedFactIds, derivedExemption).length,
     outstandingFactIds: outstanding,

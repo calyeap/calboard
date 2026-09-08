@@ -63,6 +63,13 @@ export interface AnalystInputs {
   preRevenue: CompanyFixture["preRevenue"];
   /** Gate 0's classification lookups, from the SEC submissions record. */
   gate0: CompanyFixture["gate0"];
+  /**
+   * §9.6 rule 2's two run-level inputs. Supplied by whoever knows them —
+   * gate.ts reads the profile decision out of the database and the cross-check
+   * outcomes off the acquisition — rather than defaulted here, because a
+   * default would have trust describe a run it never looked at.
+   */
+  trustInputs: CompanyFixture["trustInputs"];
 }
 
 export interface CompanyInputsResult {
@@ -122,6 +129,7 @@ export function buildCompanyInputs(
     facts: acquisition.facts,
 
     gate0: analyst.gate0,
+    trustInputs: analyst.trustInputs,
     gate1: { filedYearsCount: filedAnnualYearsCount(companyFacts) },
     leverage: {
       totalDebt: raw("total-debt"),

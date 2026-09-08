@@ -32,6 +32,7 @@ import {
 import { evaluateGate0, evaluateGate1, evaluateLeverage, evaluateTriggerA, evaluateTriggerB } from "./gates";
 import type { Gate0Input, Gate1Input, LeverageInput, TriggerMarginInput } from "./gates";
 import { CLEAN_PROVENANCE } from "./provenance";
+import { computeTrustStatus } from "./trust";
 import {
   gate0Cause,
   leverageCause,
@@ -143,6 +144,18 @@ export interface CompanyFixture {
   revalueBaseCaseAtRate: (rate: Decimal) => Decimal;
 
   configuredConstants: UndefinedPolicyConstants;
+
+  // §9.6 rule 2 needs two facts about the run that no calculation module
+  // produces: whether a human confirmed the profile (§6.3's *Cannot judge*
+  // raises PROFILE NOT CONFIRMED on the valuation path) and which facts failed
+  // a §3.8.2 cross-check. Both are already known where a real run is built —
+  // see gate.ts — and they arrive here rather than being guessed at, because
+  // guessing either way would make trust say something about a run that is not
+  // true of it.
+  trustInputs: {
+    profileHumanConfirmed: boolean;
+    crossCheckFailedFactIds: readonly string[];
+  };
 
   // Populated only for the pre-revenue profile.
   preRevenue: PreRevenueFixture | null;
@@ -475,6 +488,25 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
         })()
       : null;
 
+  // Named rather than inlined into the return, because §9.6 reads it: a
+  // REQUIRED input of any other output being INCOMPLETE is one of PARTIAL's
+  // conditions, and trust scans these figures for it.
+  const diagnostics: AnalysisResult["diagnostics"] = {
+    enterpriseValue: enterpriseValueBridge,
+    multiples,
+    marginHistory,
+    fcf,
+    reinvestmentRonic,
+    impliedReturnOnNewCapital,
+    terminal,
+    impliedExitMultiple,
+    rateSensitivity,
+    fcfYieldGrowth,
+    runRate,
+    shapeMismatch,
+    sensitivity,
+  };
+
   return {
     schemaVersion: fixture.schemaVersion,
     runId: fixture.runId,
@@ -491,21 +523,7 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
       suppressing: suppressing.map(({ state, appliesTo }) => ({ state, appliesTo })),
       qualifying,
     },
-    diagnostics: {
-      enterpriseValue: enterpriseValueBridge,
-      multiples,
-      marginHistory,
-      fcf,
-      reinvestmentRonic,
-      impliedReturnOnNewCapital,
-      terminal,
-      impliedExitMultiple,
-      rateSensitivity,
-      fcfYieldGrowth,
-      runRate,
-      shapeMismatch,
-      sensitivity,
-    },
+    diagnostics,
     scenarios: fixture.scenarios,
     scenarioOutputs,
     priceImplied: {
@@ -517,6 +535,17 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
       impliedExitMultiple,
     },
     fairValueRange,
+    // §9.6, computed LAST of the deterministic members because every input it
+    // reads is one of them — and reading `fairValueRange` rather than
+    // re-deriving §10.3 is what keeps the status and the refusal one fact.
+    trust: computeTrustStatus({
+      fairValueRange,
+      states: { suppressing, qualifying },
+      facts: fixture.facts,
+      diagnostics,
+      profileHumanConfirmed: fixture.trustInputs.profileHumanConfirmed,
+      crossCheckFailedFactIds: fixture.trustInputs.crossCheckFailedFactIds,
+    }),
     preRevenue,
     // Both members are the AI layer's, and the AI layer runs AFTER this
     // function: §8.1 puts calculation on one side of the boundary and
