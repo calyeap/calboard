@@ -2382,6 +2382,23 @@ h6 {
 }
 .cb-analyzer .cb-steps .sourcepane dd {
   margin: 2px 0 0;
+  /* Real citations carry XBRL element names, and they are single unbroken
+     tokens: us-gaap:IncrementalCommonSharesAttributableToShareBasedPayment-
+     Arrangements is 73 characters with nowhere to break. Left alone it set the
+     min-content width of this grid column and pushed the card, the wrap and
+     the document past the viewport at 1024 and 1440 — design §16 allows
+     nothing off-screen at any width.
+
+     `anywhere` rather than `break-word`: both break the token, but only
+     `anywhere` reduces the element's min-content contribution, which is what
+     lets the grid track actually shrink. `break-word` would still leave the
+     column sized by the longest identifier.
+
+     The identifier is NOT shortened, and must not be. §3.2 requires the source
+     identified precisely enough to re-fetch and §3.8 a citation sufficient to
+     check the figure against its source; a truncated or ellipsised element
+     name may satisfy neither. Wrapping keeps the whole string on screen. */
+  overflow-wrap: anywhere;
 }
 .cb-analyzer .cb-steps .sourcepane a {
   color: var(--ink);
