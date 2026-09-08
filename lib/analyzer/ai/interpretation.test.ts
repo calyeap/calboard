@@ -21,11 +21,19 @@ function fakeCall(response: unknown, seen?: AnalystCallRequest[]): AnalystCall {
   };
 }
 
+/**
+ * A well-formed response carrying the given texts.
+ *
+ * Always all five §8.2 responsibilities, because that is the contract: the
+ * supplied texts take the first slots and the rest are filled with clean
+ * prose, so a test about ONE sentence is not also a test about the set being
+ * incomplete.
+ */
 function statementsOf(texts: string[]): unknown {
   return {
-    statements: texts.map((text, i) => ({
-      responsibility: INTERPRETATION_RESPONSIBILITIES[i % INTERPRETATION_RESPONSIBILITIES.length],
-      text,
+    statements: INTERPRETATION_RESPONSIBILITIES.map((responsibility, i) => ({
+      responsibility,
+      text: texts[i] ?? "Nothing further on this responsibility for this run.",
     })),
     pageOne: {
       mainFinding: "The price rests on growth the company has not yet delivered.",
@@ -198,6 +206,35 @@ describe("runInterpretation", () => {
       await expect(runInterpretation(msft, alwaysBad)).rejects.toThrow(UntraceableFigureError);
       expect(seen).toHaveLength(2);
     });
+  });
+
+  it("REFUSES a second statement against a responsibility already discharged", async () => {
+    // A real OKLO run returned six statements, the last a restatement of the
+    // fifth "for the reader who wants one line". §8.2 is a table of five
+    // responsibilities, and the dispatch says to build to that table: a
+    // sixth entry is padding, and padding on a page that must not carry a
+    // verdict is where one arrives sounding like a summary.
+    const call = fakeCall({
+      statements: [
+        ...INTERPRETATION_RESPONSIBILITIES.map((responsibility) => ({ responsibility, text: "Clean." })),
+        { responsibility: INTERPRETATION_RESPONSIBILITIES[4], text: "Restated plainly." },
+      ],
+      pageOne: (statementsOf([]) as { pageOne: unknown }).pageOne,
+    });
+
+    await expect(runInterpretation(msft, call)).rejects.toThrow(/once/i);
+  });
+
+  it("REFUSES a set that leaves one of §8.2's five undischarged", async () => {
+    const call = fakeCall({
+      statements: INTERPRETATION_RESPONSIBILITIES.slice(0, 4).map((responsibility) => ({
+        responsibility,
+        text: "Clean.",
+      })),
+      pageOne: (statementsOf([]) as { pageOne: unknown }).pageOne,
+    });
+
+    await expect(runInterpretation(msft, call)).rejects.toThrow(/five/i);
   });
 
   it("REFUSES a responsibility outside §8.2's five", async () => {

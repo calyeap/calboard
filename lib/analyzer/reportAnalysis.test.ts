@@ -18,7 +18,10 @@ function scriptedCall(seen: AnalystCallRequest[] = []): AnalystCall {
     seen.push(request);
     if (request.label === "interpretation") {
       return {
-        statements: [{ responsibility: INTERPRETATION_RESPONSIBILITIES[2], text: STATEMENT }],
+        statements: INTERPRETATION_RESPONSIBILITIES.map((responsibility, i) => ({
+          responsibility,
+          text: i === 2 ? STATEMENT : "Nothing further on this responsibility for this run.",
+        })),
         pageOne: {
           mainFinding: STATEMENT,
           whatSupportsTheCase: "Returns on new capital sit above the policy rates.",
@@ -71,7 +74,7 @@ describe("analysisForReport", () => {
 
     expect(report.aiLayer.status).toBe("COMPLETED");
     expect(seen.map((r) => r.label).sort()).toEqual(["challenger", "interpretation"]);
-    expect(report.result.interpretation.statements[0].statement).toBe(STATEMENT);
+    expect(report.result.interpretation.statements[2].statement).toBe(STATEMENT);
     expect(report.result.challenger).not.toBeNull();
   });
 
@@ -84,7 +87,7 @@ describe("analysisForReport", () => {
 
     expect(seen).toHaveLength(2);
     expect(second.aiLayer.status).toBe("COMPLETED");
-    expect(second.result.interpretation.statements[0].statement).toBe(STATEMENT);
+    expect(second.result.interpretation.statements[2].statement).toBe(STATEMENT);
   });
 
   it("keeps the analysis when a call fails, and says why rather than inventing prose", async () => {
@@ -107,7 +110,10 @@ describe("analysisForReport", () => {
     const untraceable: AnalystCall = async (request) => {
       if (request.label === "interpretation") {
         return {
-          statements: [{ responsibility: INTERPRETATION_RESPONSIBILITIES[2], text: "Growth of 14.2% is implied." }],
+          statements: INTERPRETATION_RESPONSIBILITIES.map((responsibility, i) => ({
+            responsibility,
+            text: i === 2 ? "Growth of 14.2% is implied." : "Clean.",
+          })),
           pageOne: {
             mainFinding: "x",
             whatSupportsTheCase: "y",
@@ -134,6 +140,6 @@ describe("analysisForReport", () => {
 
     expect(report.aiLayer.status).toBe("COMPLETED");
     expect(report.result.preRevenue).not.toBeNull();
-    expect(report.result.interpretation.statements[0].statement).toBe(STATEMENT);
+    expect(report.result.interpretation.statements[2].statement).toBe(STATEMENT);
   });
 });

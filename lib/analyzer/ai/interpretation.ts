@@ -68,6 +68,11 @@ const RESPONSE_SCHEMA: Record<string, unknown> = {
   properties: {
     statements: {
       type: "array",
+      // NOT minItems: 5. Structured outputs reject any minItems other than 0
+      // or 1 — "For 'array' type, 'minItems' values other than 0 or 1 are not
+      // supported" — and the whole request 400s, which costs the report both
+      // calls. The "exactly five, one per responsibility" rule is stated in
+      // the prompt and ENFORCED in code below; the schema cannot carry it.
       minItems: 1,
       items: {
         type: "object",
@@ -164,9 +169,15 @@ ${catalogueBlock(catalogue)}
 
 WHAT TO WRITE
 
-One statement for each of the five responsibilities below, in this order. Where
-a responsibility has nothing to say on this run because its inputs are
-suppressed, say that, name the state by referencing its slot, and stop.
+EXACTLY FIVE STATEMENTS — one for each responsibility below, in this order, and
+no others. Not four, not six. Do not add a summary, a restatement, an overall
+reading, or a line "for the reader in a hurry": Section I is this table, and a
+sixth entry is where a verdict arrives wearing the clothes of a summary. An
+answer with a responsibility repeated, or one missing, is refused in full.
+
+Where a responsibility has nothing to say on this run because its inputs are
+suppressed, say that, name the state by referencing its slot, and stop. That is
+a complete answer to that responsibility.
 
 ${INTERPRETATION_RESPONSIBILITIES.map((r) => `  ${r}\n    ${RESPONSIBILITY_BRIEF[r]}`).join("\n")}
 
@@ -242,13 +253,37 @@ export async function runInterpretation(result: AnalysisResult, call: AnalystCal
 function interpretResponse(raw: unknown, catalogue: SlotCatalogue): InterpretationResult {
   const response = readResponse(raw);
 
-  const statements = response.statements.map((s, i) => {
+  // §8.2 is a TABLE OF FIVE, and Section I is that table. Exactly one
+  // statement per responsibility: a sixth entry is padding, and a missing one
+  // is a responsibility silently dropped. The real OKLO run that prompted this
+  // returned six, the last a restatement of the fifth "for the reader who
+  // wants one line" — which is how a summary, and then a verdict, arrives on a
+  // page that must carry neither.
+  const seen = new Set<string>();
+  for (const s of response.statements) {
     if (!(INTERPRETATION_RESPONSIBILITIES as readonly string[]).includes(s.responsibility)) {
       throw new MalformedAnalystResponseError(
         "interpretation",
         `"${s.responsibility}" is not one of §8.2's five responsibilities`
       );
     }
+    if (seen.has(s.responsibility)) {
+      throw new MalformedAnalystResponseError(
+        "interpretation",
+        `§8.2 gives each responsibility once; "${s.responsibility}" was answered twice`
+      );
+    }
+    seen.add(s.responsibility);
+  }
+  if (seen.size !== INTERPRETATION_RESPONSIBILITIES.length) {
+    const missing = INTERPRETATION_RESPONSIBILITIES.filter((r) => !seen.has(r));
+    throw new MalformedAnalystResponseError(
+      "interpretation",
+      `§8.2 has five responsibilities and ${missing.length} went unanswered: ${missing.join(", ")}`
+    );
+  }
+
+  const statements = response.statements.map((s, i) => {
     return toStatement(`interpretation statement ${i + 1}`, s.responsibility as InterpretationResponsibility, s.text, catalogue);
   });
 

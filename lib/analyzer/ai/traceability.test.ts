@@ -47,7 +47,7 @@ describe("traceText", () => {
 
     const defects = traceText("The price is 499.70 a share.", catalogue);
 
-    expect(defects).toEqual([{ kind: "NUMERAL FROM MODEL", detail: "499.70" }]);
+    expect(defects).toMatchObject([{ kind: "NUMERAL FROM MODEL", detail: "499.70" }]);
   });
 
   it("does not mistake digits inside a slot id for a numeral the model emitted", () => {
@@ -61,7 +61,7 @@ describe("traceText", () => {
 
     const defects = traceText("Software companies of this kind typically grow at fifteen percent.", catalogue);
 
-    expect(defects).toEqual([{ kind: "SPELLED-OUT QUANTITY", detail: "fifteen percent" }]);
+    expect(defects).toMatchObject([{ kind: "SPELLED-OUT QUANTITY", detail: "fifteen percent" }]);
   });
 
   it("leaves the hyphenated horizon adjective alone — it names a window, it does not count one", () => {
@@ -78,7 +78,7 @@ describe("traceText", () => {
   it("still refuses the counted form, which asserts a quantity", () => {
     const catalogue = catalogueOf(slot("price", "$499.70"));
 
-    expect(traceText("The company has compounded for thirteen years.", catalogue)).toEqual([
+    expect(traceText("The company has compounded for thirteen years.", catalogue)).toMatchObject([
       { kind: "SPELLED-OUT QUANTITY", detail: "thirteen years" },
     ]);
   });
@@ -115,6 +115,18 @@ describe("UntraceableFigureError", () => {
     expect(err.message).toContain("NUMERAL FROM MODEL");
     expect(err.message).not.toContain("14.2%");
     expect(err.message).not.toContain("made.up.slot");
+  });
+
+  it("carries the surrounding words in the diagnostic, so a bare digit can be found", () => {
+    // A real MSFT run refused on NUMERAL FROM MODEL ("1") — true, and useless
+    // on its own. A "1" could be a footnote marker, a quarter, or a fabricated
+    // figure, and only the third is the failure this check exists for.
+    const catalogue = catalogueOf(slot("price", "$499.70"));
+
+    const defects = traceText("The debt is disclosed in Note 1 of the filing.", catalogue);
+
+    expect(defects[0].kind).toBe("NUMERAL FROM MODEL");
+    expect(defects[0].context).toContain("Note 1");
   });
 
   it("keeps the offending text on the error for the log and the command line, where it belongs", () => {

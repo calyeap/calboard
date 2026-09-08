@@ -44,8 +44,24 @@ function money(v: Decimal, dp = 2): string {
  * different figures.
  */
 function bigMoney(v: Decimal): string {
-  return formatUsd(v);
+  // Below a million, a computed figure is a PER-SHARE one, and per-share money
+  // keeps its cents: a real OKLO run wrote "its value $3.1 sits on the balance
+  // sheet at $3.10 per share" in one sentence, because the scenario value and
+  // the cash floor took different branches. Same quantity, two forms, one
+  // sentence.
+  //
+  // Above it, the filing's own magnitude through the shared display rule.
+  // Either way the value is rounded BEFORE formatting: factDisplay's
+  // sub-million branch prints the exact figure, which is right for a fact —
+  // filings state whole dollars — and wrong for a computed one, where three
+  // equal scenario weights summing to one produced $474.99999999999999999.
+  // The exact value stays exact everywhere it is calculated with; this is the
+  // screen.
+  const rounded = v.toDecimalPlaces(2);
+  return rounded.abs().lessThan(MILLION) ? money(rounded) : formatUsd(rounded);
 }
+
+const MILLION = new Decimal("1e6");
 
 function multiple(v: Decimal): string {
   return `${v.toFixed(1)}x`;

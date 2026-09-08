@@ -55,6 +55,24 @@ export type TraceDefectKind = "UNKNOWN SLOT" | "NUMERAL FROM MODEL" | "SPELLED-O
 export interface TraceDefect {
   kind: TraceDefectKind;
   detail: string;
+  /**
+   * The words around the offending text. Log and command line only — never the
+   * screen, on the same rule as `detail` itself.
+   *
+   * A real run refused on NUMERAL FROM MODEL ("1"), which is true and useless:
+   * a bare digit could be a footnote marker, a quarter, or a fabricated figure,
+   * and only the last is the failure this check exists for. Without the
+   * surrounding words the only way to tell is to run the call again and hope.
+   */
+  context?: string;
+}
+
+const CONTEXT_RADIUS = 45;
+
+function contextAround(text: string, index: number, length: number): string {
+  const start = Math.max(0, index - CONTEXT_RADIUS);
+  const end = Math.min(text.length, index + length + CONTEXT_RADIUS);
+  return `${start > 0 ? "…" : ""}${text.slice(start, end).trim()}${end < text.length ? "…" : ""}`;
 }
 
 /**
@@ -84,7 +102,11 @@ export class UntraceableFigureError extends Error {
     );
     this.name = "UntraceableFigureError";
     this.defects = defects;
-    this.diagnostic = `${where}: ` + defects.map((d) => `${d.kind} ("${d.detail}")`).join("; ");
+    this.diagnostic =
+      `${where}: ` +
+      defects
+        .map((d) => `${d.kind} ("${d.detail}")${d.context === undefined ? "" : ` in: ${d.context}`}`)
+        .join("; ");
   }
 }
 
@@ -138,11 +160,19 @@ export function traceText(text: string, catalogue: SlotCatalogue): TraceDefect[]
   const prose = withoutSlotReferences(text);
 
   for (const match of prose.matchAll(NUMERAL)) {
-    defects.push({ kind: "NUMERAL FROM MODEL", detail: match[0] });
+    defects.push({
+      kind: "NUMERAL FROM MODEL",
+      detail: match[0],
+      context: contextAround(prose, match.index ?? 0, match[0].length),
+    });
   }
 
   for (const match of prose.matchAll(SPELLED_OUT_QUANTITY)) {
-    defects.push({ kind: "SPELLED-OUT QUANTITY", detail: match[0].toLowerCase() });
+    defects.push({
+      kind: "SPELLED-OUT QUANTITY",
+      detail: match[0].toLowerCase(),
+      context: contextAround(prose, match.index ?? 0, match[0].length),
+    });
   }
 
   return defects;

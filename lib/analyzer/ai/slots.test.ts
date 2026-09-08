@@ -58,6 +58,16 @@ describe("buildSlotCatalogue", () => {
     expect(catalogue.get("price")?.formatted).toBe(`$${msft.price.value.toFixed(2)}`);
   });
 
+  it("never puts an unrounded figure into a computed money slot either", () => {
+    // A real MSFT run printed the probability-weighted value as
+    // "$474.99999999999999999" — the exact result of three equal weights
+    // summing to one, carried straight to the page. Facts from filings are
+    // integers, so the display rule had never met a value like it.
+    const catalogue = buildSlotCatalogue(msft);
+
+    expect(catalogue.get("fairValueRange.weightedValueInside")?.formatted).not.toMatch(/\.\d{3,}/);
+  });
+
   it("never puts an unrounded figure into a fact slot, for either company", () => {
     for (const result of [msft, oklo]) {
       for (const [id, slot] of buildSlotCatalogue(result)) {

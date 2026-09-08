@@ -21,7 +21,12 @@ function scriptedCall(seen: AnalystCallRequest[]): AnalystCall {
     seen.push(request);
     if (request.label === "interpretation") {
       return {
-        statements: [{ responsibility: INTERPRETATION_RESPONSIBILITIES[2], text: INTERPRETATION_TEXT }],
+        // All five §8.2 responsibilities — Section I is that table, and an
+        // incomplete set is refused.
+        statements: INTERPRETATION_RESPONSIBILITIES.map((responsibility, i) => ({
+          responsibility,
+          text: i === 2 ? INTERPRETATION_TEXT : "Nothing further on this responsibility for this run.",
+        })),
         pageOne: {
           mainFinding: INTERPRETATION_TEXT,
           whatSupportsTheCase: "Returns on new capital sit above the policy rates.",
