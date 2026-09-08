@@ -72,6 +72,7 @@ Then edit `.env.local`:
 | `ALPACA_API_KEY_ID`, `ALPACA_API_SECRET_KEY`, `RENDER_API_KEY` | No | Reserved for future milestones; not read by the current build. |
 | `SEC_USER_AGENT` | Yes, to run the analyzer | EDGAR requires a User-Agent identifying the requester: `Product/Version (you@example.com)`. Acquisition refuses to start without it. |
 | `ANALYZER_OFFLINE` | No | Set to `1` to acquire from the committed SEC captures and the recorded quotes beside them, calling nothing. Explicit offline mode, never a fallback. |
+| `ANTHROPIC_API_KEY` | Only for the report's prose | Runs the §8.2 interpretation layer and the §8.5 blind challenger. Without it both calls are skipped and Sections I and I2 say so; every computed value on the report is unaffected, because §8.1 puts calculation on the other side of that boundary. |
 
 ### 4. Create the test database
 
@@ -113,6 +114,22 @@ npm run dev
 ```
 
 Open [http://127.0.0.1:3000](http://127.0.0.1:3000).
+
+### 7. One analyzer run from the command line
+
+```bash
+npm run ai-run -- MSFT
+```
+
+Drives one company through the same functions the routes drive — the Step 2
+spot-check queue, each fact decision, the Step 6 profile confirmation, and the
+gated computation — then prints the §8.2 interpretation, page one's four
+variable sentences and the §8.5 challenger findings.
+
+The last section is the point: it re-walks every figure reference in every
+[C] sentence and prints the Analysis Result field it was substituted from. A
+figure with no field behind it is a defect under spec §8.3 limit 3, and this
+is where that claim can be read rather than taken on trust.
 
 ### Testing
 

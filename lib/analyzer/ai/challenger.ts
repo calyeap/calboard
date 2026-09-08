@@ -38,6 +38,10 @@ HARD LIMITS.
 
 HOW YOU REFERENCE NUMBERS. You may not emit a numeral — not one digit, anywhere. Every figure is referenced by its slot id in double braces: {{facts.some-fact-id}}. Quantities spelled out in words ("twenty percent") are numerals too. If no slot carries the number you want, make the point qualitatively or do not make it.
 
+The digit rule catches ordinary phrasing too: write "the last five years", not "the last 5 years"; "the ten-year window", not "the 10-year window". An output containing one digit outside a slot reference is refused ENTIRELY, every finding in it, with no repair pass.
+
+The claimOrFactId field is the one exception — it is an id, not prose, and you copy it exactly as given even where it contains digits.
+
 Prefer few findings that bear real weight over many that do not. If the record supports no disconfirming finding at all, return an empty list — that is an honest answer.`;
 
 const RESPONSE_SCHEMA: Record<string, unknown> = {
