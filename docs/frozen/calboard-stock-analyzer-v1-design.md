@@ -35,7 +35,7 @@ Companion mocks, to be frozen with this document:
 
 ## 0. THE DESIGN THESIS IN ONE PAGE
 
-The spec's hardest interface problem is that a correct analysis routinely returns **states instead of numbers**, and there are twenty-three of them (ten suppressing, thirteen qualifying) plus six provenance fields on every fact. Semantic colour is unavailable — Calboard reserves it for gain / loss / stale, and a new vocabulary cannot borrow reserved colours.
+The spec's hardest interface problem is that a correct analysis routinely returns **states instead of numbers**, and there are twenty-four of them (ten suppressing, thirteen qualifying, one position) plus six provenance fields on every fact. The one position state — **INCONCLUSIVE**, added by spec amendment M8 per CalFinance Methodology v2 — is neither suppressing nor qualifying and takes none of the three decorations below; it renders as a plain token, the same mechanism CHEAP / FAIR / EXPENSIVE already use, and its visual treatment beyond that is undesigned and left to a later ruling. Semantic colour is unavailable — Calboard reserves it for gain / loss / stale, and a new vocabulary cannot borrow reserved colours.
 
 So the state vocabulary is built from **three decorations, no colour, no glyphs**:
 
@@ -53,7 +53,7 @@ Suppression **replaces**. Qualification **accompanies**. That is the whole disti
 
 Three further consequences drive everything below:
 
-1. **No abbreviations anywhere in the state vocabulary.** Every state and flag prints its own name. Twenty-three states do not need twenty-three icons; they need twenty-three names in three mechanisms.
+1. **No abbreviations anywhere in the state vocabulary.** Every state and flag prints its own name. Twenty-four states do not need twenty-four icons; the twenty-three suppressing and qualifying states need twenty-three names in three mechanisms, and INCONCLUSIVE needs one name in the plain-token mechanism CHEAP / FAIR / EXPENSIVE already use.
 2. **A layout that only works when every cell has a number is the wrong layout.** Every table in this design is specified at its degenerate extreme first — the Microsoft grid with four of nine cells gone, the OKLO table with two of six probabilities gone — and the healthy case is the easy one.
 3. **Section A's state manifest is also the legend.** Every active state and flag is listed before any number, in the same three decorations it will use downstream. The reader learns the vocabulary before meeting it.
 
@@ -1083,6 +1083,8 @@ The surface got easier to consume. **No analytical depth was removed to achieve 
 ## 19. DESIGN → COMMAND CENTER HANDOFF
 
 **RESULT** — Stock Analyzer v1 interaction and screen design complete. Four screens, three-decoration state system, all 23 states and flags given distinct treatment without semantic colour, provenance layered across three disclosure levels, report ordering fixed with §10.3 resolved by restatement, Microsoft and OKLO degenerate cases rendered.
+
+> **Amended 8 Sept 2026 (M8).** The count above describes this document as it stood before this amendment and is preserved as a record. Live count is twenty-four states and flags: the twenty-three enumerated here (ten suppressing, thirteen qualifying) plus **INCONCLUSIVE**, a valuation-position state added by spec amendment M8 (CalFinance Methodology v2). INCONCLUSIVE takes none of the three decorations this document specifies — it renders as a plain token, per §0. Its full visual treatment is a design ruling this amendment does not make. No report ordering, methodology or calculation changed.
 
 **VERDICT** — PASS against the brief's DONE WHEN, all 18 items.
 
