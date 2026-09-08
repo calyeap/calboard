@@ -50,6 +50,8 @@ The digit rule catches ordinary phrasing too, so write around it:
 
 An output containing one digit outside a slot reference is refused ENTIRELY — every sentence in it, not just the offending one. There is no repair pass and no partial acceptance, so check each sentence before you finish.
 
+Some catalogue entries hold TEXT rather than a figure — a success definition's own name, for instance. Where you want to name one, reference its slot rather than typing the name out: several of them contain digits, and typing one would fail the rule above for a reason that has nothing to do with what you meant to say.
+
 A slot whose value is suppressed renders as its state name. Referencing one is the correct way to report a suppression, and it is the only thing you may say about it.
 
 VOCABULARY. Where a pre-revenue interpolation between two outcome values appears, it is a "conditional price-implied break-even success weight". It is never an implied probability of success, and it is never presented as a real-world probability.

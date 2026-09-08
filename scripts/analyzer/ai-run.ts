@@ -138,6 +138,16 @@ async function main(): Promise<void> {
     }
   }
 
+  if (process.argv.includes("--slots")) {
+    // Everything [C] was ALLOWED to reference on this run. Worth reading
+    // before the prose: a figure absent from this list cannot appear in a
+    // sentence, so this is the boundary of §8.3 limit 3 for this company.
+    heading("The catalogue [C] could reference");
+    for (const slot of buildSlotCatalogue(report.result).values()) {
+      console.log(`  {{${slot.id}}}  ${slot.label} = ${slot.formatted}${slot.suppressed ? "  [state]" : ""}`);
+    }
+  }
+
   heading("Every figure in [C] output, traced to its field (§8.3 limit 3)");
   reportTraceability(report.result);
 

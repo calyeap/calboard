@@ -295,6 +295,13 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
     );
     preRevenue.successDefinitions.forEach((row, i) => {
       const key = `preRevenue.successDefinitions.${i}`;
+      // The definition's own NAME as a slot, not only as a label. OKLO's read
+      // "Definition 3 — 8 GW, utility multiple, back-loaded ramp": a sentence
+      // naming one by typing it out would carry digits [C] is not allowed to
+      // emit, and the sentence would be refused for a reason that has nothing
+      // to do with the figure. §10.5 requires every one of these tied to a
+      // named success definition, so naming them must be possible.
+      b.add(`${key}.definition`, `the name of success definition ${i + 1}`, row.definition);
       b.value(`${key}.vSuccess`, `value per share if "${row.definition}" happens`, row.vSuccess, money);
       b.value(`${key}.vFail`, `value per share if "${row.definition}" does not happen`, row.vFail, money);
       // §10.5, and CalFinance Methodology v2's own wording: this is a
