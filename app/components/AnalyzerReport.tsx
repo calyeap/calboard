@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 import { formatUsd } from "@/lib/formatUsd";
 import { QuickRead } from "./QuickRead";
 import { ValuationStrip } from "./ValuationStrip";
+import type { AiLayerReport } from "@/lib/analyzer/reportAnalysis";
 import type {
   AnalysisResult,
   ComputedValue,
@@ -417,7 +418,30 @@ function buildProvisionalRegister(result: AnalysisResult): ProvisionalRow[] {
   return rows;
 }
 
-export function AnalyzerReport({ result }: { result: AnalysisResult }) {
+// One line under Sections I and I2 saying where their prose came from, or why
+// there is none.
+//
+// An empty Section I has three quite different causes — no credential, an
+// unreachable model, and an output REFUSED for failing a §8.3 limit — and the
+// third is the one that must never be silent. A rejected sentence that leaves
+// no trace is indistinguishable from a call that was never made, which would
+// hide precisely the event these checks exist to catch.
+function AiLayerNote({ aiLayer }: { aiLayer: AiLayerReport | undefined }) {
+  if (aiLayer === undefined) return null;
+  if (aiLayer.status === "COMPLETED") {
+    return aiLayer.model === null ? null : <p className="note">Written by {aiLayer.model}.</p>;
+  }
+  return (
+    <div className="state">
+      <span className="name">
+        {aiLayer.status === "NOT CONFIGURED" ? "Interpretation not run" : "Interpretation refused"}
+      </span>
+      <span className="cause">{aiLayer.detail}</span>
+    </div>
+  );
+}
+
+export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; aiLayer?: AiLayerReport }) {
   const { gates, states, diagnostics, priceImplied, scenarios, scenarioOutputs, fairValueRange, preRevenue } = result;
 
   // Section H's right column restates the r = 8%, current-margin cell —
@@ -1195,8 +1219,19 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
           {result.interpretation.statements.length === 0 ? (
             <p className="note">Not yet available — the interpretation call has not run for this analysis.</p>
           ) : (
-            result.interpretation.statements.map((s, i) => <p key={i}>{s.statement}</p>)
+            // One block per §8.2 responsibility, labelled with the
+            // responsibility it discharges. Section I is that table, not a
+            // run of unattributed paragraphs: a reader can see which of the
+            // five questions each sentence is answering, and which were
+            // answered by naming a state instead.
+            result.interpretation.statements.map((s, i) => (
+              <div className="qitem" key={i}>
+                <span className="k">{s.responsibility}</span>
+                <p className="t">{s.statement}</p>
+              </div>
+            ))
           )}
+          <AiLayerNote aiLayer={aiLayer} />
         </section>
 
         <section id="I2">
@@ -1208,13 +1243,32 @@ export function AnalyzerReport({ result }: { result: AnalysisResult }) {
           {result.challenger === null ? (
             <p className="note">Not yet available — the independent challenger call has not completed for this analysis.</p>
           ) : (
-            result.challenger.findings.map((f, i) => (
-              <div key={i}>
-                <p>{f.claimOrFactReference}</p>
-                <p className="sub">{f.evidence}</p>
-                <p className="sub">{f.whatWouldHaveToBeTrue}</p>
-              </div>
-            ))
+            <>
+              {/* §8.5.4 — "The merge is assembly, not synthesis — findings are
+                  placed alongside the analysis, not reconciled with it, and
+                  neither side is rewritten in light of the other." The reader
+                  is told that, because a finding sitting under an analysis
+                  looks answered unless it says it is not. */}
+              <p className="note">
+                These findings come from a call that did not see the analysis above. They are placed alongside it and
+                are <b>not reconciled</b> with it — nothing here has been answered, and nothing above has been revised
+                in light of it.
+              </p>
+              {result.challenger.findings.length === 0 ? (
+                <p className="note">
+                  The independent call completed and recorded no finding against this fact set. That is an answer, not
+                  an omission.
+                </p>
+              ) : (
+                result.challenger.findings.map((f, i) => (
+                  <div className="qitem" key={i}>
+                    <span className="k">{f.claimOrFactReference}</span>
+                    <p className="t">{f.evidence}</p>
+                    <p className="sub">What would have to be true: {f.whatWouldHaveToBeTrue}</p>
+                  </div>
+                ))
+              )}
+            </>
           )}
         </section>
 

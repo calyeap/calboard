@@ -643,15 +643,55 @@ export interface ChallengerResult {
 // §8.2 — [C] interpretation
 // ---------------------------------------------------------------------------
 
+// §8.2's table has five rows, and each names a responsibility bound to a
+// section of the methodology. Carried on the statement so Section I is the
+// table rather than a bag of sentences, and so a sixth responsibility — an
+// overall verdict, say — cannot arrive without failing validation. Derived as
+// a const array for the same reason VERIFICATION_STATES is: the union cannot
+// drift from the list a test asserts against.
+export const INTERPRETATION_RESPONSIBILITIES = [
+  // §3.1 — the analyst's chosen growth path against base rates and history
+  "GROWTH PATH AGAINST BASE RATES AND HISTORY",
+  // §5 — hypersensitivity as a signal the model is fragile
+  "MODEL FRAGILITY",
+  // §6 — the price-implied diagnostics, translated
+  "PRICE-IMPLIED DIAGNOSTICS",
+  // §10 Step 3 — assisting the analyst in constructing scenarios
+  "SCENARIO CONSTRUCTION",
+  // §10 Step 5 — plausibility, internal consistency, what the price requires
+  "ASSUMPTION PLAUSIBILITY AND WHAT THE PRICE REQUIRES",
+] as const;
+
+export type InterpretationResponsibility = (typeof INTERPRETATION_RESPONSIBILITIES)[number];
+
 export interface InterpretationStatement {
+  // Which §8.2 responsibility this statement discharges.
+  responsibility: InterpretationResponsibility;
   statement: string;
   // Ids into this AnalysisResult that the statement rests on — a value and
-  // its interpretation are never separable (§10.0.2 rule 1).
+  // its interpretation are never separable (§10.0.2 rule 1). DERIVED from the
+  // slot references the statement carries, never taken from the model's own
+  // account of what it used: a claim about provenance from the thing whose
+  // provenance is in question is not evidence.
   referencesValueIds: string[];
+}
+
+// §10.7 rule 2 — the four page-one sentences that "genuinely vary" and so come
+// from a constrained [C] call rather than a template. Every other page-one
+// sentence is a filled template ([S]); there is no third path (§10.7's
+// consequence for the renderer).
+export interface PageOneProse {
+  mainFinding: InterpretationStatement;
+  whatSupportsTheCase: InterpretationStatement;
+  whatWorriesCalboard: InterpretationStatement;
+  biggestUncertainty: InterpretationStatement;
 }
 
 export interface InterpretationResult {
   statements: InterpretationStatement[];
+  // Null until the interpretation call has run for this analysis. Page one
+  // then falls back to its deterministic [S] copy — never to invented prose.
+  pageOne: PageOneProse | null;
 }
 
 // ---------------------------------------------------------------------------

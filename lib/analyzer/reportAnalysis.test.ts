@@ -1,0 +1,139 @@
+import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { getPool } from "./../db";
+import { createRun, recordFactDecision } from "./runStore";
+import { loadGateState } from "./gate";
+import { analysisForReport } from "./reportAnalysis";
+import { INTERPRETATION_RESPONSIBILITIES } from "./types";
+import type { AnalystCall, AnalystCallRequest } from "./ai/analystCall";
+
+// The AI layer as the report sees it. §8.1 draws the boundary this file
+// exercises: "Deterministic code handles calculations, gates, states and
+// rules. AI interprets, explains, challenges and summarises." So the report
+// must render the whole deterministic analysis whether or not either call ran.
+
+const STATEMENT = "The price rests on growth this company has not yet delivered.";
+
+function scriptedCall(seen: AnalystCallRequest[] = []): AnalystCall {
+  return async (request) => {
+    seen.push(request);
+    if (request.label === "interpretation") {
+      return {
+        statements: [{ responsibility: INTERPRETATION_RESPONSIBILITIES[2], text: STATEMENT }],
+        pageOne: {
+          mainFinding: STATEMENT,
+          whatSupportsTheCase: "Returns on new capital sit above the policy rates.",
+          whatWorriesCalboard: "The margin sits at the top of its own history.",
+          biggestUncertainty: "Which margin level is the right base for the grid.",
+        },
+      };
+    }
+    return { findings: [] };
+  };
+}
+
+async function decidedRun(ticker: string, companyName: string): Promise<string> {
+  const runId = await createRun(ticker, companyName);
+  const state = await loadGateState(runId);
+  for (const factId of state.outstandingFactIds) {
+    await recordFactDecision(runId, factId, "CONFIRMED", null);
+  }
+  return runId;
+}
+
+describe("analysisForReport", () => {
+  beforeEach(async () => {
+    await getPool().query(
+      "TRUNCATE analyzer_run_ai_outputs, analyzer_run_fact_decisions, analyzer_run_judgments, analyzer_runs CASCADE"
+    );
+  });
+
+  afterAll(async () => {
+    await getPool().end();
+  });
+
+  it("renders the whole deterministic analysis when no call is configured — §8.1's boundary is that the numbers do not depend on it", async () => {
+    const runId = await decidedRun("MSFT", "Microsoft Corporation");
+
+    const report = await analysisForReport(runId, null);
+
+    expect(report.aiLayer.status).toBe("NOT CONFIGURED");
+    expect(report.result.priceImplied.reverseDcfGrid).toHaveLength(9);
+    expect(report.result.interpretation.statements).toEqual([]);
+    expect(report.result.interpretation.pageOne).toBeNull();
+    expect(report.result.challenger).toBeNull();
+  });
+
+  it("runs both calls and merges them once the analysis exists", async () => {
+    const runId = await decidedRun("MSFT", "Microsoft Corporation");
+    const seen: AnalystCallRequest[] = [];
+
+    const report = await analysisForReport(runId, scriptedCall(seen));
+
+    expect(report.aiLayer.status).toBe("COMPLETED");
+    expect(seen.map((r) => r.label).sort()).toEqual(["challenger", "interpretation"]);
+    expect(report.result.interpretation.statements[0].statement).toBe(STATEMENT);
+    expect(report.result.challenger).not.toBeNull();
+  });
+
+  it("calls once per run — a refresh reads the stored words rather than rolling new ones", async () => {
+    const runId = await decidedRun("MSFT", "Microsoft Corporation");
+    const seen: AnalystCallRequest[] = [];
+
+    await analysisForReport(runId, scriptedCall(seen));
+    const second = await analysisForReport(runId, scriptedCall(seen));
+
+    expect(seen).toHaveLength(2);
+    expect(second.aiLayer.status).toBe("COMPLETED");
+    expect(second.result.interpretation.statements[0].statement).toBe(STATEMENT);
+  });
+
+  it("keeps the analysis when a call fails, and says why rather than inventing prose", async () => {
+    const runId = await decidedRun("MSFT", "Microsoft Corporation");
+    const failing: AnalystCall = async () => {
+      throw new Error("the model was unreachable");
+    };
+
+    const report = await analysisForReport(runId, failing);
+
+    expect(report.aiLayer.status).toBe("FAILED");
+    expect(report.aiLayer.detail).toContain("unreachable");
+    expect(report.result.interpretation.statements).toEqual([]);
+    expect(report.result.challenger).toBeNull();
+    expect(report.result.priceImplied.reverseDcfGrid).toHaveLength(9);
+  });
+
+  it("keeps the analysis when [C] returns a figure that does not trace, and refuses the prose entirely", async () => {
+    const runId = await decidedRun("MSFT", "Microsoft Corporation");
+    const untraceable: AnalystCall = async (request) => {
+      if (request.label === "interpretation") {
+        return {
+          statements: [{ responsibility: INTERPRETATION_RESPONSIBILITIES[2], text: "Growth of 14.2% is implied." }],
+          pageOne: {
+            mainFinding: "x",
+            whatSupportsTheCase: "y",
+            whatWorriesCalboard: "z",
+            biggestUncertainty: "w",
+          },
+        };
+      }
+      return { findings: [] };
+    };
+
+    const report = await analysisForReport(runId, untraceable);
+
+    expect(report.aiLayer.status).toBe("FAILED");
+    expect(report.aiLayer.detail).toContain("NUMERAL FROM MODEL");
+    expect(report.result.interpretation.statements).toEqual([]);
+    expect(report.result.challenger).toBeNull();
+  });
+
+  it("does the same for OKLO, whose pre-revenue analysis suppresses most of the grid", async () => {
+    const runId = await decidedRun("OKLO", "Oklo Inc.");
+
+    const report = await analysisForReport(runId, scriptedCall());
+
+    expect(report.aiLayer.status).toBe("COMPLETED");
+    expect(report.result.preRevenue).not.toBeNull();
+    expect(report.result.interpretation.statements[0].statement).toBe(STATEMENT);
+  });
+});
