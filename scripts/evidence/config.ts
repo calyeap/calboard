@@ -18,6 +18,8 @@ export const FROZEN_HASHES: Readonly<Record<string, string>> = {
     "35f382a109ffbeb9b048b8f6d532564e80fc26c00b8c1d6ea8345b7e17fbf870",
   "mock-report-oklo.html":
     "fc6de075e6c84f4ba2b720d669985b4f43534f4a7ae77e658c725122d4d9476f",
+  "calboard-valuation-methodology.md":
+    "a4a39e33717993fe9558f263009cec3814555765ac69c69728d99354d4a5ec7c",
 };
 
 /** Proves the reachability gate got Screen 1 and not merely a 200. */
