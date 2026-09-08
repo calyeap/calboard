@@ -111,13 +111,25 @@ function capturedPrice(
 /**
  * The latest close, with its timestamp (§3.4).
  *
+ * THE ONE PLACE A RUN GETS A PRICE, and the single guard separating a recorded
+ * quote from a live one. `prices.json` is read only by `capturedPrice`, which
+ * is called only from the `isOffline()` branch below — one reader, one call
+ * site, one branch. Command Center's 8 September condition, that a capture can
+ * never be served to a real run, is satisfied by that branch and not by
+ * anything else, so it must not be softened into a fallback: `?? capturedPrice`
+ * on the live path would serve a stale price exactly when the network is
+ * having a bad day.
+ *
+ * Exported so priceCapture.test.ts can pin it. It is a seam for that test, not
+ * an invitation to call it from elsewhere — loadGateState is the only caller.
+ *
  * A failure returns null rather than throwing. Price is one input among many:
  * losing it must return INCOMPLETE for price-dependent outputs (§5.2), not
  * take down a run whose filing facts were acquired perfectly well. It is never
  * estimated, carried forward or interpolated (§5.1), and there is no
  * "approximate" price state anywhere (§3.4).
  */
-async function latestPrice(
+export async function latestPrice(
   ticker: string
 ): Promise<{ value: Decimal; timestamp: string; source: string } | null> {
   // Offline mode reads a RECORDED quote rather than calling the provider — the

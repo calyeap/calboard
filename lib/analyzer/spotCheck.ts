@@ -108,6 +108,24 @@ export function materialityOf(fact: FactRecord, context?: MaterialityContext): M
   // against a filing — there is no such line — only by agreeing with a
   // treatment, which §3.8.3 does not ask for and which invites a
   // Cannot-verify every time.
+  // §3.2 IS NARROWER THAN THIS BEHAVIOUR, AND THE SPEC TEXT IS THE STALE PART.
+  // Do not "fix" the code to match it.
+  //
+  // A fact exempted here ends up carrying SPOT-CHECK NOT REQUIRED
+  // (deriveVerificationState below). §3.2 glosses that value as "exempt from
+  // the queue because the figure came through a fixed, versioned tag mapping",
+  // which describes ONE route to the state and not this one. Command Center
+  // ruled on 8 September 2026 that the state is behaviourally correct — the
+  // fact is not queued and not spot-checked, which is what the value means to
+  // a reader — and that the narrow explanation goes into the M8 spec
+  // amendment cycle alongside §17.16's Quick Read contents list and §19 line
+  // 1082. It is deliberately NOT being re-frozen for now.
+  //
+  // A reader who takes §3.2's gloss literally and deletes this branch to match
+  // it would silently re-queue every derived fact, undoing the ruling and
+  // putting cards back in front of the analyst that cannot be answered by
+  // matching a number against a filing. That is the specific mistake this
+  // paragraph exists to prevent.
   if (context !== undefined && isDerivedAndAlreadyChecked(fact, context)) {
     return { material: false, reason: "DERIVED — COMPONENTS EXEMPT AND CROSS-CHECKED" };
   }
@@ -375,8 +393,12 @@ export function deriveVerificationState(
   // field at exactly four values and inventing a fifth would break it. The
   // value names the state — exempt from the queue, and expressly "not a human
   // confirmation" — even where §3.2's example of how a fact got there is not
-  // the route this one took. Flagged for Command Center rather than resolved
-  // here.
+  // the route this one took.
+  //
+  // RULED, 8 September 2026: record, do not amend. The state is correct and
+  // §3.2's account of how it is reached is stale; the wording goes into the M8
+  // spec amendment cycle, and nothing is re-frozen for it now. See the longer
+  // note at the grant site in materialityOf above.
   if (!queued) return "SPOT-CHECK NOT REQUIRED";
 
   // Queued and undecided. §3.2 defines SPOT-CHECK PENDING as exactly this —
