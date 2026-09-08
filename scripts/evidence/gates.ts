@@ -5,11 +5,23 @@ import { FROZEN_HASHES, SCREEN1_MARKUP_MARKER } from "./config";
 import type { CheckResult } from "./preflight/types";
 
 /**
- * Frozen artefacts, byte-exact.
+ * Frozen artefacts, byte-exact — and every artefact accounted for.
  *
  * An absent artefact is reported as absent and never as a hash mismatch. They
  * are different situations — a file that changed versus a file that is not
  * there — and collapsing them hides the second inside the first.
+ *
+ * Coverage runs in both directions. The loop above checks that every name
+ * FROZEN_HASHES expects is present and byte-exact; the pass below checks the
+ * opposite — that docs/frozen/ holds nothing FROZEN_HASHES has never heard
+ * of. Without it, a newly frozen artefact sits unchecked and this gate keeps
+ * returning PASS having never looked at it — exactly what happened to
+ * calboard-valuation-methodology.md, frozen days before FROZEN_HASHES gained
+ * an entry for it. The directory is authoritative for WHICH FILES must be
+ * listed; FROZEN_HASHES stays authoritative for their VALUES — this only
+ * ever reads a filename off disk to check it is registered, never bytes to
+ * compute a hash from it. Deriving the expected hash from the file itself
+ * would verify the file against itself, a check with no way to ever fail.
  */
 export async function verifyFrozenArtefacts(repoRoot: string): Promise<CheckResult> {
   const step = "frozen artefacts match their SHA-256";
@@ -26,6 +38,18 @@ export async function verifyFrozenArtefacts(repoRoot: string): Promise<CheckResu
     const actual = createHash("sha256").update(bytes).digest("hex");
     if (actual !== expected) faults.push(`${name}: expected ${expected}, got ${actual}`);
   }
+
+  try {
+    const entries = await fs.readdir(path.join(repoRoot, "docs", "frozen"), { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile() && !(entry.name in FROZEN_HASHES)) {
+        faults.push(`${entry.name}: present in docs/frozen/ but not registered in FROZEN_HASHES`);
+      }
+    }
+  } catch (err) {
+    faults.push(`docs/frozen/: could not be listed — ${(err as Error).message}`);
+  }
+
   return faults.length === 0
     ? { step, status: "PASS", detail: "" }
     : { step, status: "FAIL", detail: faults.join("; ") };
