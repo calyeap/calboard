@@ -214,6 +214,27 @@ export interface TriggerMarginInput {
 // nothing about cyclicality.
 export function evaluateTriggerA(input: TriggerMarginInput): TriggerResult {
   const margins = input.yearlyOperatingMargins;
+
+  // An EMPTY window. Reachable only since M8-a: a pre-revenue company tags no
+  // revenue, so there is no margin to divide into and no history to describe.
+  // Every fixture supplied at least one year, so this previously threw out of
+  // Decimal.max() with "Invalid argument: undefined" — a crash, not a state.
+  //
+  // Not firing is the correct answer rather than a fallback. Trigger A is "a
+  // description, not a claim about the business" (§6.4): with no margin
+  // history there is nothing to describe, and a description that fires on no
+  // observations would be an assertion. Whether the window is trustworthy at
+  // all remains Gate 1's concern, as the input's own comment says.
+  //
+  // No arithmetic below is changed. This branch is unreachable for any
+  // non-empty window, and evaluateTriggerB already handled the empty case.
+  if (margins.length === 0) {
+    return {
+      fired: false,
+      evidence: "no operating-margin history in the available window",
+    };
+  }
+
   const current = margins[margins.length - 1];
   const max = windowMax(margins);
   const range = windowRange(margins);

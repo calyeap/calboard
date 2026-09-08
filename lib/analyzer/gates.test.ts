@@ -304,3 +304,21 @@ describe("triggers evaluated together — NVIDIA-inspired shape fires both, Micr
     expect(evaluateTriggerB(input).fired).toBe(true);
   });
 });
+
+describe("evaluateTriggerA — an empty margin window", () => {
+  it("does not fire, and does not throw", () => {
+    // Reachable since M8-a: a pre-revenue filer tags no revenue, so there is
+    // no margin series at all. This threw out of Decimal.max() before the
+    // guard. Trigger A is a description (§6.4), and there is nothing here to
+    // describe.
+    const result = evaluateTriggerA({ yearlyOperatingMargins: [] });
+    expect(result.fired).toBe(false);
+    expect(result.evidence).toContain("no operating-margin history");
+  });
+
+  it("still fires on a window that warrants it, unchanged", () => {
+    // The guard must not have altered the arithmetic for a real window.
+    const margins = [0.20, 0.25, 0.30, 0.40].map((v) => new Decimal(v));
+    expect(evaluateTriggerA({ yearlyOperatingMargins: margins }).fired).toBe(true);
+  });
+});

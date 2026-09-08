@@ -316,5 +316,8 @@ function factRow(
     retrievalTimestamp: "2026-09-04T21:04:00-04:00",
     supersedesFactId: null,
     tagMappingVersion,
+    // Acquired, not computed. M8-a's derived facts are built by the
+    // acquisition layer, never by a fixture.
+    derivedFrom: null,
   };
 }

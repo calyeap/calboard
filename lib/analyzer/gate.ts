@@ -1,9 +1,17 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import Decimal from "decimal.js";
 import { assembleAnalysisResult, type CompanyFixture } from "./assemble";
 import type { AnalysisResult } from "./types";
-import { MSFT_FIXTURE } from "./fixtures/msft";
-import { OKLO_FIXTURE } from "./fixtures/oklo";
 import { isSpotCheckComplete, queuedFacts, undecidedFacts, applyDecisions } from "./spotCheck";
-import { getRun, getFactDecisions, type AnalyzerRun } from "./runStore";
+import { getRun, getFactDecisions, getJudgments, type AnalyzerRun } from "./runStore";
+import { buildAcquiredRun, type AcquiredRunInputs } from "./acquiredRun";
+import { constrainedAndPassedFactIds } from "./crosschecks/run";
+import type { DerivedExemptionEvidence } from "./spotCheck";
+import { TICKERS_WITH_ANALYST_INPUTS } from "./acquisition/analystInputs";
+import { selectionToNonOperatingInvestments } from "./acquisition/nonOperatingJudgment";
+import { activeProvider } from "../marketdata";
+import { roundMoney } from "../money";
 
 // ---------------------------------------------------------------------------
 // §2's ordering rule: "no calculation module may execute before Step 2 has
@@ -22,18 +30,147 @@ import { getRun, getFactDecisions, type AnalyzerRun } from "./runStore";
 // the server (R7) and a route guard in the UI layer is a recommendation.
 // ---------------------------------------------------------------------------
 
-// M7 serves the two M5 validation fixtures; acquisition arrives at M8. Keyed
-// by the ticker frozen on the run at Step 1.
-const FIXTURES: Record<string, CompanyFixture> = {
-  MSFT: MSFT_FIXTURE,
-  OKLO: OKLO_FIXTURE,
-};
+// M8-a: a run's FACTS come from SEC filings, acquired per run through the
+// fixed, versioned tag mapping. What is still keyed by ticker is the
+// ANALYST-side bundle — Step 7's scenarios and the four undefined §7.1 policy
+// constants — because those are a human's output and Step 7's interface is not
+// built. See acquisition/analystInputs.ts, which states that plainly.
+//
+// A company with no bundle has no scenarios, so it has no fair-value range and
+// cannot open a run. That is a refusal, not a gap to be filled with invented
+// numbers.
+export const SUPPORTED_FIXTURE_TICKERS = TICKERS_WITH_ANALYST_INPUTS;
 
-export function fixtureForTicker(ticker: string): CompanyFixture | null {
-  return FIXTURES[ticker.toUpperCase()] ?? null;
+export function isSupportedTicker(ticker: string): boolean {
+  return TICKERS_WITH_ANALYST_INPUTS.includes(ticker.toUpperCase());
 }
 
-export const SUPPORTED_FIXTURE_TICKERS = Object.keys(FIXTURES);
+/**
+ * Offline mode: acquire from the committed SEC captures and the recorded
+ * quotes beside them, calling nothing.
+ *
+ * Explicit configuration, never a fallback. The test suite runs here so it
+ * neither depends on EDGAR being up nor spends the published rate budget on
+ * every `npm test`, and a developer can work on a train. What it must not
+ * become is a silent default when a live fetch fails — a stale fact set that
+ * looks fresh is the §3.4 staleness question answered wrongly, so
+ * `acquireCompany` still raises on a live failure rather than dropping back
+ * here, and the run's disclosures name which source was used either way.
+ */
+function isOffline(): boolean {
+  return process.env.ANALYZER_OFFLINE === "1";
+}
+
+/**
+ * Whether a ticker can open a run.
+ *
+ * Kept under its old name so existing callers are unaffected, but it no longer
+ * returns a hand-written fact set — there is no longer one to return.
+ */
+export function fixtureForTicker(ticker: string): { ticker: string } | null {
+  return isSupportedTicker(ticker) ? { ticker: ticker.toUpperCase() } : null;
+}
+
+interface CapturedPriceRow {
+  close: number;
+  date: string;
+  source: string;
+}
+
+/**
+ * The recorded quote for a ticker, for offline runs only.
+ *
+ * Read lazily and never cached across calls to keep this out of the live path
+ * entirely: an online run does not touch this file.
+ */
+function capturedPrice(
+  ticker: string
+): { value: Decimal; timestamp: string; source: string } | null {
+  try {
+    const path = join(
+      process.cwd(),
+      "lib",
+      "analyzer",
+      "acquisition",
+      "captures",
+      "prices.json"
+    );
+    const rows = JSON.parse(readFileSync(path, "utf8")) as Record<string, CapturedPriceRow>;
+    const row = rows[ticker.toUpperCase()];
+    if (row === undefined) return null;
+    return {
+      value: roundMoney(new Decimal(row.close)),
+      timestamp: row.date,
+      source: row.source,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The latest close, with its timestamp (§3.4).
+ *
+ * THE ONE PLACE A RUN GETS A PRICE, and the single guard separating a recorded
+ * quote from a live one. `prices.json` is read only by `capturedPrice`, which
+ * is called only from the `isOffline()` branch below — one reader, one call
+ * site, one branch. Command Center's 8 September condition, that a capture can
+ * never be served to a real run, is satisfied by that branch and not by
+ * anything else, so it must not be softened into a fallback: `?? capturedPrice`
+ * on the live path would serve a stale price exactly when the network is
+ * having a bad day.
+ *
+ * Exported so priceCapture.test.ts can pin it. It is a seam for that test, not
+ * an invitation to call it from elsewhere — loadGateState is the only caller.
+ *
+ * A failure returns null rather than throwing. Price is one input among many:
+ * losing it must return INCOMPLETE for price-dependent outputs (§5.2), not
+ * take down a run whose filing facts were acquired perfectly well. It is never
+ * estimated, carried forward or interpolated (§5.1), and there is no
+ * "approximate" price state anywhere (§3.4).
+ */
+export async function latestPrice(
+  ticker: string
+): Promise<{ value: Decimal; timestamp: string; source: string } | null> {
+  // Offline mode reads a RECORDED quote rather than calling the provider — the
+  // same treatment the filing facts get, and for the same reason: real data,
+  // taken once, labelled as a capture rather than passed off as live.
+  //
+  // It exists so an offline run has the same fact-set SHAPE as a live one.
+  // Without it the price fact is simply absent, which quietly shrinks the Step
+  // 2 queue and left the gate's own integration tests unable to reach a
+  // partly-decided queue at all. A test environment that cannot reach the
+  // state under test is the failure mode this project keeps finding.
+  //
+  // Absent from the capture file, this returns null and price-dependent
+  // outputs are INCOMPLETE — never a stale or stand-in figure, which §3.4 and
+  // §5.1 both forbid.
+  if (isOffline()) return capturedPrice(ticker);
+
+  try {
+    const provider = activeProvider();
+    const point = await provider.fetchLatestEod(ticker, "equity");
+    return {
+      // Cent-rounded through the app's one money policy, exactly as the
+      // portfolio side does. Providers serve prices as JS floats — Yahoo
+      // returns Microsoft's 499.70 close as 499.70001220703125 — and
+      // lib/money.ts's opening comment records why that is rounded once, at a
+      // known point, rather than wherever each display path happens to do it.
+      //
+      // This is a rounding of the acquired figure, not an estimate of it
+      // (§5.1): the cent is the unit the price is quoted in, and the trailing
+      // binary noise is an artefact of the transport rather than information
+      // from the source. Not doing it would put a sixteen-digit price on the
+      // fact card and let the analyzer disagree with /holdings about the same
+      // instrument on the same day — the divergence money.ts exists to end.
+      value: roundMoney(new Decimal(point.close)),
+      timestamp: point.date,
+      source: `${provider.sourceName} latest close`,
+    };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Raised when a calculation is attempted before Step 2 is complete.
@@ -72,6 +209,21 @@ export interface GateState {
   queuedCount: number;
   outstandingFactIds: string[];
   spotCheckComplete: boolean;
+  /**
+   * The whole acquisition, so the screens can show where each figure came
+   * from, what the §3.8.2 suite found, and what on this run was not acquired.
+   * §3.8.2 is explicit that unreported cross-check results are not a control,
+   * so the outcomes travel to the screen rather than to a log.
+   */
+  acquired: AcquiredRunInputs;
+  /** Forced into the queue by a failed §3.8.2 cross-check, whatever their path. */
+  crossCheckFailedFactIds: Set<string>;
+  /**
+   * Evidence for the derived-fact queue exemption on THIS run. Carried on the
+   * state so every screen reads the same queue the gate enforced, rather than
+   * recomputing it from a different set of facts.
+   */
+  derivedExemption: DerivedExemptionEvidence;
 }
 
 /**
@@ -84,37 +236,85 @@ export async function loadGateState(runId: string): Promise<GateState> {
   const run = await getRun(runId);
   if (run === null) throw new RunNotFoundError(runId);
 
-  const fixture = fixtureForTicker(run.ticker);
-  if (fixture === null) {
-    // A run exists for a ticker M7 has no fixture for. Fail closed: without a
-    // fact set there is nothing to spot-check, and a run that cannot be
-    // spot-checked must not be computable.
+  if (!isSupportedTicker(run.ticker)) {
+    // A run exists for a ticker with no analyst-input bundle. Fail closed: a
+    // run whose scenarios cannot exist must not be computable.
     throw new RunNotFoundError(runId);
   }
 
-  const decisions = await getFactDecisions(runId);
+  const [decisions, judgments, price] = await Promise.all([
+    getFactDecisions(runId),
+    getJudgments(runId),
+    latestPrice(run.ticker),
+  ]);
+
+  // Acquire once to learn the candidate investment line items, then resolve
+  // §4.4's judgment against them. Enterprise value depends on the outcome:
+  // with no judgment recorded the non-operating figure is null and every
+  // EV-based output is INCOMPLETE. That is the correct state — no tag says
+  // which of a company's investments are non-operating.
+  const source = isOffline() ? ("CAPTURE" as const) : undefined;
+  const withoutJudgment = await buildAcquiredRun({ ticker: run.ticker, price, source });
+  const nonOperatingInvestments = selectionToNonOperatingInvestments(
+    judgments.find((j) => j.judgmentKey === "NON-OPERATING INVESTMENTS")?.selection,
+    withoutJudgment.acquired.acquisition.candidateNonOperatingInvestments
+  );
+
+  // The second call is served from the acquisition cache, so this costs no
+  // additional EDGAR request.
+  const acquired =
+    nonOperatingInvestments === null
+      ? withoutJudgment
+      : await buildAcquiredRun({ ticker: run.ticker, price, nonOperatingInvestments, source });
+
+  const crossCheckFailedFactIds = acquired.acquired.crossCheckFailedFactIds;
+  const fixture = acquired.fixture;
+
+  // The evidence the derived-fact exemption rests on (Command Center, 8
+  // September 2026): which facts a §3.8.2 cross-check actually constrained
+  // against other facts and passed. Derived here, from this run's own report,
+  // so a stale or absent report cannot exempt anything.
+  const derivedExemption = {
+    crossCheckConstrainedFactIds: constrainedAndPassedFactIds(acquired.acquired.crossChecks),
+  };
+
   const decidedFactIds = new Set(decisions.map((d) => d.factId));
-  const outstanding = undecidedFacts(fixture.facts, decidedFactIds).map((f) => f.id);
+  const outstanding = undecidedFacts(
+    fixture.facts,
+    decidedFactIds,
+    crossCheckFailedFactIds,
+    derivedExemption
+  ).map((f) => f.id);
 
   // Every fact leaves this function carrying the verification state THIS run
-  // gives it, derived from the decisions — never the acquisition-time label the
-  // fixture wrote. Done once, here, because this is the single place a run's
-  // facts are loaded: the screens, the Analysis Result and the report's
-  // provenance tokens all read what this produces, and none of them re-derives
-  // it. A second derivation downstream is how the screen and the data came to
-  // disagree.
+  // gives it, derived from the decisions AND the cross-check outcomes — never
+  // the acquisition-time label. Done once, here, because this is the single
+  // place a run's facts are loaded: the screens, the Analysis Result and the
+  // report's provenance tokens all read what this produces, and none of them
+  // re-derives it. A second derivation downstream is how the screen and the
+  // data came to disagree.
   const facts = applyDecisions(
     fixture.facts,
-    new Map(decisions.map((d) => [d.factId, d.decision]))
+    new Map(decisions.map((d) => [d.factId, d.decision])),
+    crossCheckFailedFactIds,
+    derivedExemption
   );
 
   return {
     run,
     fixture: { ...fixture, facts },
     decidedFactIds,
-    queuedCount: queuedFacts(fixture.facts).length,
+    queuedCount: queuedFacts(fixture.facts, crossCheckFailedFactIds, derivedExemption).length,
     outstandingFactIds: outstanding,
-    spotCheckComplete: isSpotCheckComplete(fixture.facts, decidedFactIds),
+    spotCheckComplete: isSpotCheckComplete(
+      fixture.facts,
+      decidedFactIds,
+      crossCheckFailedFactIds,
+      derivedExemption
+    ),
+    acquired,
+    crossCheckFailedFactIds,
+    derivedExemption,
   };
 }
 

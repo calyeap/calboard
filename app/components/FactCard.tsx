@@ -15,11 +15,19 @@ export function FactCard({
   fact,
   decision,
   queued,
+  displayValue,
 }: {
   runId: string;
   fact: FactRecord;
   decision: StoredFactDecision | undefined;
   queued: boolean;
+  /**
+   * The value as the analyst reads it, formatted at the display layer from the
+   * exact acquired figure (lib/analyzer/factDisplay.ts). Computed on the server
+   * so the Decimal boundary stays where it is; nothing here recomputes a figure
+   * from it.
+   */
+  displayValue: string;
 }) {
   // `pending` is the analyst's unsubmitted change on this render; the recorded
   // decision is what the card falls back to. Deriving `chosen` this way is what
@@ -52,15 +60,40 @@ export function FactCard({
   // suppression is the claim that there is no number here.
   const valuePresent = fact.value !== null;
 
+  // Two different routes out of the queue, and they must not describe
+  // themselves the same way.
+  //
+  // A tag-mapped fact was ACQUIRED through a fixed, versioned mapping. A
+  // computed fact was DERIVED here from facts that were. Every card in the
+  // computed group used to carry the tag-mapping sentence verbatim, which is a
+  // false statement about how the figure was obtained, on the screen whose
+  // whole purpose is establishing where figures came from — and it contradicted
+  // the group header directly above it.
+  //
+  // The test is the record's own: a derived fact names its components and
+  // carries no mapping version.
+  const derived = fact.derivedFrom !== null && fact.derivedFrom.length > 0;
+  const computedNotQueued = !queued && derived;
+
   // What this card says about its own state, or null where the state line adds
   // nothing the token stamp has not already said.
-  const stateLine = !queued
+  const stateLine = computedNotQueued
     ? {
-        name: "Spot-check not required",
+        name: "Computed and cross-checked",
         cause:
-          "Acquired through a fixed, versioned tag mapping, so it is not spot-checked. It is not hidden either, and it carries every label it would otherwise carry.",
+          `Worked out here from ${listComponents(fact.derivedFrom)}, each of which came ` +
+          "through the tag mapping. A deterministic check has recomputed this figure from " +
+          "them and it agreed, so there is nothing here for a spot-check to catch that the " +
+          "check has not. It is shown rather than hidden, and carries every label it would " +
+          "otherwise carry.",
       }
-    : decision
+    : !queued
+      ? {
+          name: "Spot-check not required",
+          cause:
+            "Acquired through a fixed, versioned tag mapping, so it is not spot-checked. It is not hidden either, and it carries every label it would otherwise carry.",
+        }
+      : decision
       ? {
           name: decision.decision === "CONFIRMED" ? "Confirmed" : "Cannot verify",
           cause: decision.reasonCode
@@ -73,8 +106,19 @@ export function FactCard({
     <div className="factcard">
       <div>
         <h3 className="factname">{fact.name}</h3>
+        {/* The kicker is the first place the two exempt groups become
+            distinguishable at card level. The token line below cannot do it:
+            those are the §3.2 field values themselves, and both routes
+            genuinely carry PRIMARY · Deterministic/structured · Spot-check not
+            required — that is the record, not copy. */}
         <p className="requiredfor">
-          {queued && !decision ? "Queued for spot-check · " : queued ? "" : "Shown, not queued · "}
+          {queued && !decision
+            ? "Queued for spot-check · "
+            : queued
+              ? ""
+              : computedNotQueued
+                ? "Computed here, not queued · "
+                : "Acquired, not queued · "}
           {fact.type}
         </p>
 
@@ -82,7 +126,7 @@ export function FactCard({
           This is the {fact.asOfDate} figure
           {fact.retrievalTimestamp ? `, retrieved ${formatStamp(fact.retrievalTimestamp)}` : ""}.
         </p>
-        <div className="value">{renderValue(fact.value)}</div>
+        <div className="value">{displayValue}</div>
 
         {/* Three fixed slots, in fixed order, never merged (§3.2.1). */}
         <div className="stamp">
@@ -235,10 +279,17 @@ export function FactCard({
   );
 }
 
-function renderValue(value: FactRecord["value"]): string {
-  // Absence is displayed, never rendered as zero (§4.3).
-  if (value === null) return "—";
-  return String(value);
+/**
+ * The components a derived figure was worked out from, as prose.
+ *
+ * Reads the fact's own recorded derivation rather than a sentence written
+ * about it, so a card can never name components the record does not have.
+ */
+function listComponents(ids: string[] | null): string {
+  const names = (ids ?? []).map((id) => id.replace(/-/g, " "));
+  if (names.length === 0) return "figures acquired for this run";
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
 function titleCase(s: string): string {

@@ -1,0 +1,17 @@
+{
+  "__capture": {
+    "note": "Real closing quotes, recorded from the live provider during the M8-a acceptance runs on 8 September 2026. Used ONLY in ANALYZER_OFFLINE mode, so that an offline run has the same fact set shape as a live one and the Step 2 queue can be exercised. Nothing here is invented; nothing here is used when the app is online.",
+    "recordedAt": "2026-09-08T04:18:18.616Z",
+    "provider": "YAHOO"
+  },
+  "MSFT": {
+    "close": 499.7,
+    "date": "2026-09-04",
+    "source": "YAHOO latest close (recorded capture, 2026-09-08)"
+  },
+  "OKLO": {
+    "close": 41.27,
+    "date": "2026-09-04",
+    "source": "YAHOO latest close (recorded capture, 2026-09-08)"
+  }
+}

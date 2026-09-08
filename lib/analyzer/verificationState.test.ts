@@ -2,6 +2,18 @@ import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { getPool } from "../db";
 import { createRun, recordFactDecision } from "./runStore";
 import { loadGateState, computeAnalysisForRun } from "./gate";
+
+/**
+ * The facts THIS RUN actually queues.
+ *
+ * Since M8-a the fact set is acquired from SEC filings per run, so the queue
+ * belongs to the run rather than to a fixture constant. Asking the gate also
+ * exercises the same queue the route enforces.
+ */
+async function queuedIdsForRun(runId: string): Promise<string[]> {
+  return (await loadGateState(runId)).outstandingFactIds;
+}
+
 import { queuedFacts, exemptFacts, applyDecisions, deriveVerificationState } from "./spotCheck";
 import { MSFT_FIXTURE } from "./fixtures/msft";
 import { OKLO_FIXTURE } from "./fixtures/oklo";
@@ -119,26 +131,27 @@ describe("a run's facts, end to end", () => {
 
   it("carries the decisions onto the records, both ways", async () => {
     const runId = await createRun("MSFT", "Microsoft Corporation");
-    const [first, second] = queuedFacts(MSFT_FIXTURE.facts);
-    await recordFactDecision(runId, first.id, "CONFIRMED", null);
-    await recordFactDecision(runId, second.id, "NOT CONFIRMED", "NOT LOCATED");
+    const [first, second] = await queuedIdsForRun(runId);
+    await recordFactDecision(runId, first, "CONFIRMED", null);
+    await recordFactDecision(runId, second, "NOT CONFIRMED", "NOT LOCATED");
 
     const state = await loadGateState(runId);
     const states = statesOf(state.fixture.facts);
-    expect(states[first.id]).toBe("CONFIRMED");
-    expect(states[second.id]).toBe("NOT CONFIRMED");
+    expect(states[first]).toBe("CONFIRMED");
+    expect(states[second]).toBe("NOT CONFIRMED");
   });
 
   // The consequence that made this worth fixing: the Analysis Result is what
   // the report renders its provenance tokens from.
   it("does not report VERIFIED in the Analysis Result for a non-confirmed fact", async () => {
     const runId = await createRun("MSFT", "Microsoft Corporation");
-    for (const fact of queuedFacts(MSFT_FIXTURE.facts)) {
-      await recordFactDecision(runId, fact.id, "NOT CONFIRMED", "CONTRADICTED BY SOURCE");
+    const queued = await queuedIdsForRun(runId);
+    for (const factId of queued) {
+      await recordFactDecision(runId, factId, "NOT CONFIRMED", "CONTRADICTED BY SOURCE");
     }
 
     const result = await computeAnalysisForRun(runId);
-    const queuedIds = new Set(queuedFacts(MSFT_FIXTURE.facts).map((f) => f.id));
+    const queuedIds = new Set(queued);
 
     for (const fact of result.facts) {
       if (queuedIds.has(fact.id)) {
@@ -149,12 +162,13 @@ describe("a run's facts, end to end", () => {
 
   it("reports CONFIRMED in the Analysis Result for a confirmed fact", async () => {
     const runId = await createRun("OKLO", "Oklo Inc.");
-    for (const fact of queuedFacts(OKLO_FIXTURE.facts)) {
-      await recordFactDecision(runId, fact.id, "CONFIRMED", null);
+    const queued = await queuedIdsForRun(runId);
+    for (const factId of queued) {
+      await recordFactDecision(runId, factId, "CONFIRMED", null);
     }
 
     const result = await computeAnalysisForRun(runId);
-    const queuedIds = new Set(queuedFacts(OKLO_FIXTURE.facts).map((f) => f.id));
+    const queuedIds = new Set(queued);
 
     for (const fact of result.facts) {
       if (queuedIds.has(fact.id)) {
@@ -166,13 +180,13 @@ describe("a run's facts, end to end", () => {
   it("keeps two runs of the same company on their own states", async () => {
     const confirmed = await createRun("MSFT", "Microsoft Corporation");
     const untouched = await createRun("MSFT", "Microsoft Corporation");
-    const [first] = queuedFacts(MSFT_FIXTURE.facts);
-    await recordFactDecision(confirmed, first.id, "CONFIRMED", null);
+    const [first] = await queuedIdsForRun(confirmed);
+    await recordFactDecision(confirmed, first, "CONFIRMED", null);
 
-    expect(statesOf((await loadGateState(confirmed)).fixture.facts)[first.id]).toBe("CONFIRMED");
-    expect(statesOf((await loadGateState(untouched)).fixture.facts)[first.id]).not.toBe(
+    expect(statesOf((await loadGateState(confirmed)).fixture.facts)[first]).toBe("CONFIRMED");
+    expect(statesOf((await loadGateState(untouched)).fixture.facts)[first]).not.toBe(
       "CONFIRMED"
     );
-    expect(statesOf((await loadGateState(untouched)).fixture.facts)[first.id]).not.toBe("VERIFIED");
+    expect(statesOf((await loadGateState(untouched)).fixture.facts)[first]).not.toBe("VERIFIED");
   });
 });

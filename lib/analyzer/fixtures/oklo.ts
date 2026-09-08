@@ -113,6 +113,7 @@ export const OKLO_FIXTURE: CompanyFixture = {
       // balance adjusted for burn, the other a cash-flow line — so both are
       // queued for spot-check (§3.8.1).
       tagMappingVersion: null,
+      derivedFrom: null,
     },
     {
       id: "quarterly-burn",
@@ -134,6 +135,7 @@ export const OKLO_FIXTURE: CompanyFixture = {
       // balance adjusted for burn, the other a cash-flow line — so both are
       // queued for spot-check (§3.8.1).
       tagMappingVersion: null,
+      derivedFrom: null,
     },
   // No `as FactRecord[]` assertion here. It used to carry one, and the
   // assertion silently suppressed the missing-property error when

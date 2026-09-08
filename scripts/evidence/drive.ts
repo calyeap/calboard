@@ -3,11 +3,70 @@ import type { Browser, Page } from "playwright";
 import { captureAt } from "./capture";
 import { WIDTHS, TICKERS } from "./config";
 import type { ProbeDocument } from "./preflight/types";
-import { queuedFacts } from "@/lib/analyzer/spotCheck";
-import { MSFT_FIXTURE } from "@/lib/analyzer/fixtures/msft";
-import { OKLO_FIXTURE } from "@/lib/analyzer/fixtures/oklo";
+import { loadGateState } from "@/lib/analyzer/gate";
 
-const FIXTURES = { MSFT: MSFT_FIXTURE, OKLO: OKLO_FIXTURE } as const;
+/**
+ * The fact ids Step 2 should be showing a card for, on THIS run.
+ *
+ * Read from the same per-run gate state the page enforces, and derived
+ * nowhere else. The runner used to compute its own expectation from
+ * MSFT_FIXTURE / OKLO_FIXTURE, which bypassed the run's acquisition, its
+ * §3.8.2 cross-check outcomes and its derivedExemption evidence — a second
+ * source of truth for what should be queued, which promptly went stale when
+ * acquisition landed and stopped the runner over a card the screen was right
+ * not to render. Same failure family as a verification state travelling beside
+ * a fact instead of deriving from the decision.
+ *
+ * `outstandingFactIds` is the queue itself here, because this is called before
+ * any decision is recorded — and that assumption is asserted rather than
+ * assumed, so a future caller that resumes a part-decided run finds out loudly
+ * instead of silently checking a short list.
+ */
+export async function expectedQueueForRun(runId: string, ticker: string): Promise<string[]> {
+  const state = await loadGateState(runId);
+
+  if (state.outstandingFactIds.length !== state.queuedCount) {
+    throw new Error(
+      `${ticker}: run ${runId} already carries decisions — ` +
+        `${state.queuedCount} queued but ${state.outstandingFactIds.length} outstanding. ` +
+        `The expected queue is only the outstanding set on an untouched run.`
+    );
+  }
+
+  return state.outstandingFactIds;
+}
+
+/**
+ * Reconciles the expected queue against what Step 2 actually rendered.
+ *
+ * Fail-loud and deliberately kept that way: a queued fact with no card is the
+ * stop this pilot exists for. Extracted from driveRun so the stop itself is
+ * testable without a browser — a check that has only ever passed is not a
+ * check.
+ *
+ * `hasCard` is injected for the same reason. In the runner it is a Playwright
+ * locator count; in drive.test.ts it is a set.
+ */
+export async function assertCardsForQueue(
+  ticker: string,
+  expected: readonly string[],
+  hasCard: (factId: string) => Promise<boolean>
+): Promise<void> {
+  if (expected.length === 0) throw new Error(`${ticker}: the spot-check queue is empty`);
+
+  const missing: string[] = [];
+  for (const factId of expected) {
+    if (!(await hasCard(factId))) missing.push(factId);
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      missing.length === 1
+        ? `Queued fact "${missing[0]}" has no card on the ${ticker} facts screen`
+        : `Queued facts ${missing.map((f) => `"${f}"`).join(", ")} have no card on the ${ticker} facts screen`
+    );
+  }
+}
 
 /**
  * Types a ticker into Screen 1 and waits for the resolution to render.
@@ -92,17 +151,16 @@ export async function driveRun(
     if (match === null) throw new Error(`${ticker}: no runId in ${page.url()}`);
     runId = match[1];
 
-    // The queue is derived, never hardcoded: a fact that should be queued but
-    // has no card in the DOM surfaces as a failure rather than as a card nobody
-    // looked for.
-    const queue = queuedFacts(FIXTURES[ticker].facts);
-    if (queue.length === 0) throw new Error(`${ticker}: the spot-check queue is empty`);
+    // The queue is derived from THIS run's gate state, never hardcoded and
+    // never from a fixture: a fact that should be queued but has no card in the
+    // DOM surfaces as a failure rather than as a card nobody looked for.
+    const queue = await expectedQueueForRun(runId, ticker);
+    const cardFor = (factId: string) =>
+      page.locator(`form:has(input[name="factId"][value="${factId}"])`);
+    await assertCardsForQueue(ticker, queue, async (factId) => (await cardFor(factId).count()) > 0);
 
-    for (const [index, fact] of queue.entries()) {
-      const card = page.locator(`form:has(input[name="factId"][value="${fact.id}"])`);
-      if ((await card.count()) === 0) {
-        throw new Error(`Queued fact "${fact.id}" has no card on the ${ticker} facts screen`);
-      }
+    for (const [index, factId] of queue.entries()) {
+      const card = cardFor(factId);
 
       // §3.8.4's fixed two-option select renders only under NOT CONFIRMED,
       // which is why one MSFT fact must take this branch — without it the
@@ -110,7 +168,7 @@ export async function driveRun(
       const cannotVerify = opts.cannotVerifyFirstFact && index === 0;
       const value = cannotVerify ? "NOT CONFIRMED" : "CONFIRMED";
 
-      await card.locator(`input[name="decision-${fact.id}"][value="${value}"]`).check();
+      await card.locator(`input[name="decision-${factId}"][value="${value}"]`).check();
       if (cannotVerify) {
         await card.locator('select[name="reasonCode"]').selectOption("CONTRADICTED BY SOURCE");
       }

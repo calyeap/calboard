@@ -4,9 +4,11 @@ import { AnalyzerShell } from "@/app/components/AnalyzerShell";
 import { FactCard } from "@/app/components/FactCard";
 import { loadGateState, RunNotFoundError } from "@/lib/analyzer/gate";
 import { getFactDecisions, getJudgments } from "@/lib/analyzer/runStore";
-import { JUDGMENTS } from "@/lib/analyzer/judgments";
+import { judgmentsForRun } from "@/lib/analyzer/judgments";
 import { JudgmentSelector } from "@/app/components/JudgmentSelector";
-import { queuedFacts, exemptFacts } from "@/lib/analyzer/spotCheck";
+import { queuedFacts, exemptFacts, derivedExemptFacts } from "@/lib/analyzer/spotCheck";
+import { formatFactValue } from "@/lib/analyzer/factDisplay";
+import { factUnit } from "@/lib/analyzer/acquisition/factUnit";
 import type { FactRecord } from "@/lib/analyzer/types";
 
 // Screen 2 — Step 2, fact acquisition and human spot-check.
@@ -28,9 +30,26 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
   const decisionByFactId = new Map(decisions.map((d) => [d.factId, d]));
   const judgmentByKey = new Map(judgments.map((j) => [j.judgmentKey, j]));
 
-  const queued = queuedFacts(state.fixture.facts).map(toPlainFact);
-  const exempt = exemptFacts(state.fixture.facts).map(toPlainFact);
+  // §3.8.2: a failed cross-check forces its fact into the queue whatever its
+  // acquisition path, so both lists are computed against the same outcomes the
+  // gate used. Reading them without the failures would show a fact as exempt
+  // on the screen while the gate held it in the queue.
+  const failed = state.crossCheckFailedFactIds;
+  const evidence = state.derivedExemption;
+  const queued = queuedFacts(state.fixture.facts, failed, evidence).map(toPlainFact);
+  const exempt = exemptFacts(state.fixture.facts, failed).map(toPlainFact);
+  const derivedExempt = derivedExemptFacts(state.fixture.facts, failed, evidence).map(toPlainFact);
   const outstanding = state.outstandingFactIds.length;
+
+  const runJudgments = judgmentsForRun(
+    state.acquired.acquired.acquisition.candidateNonOperatingInvestments
+  );
+  const crossChecks = state.acquired.acquired.crossChecks;
+  const crossCheckCounts = {
+    pass: crossChecks.results.filter((r) => r.outcome === "PASS").length,
+    fail: crossChecks.results.filter((r) => r.outcome === "FAIL").length,
+    na: crossChecks.results.filter((r) => r.outcome === "NOT APPLICABLE").length,
+  };
 
   return (
     <AnalyzerShell>
@@ -52,12 +71,29 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
             spot-check, {exempt.length} shown but exempt.
           </p>
 
+          {/* §3.8.2: "a cross-check suite whose results are not reported is not
+              a control." The outcome is reported where the analyst decides,
+              not in a log. */}
+          <p className="note">
+            Automatic checks on the figures: {crossCheckCounts.pass} passed, {crossCheckCounts.fail}{" "}
+            failed, {crossCheckCounts.na} did not apply, across {crossChecks.inputFactIds.length}{" "}
+            inputs. A failed check never rewrites a figure — it puts that fact in front of you here,
+            and anything computed from it reports incomplete until it is re-acquired.
+          </p>
+
+          {state.acquired.disclosures.map((line) => (
+            <p className="note" key={line.slice(0, 48)}>
+              {line}
+            </p>
+          ))}
+
           {queued.map((fact) => (
             <FactCard
               key={fact.id}
               runId={runId}
               fact={fact}
               decision={decisionByFactId.get(fact.id)}
+              displayValue={displayValueFor(fact)}
               queued
             />
           ))}
@@ -80,6 +116,34 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
                   runId={runId}
                   fact={fact}
                   decision={decisionByFactId.get(fact.id)}
+                  displayValue={displayValueFor(fact)}
+                  queued={false}
+                />
+              ))}
+            </>
+          )}
+
+          {derivedExempt.length > 0 && (
+            <>
+              <div className="sechead" style={{ marginTop: 44 }}>
+                <h2>Computed by the software, and already cross-checked</h2>
+                <span className="screenlabel">Shown · not queued</span>
+              </div>
+              <hr className="rule" />
+              <p className="whythisfact">
+                These were worked out here from figures above, all of which came through the tag
+                mapping, and an automatic check has recomputed each one from its components and
+                agreed. No filing states them as a line, so checking one would mean agreeing with
+                a treatment rather than comparing a number against a document — they are shown
+                with their components named, and not queued.
+              </p>
+              {derivedExempt.map((fact) => (
+                <FactCard
+                  key={fact.id}
+                  runId={runId}
+                  fact={fact}
+                  decision={decisionByFactId.get(fact.id)}
+                  displayValue={displayValueFor(fact)}
                   queued={false}
                 />
               ))}
@@ -98,7 +162,7 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
               open, rather than inheriting them from a default nobody chose.
             </p>
 
-            {JUDGMENTS.map((judgment) => (
+            {runJudgments.map((judgment) => (
               <JudgmentSelector
                 key={judgment.key}
                 runId={runId}
@@ -149,6 +213,20 @@ export default async function FactsPage({ params }: { params: Promise<{ runId: s
  * keeps operating on the real Decimal, server-side, where it belongs — no
  * figure is ever recomputed from this string.
  */
+/**
+ * The value as the card shows it, formatted here on the SERVER.
+ *
+ * Same boundary as toPlainFact below and for the same reason: the exact
+ * figure stays a Decimal on this side, and only a string crosses. Formatting
+ * here also keeps decimal.js out of the client bundle.
+ *
+ * The unit comes from acquisition, never from this layer guessing — see
+ * lib/analyzer/acquisition/factUnit.ts.
+ */
+function displayValueFor(fact: FactRecord): string {
+  return formatFactValue(fact.value, factUnit(fact.id));
+}
+
 function toPlainFact(fact: FactRecord): FactRecord {
   return { ...fact, value: fact.value === null ? null : String(fact.value) };
 }

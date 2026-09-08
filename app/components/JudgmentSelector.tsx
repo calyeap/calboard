@@ -34,6 +34,9 @@ export function JudgmentSelector({
   const chosen = pending ?? existing?.selection ?? null;
 
   const selectable = judgment.options !== null;
+  // Read off the options actually rendered. Non-operating investments now has
+  // as many as the filings tag, so any written-in number is wrong for some run.
+  const optionCount = judgment.options?.length ?? 0;
 
   return (
     <div className="judgment">
@@ -128,8 +131,13 @@ export function JudgmentSelector({
           </button>
           {selectable && chosen === null && (
             <span className="reason">
-              Nothing is selected. The two options produce different figures, and the one you pick
-              travels into every number downstream.
+              {/* Derived, never written. This said "the two options" on every
+                  judgment, which went wrong the moment non-operating
+                  investments got its real options from acquisition — a count
+                  hard-coded against fixture content, on the judgment this
+                  milestone existed to complete. */}
+              Nothing is selected. The {optionCount} options produce different figures, and the one
+              you pick travels into every number downstream.
             </span>
           )}
           {existing && (

@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import { getPool } from "../db";
 import { createRun, recordFactDecision } from "./runStore";
-import { queuedFacts } from "./spotCheck";
-import { MSFT_FIXTURE } from "./fixtures/msft";
-import { OKLO_FIXTURE } from "./fixtures/oklo";
 
 // The spy is installed around the REAL assembleAnalysisResult, not a stub, so
 // the passing path still computes a genuine result. What is being proved is
@@ -20,6 +17,20 @@ vi.mock("./assemble", async (importOriginal) => {
 
 const { computeAnalysisForRun, loadGateState, SpotCheckIncompleteError, RunNotFoundError } =
   await import("./gate");
+
+/**
+ * The facts THIS RUN actually queues, in queue order.
+ *
+ * Since M8-a a run's fact set is acquired from SEC filings rather than read
+ * out of a fixture, so the queue is a property of the run and not of a
+ * constant this file can import. Asking the gate is also the stronger test: it
+ * exercises the same queue the route enforces, including any fact a §3.8.2
+ * cross-check forced into it.
+ */
+async function queuedIdsForRun(runId: string): Promise<string[]> {
+  const state = await loadGateState(runId);
+  return state.outstandingFactIds;
+}
 
 describe("the §2 ordering rule, enforced at the route boundary", () => {
   beforeEach(async () => {
@@ -47,12 +58,12 @@ describe("the §2 ordering rule, enforced at the route boundary", () => {
 
   it("refuses when the queue is partly decided, and computes nothing", async () => {
     const runId = await createRun("MSFT", "Microsoft Corporation");
-    const queued = queuedFacts(MSFT_FIXTURE.facts);
+    const queued = await queuedIdsForRun(runId);
     expect(queued.length).toBeGreaterThan(1);
 
     // Every fact but the last.
-    for (const fact of queued.slice(0, -1)) {
-      await recordFactDecision(runId, fact.id, "CONFIRMED", null);
+    for (const factId of queued.slice(0, -1)) {
+      await recordFactDecision(runId, factId, "CONFIRMED", null);
     }
 
     await expect(computeAnalysisForRun(runId)).rejects.toBeInstanceOf(SpotCheckIncompleteError);
@@ -61,11 +72,11 @@ describe("the §2 ordering rule, enforced at the route boundary", () => {
 
   it("names what is outstanding rather than only that something is", async () => {
     const runId = await createRun("MSFT", "Microsoft Corporation");
-    const queued = queuedFacts(MSFT_FIXTURE.facts);
-    await recordFactDecision(runId, queued[0].id, "CONFIRMED", null);
+    const queued = await queuedIdsForRun(runId);
+    await recordFactDecision(runId, queued[0], "CONFIRMED", null);
 
     await expect(computeAnalysisForRun(runId)).rejects.toMatchObject({
-      outstandingFactIds: queued.slice(1).map((f) => f.id),
+      outstandingFactIds: queued.slice(1),
     });
   });
 
@@ -81,8 +92,8 @@ describe("the §2 ordering rule, enforced at the route boundary", () => {
 
   it("computes once every queued fact carries a decision", async () => {
     const runId = await createRun("MSFT", "Microsoft Corporation");
-    for (const fact of queuedFacts(MSFT_FIXTURE.facts)) {
-      await recordFactDecision(runId, fact.id, "CONFIRMED", null);
+    for (const factId of await queuedIdsForRun(runId)) {
+      await recordFactDecision(runId, factId, "CONFIRMED", null);
     }
 
     const result = await computeAnalysisForRun(runId);
@@ -94,8 +105,8 @@ describe("the §2 ordering rule, enforced at the route boundary", () => {
   // verify does not block the gate; it blocks dependents through §5.
   it("computes when the queue is complete but answered entirely with Cannot verify", async () => {
     const runId = await createRun("OKLO", "Oklo Inc.");
-    for (const fact of queuedFacts(OKLO_FIXTURE.facts)) {
-      await recordFactDecision(runId, fact.id, "NOT CONFIRMED", "NOT LOCATED");
+    for (const factId of await queuedIdsForRun(runId)) {
+      await recordFactDecision(runId, factId, "NOT CONFIRMED", "NOT LOCATED");
     }
 
     await expect(computeAnalysisForRun(runId)).resolves.toBeDefined();
@@ -134,21 +145,21 @@ describe("the §2 ordering rule, enforced at the route boundary", () => {
   // as "a second request sees the first request's decisions".
   it("preserves decisions across independent reads, as a refresh would", async () => {
     const runId = await createRun("MSFT", "Microsoft Corporation");
-    const [first] = queuedFacts(MSFT_FIXTURE.facts);
-    await recordFactDecision(runId, first.id, "NOT CONFIRMED", "CONTRADICTED BY SOURCE");
+    const [first] = await queuedIdsForRun(runId);
+    await recordFactDecision(runId, first, "NOT CONFIRMED", "CONTRADICTED BY SOURCE");
 
     const reloaded = await loadGateState(runId);
-    expect(reloaded.decidedFactIds.has(first.id)).toBe(true);
+    expect(reloaded.decidedFactIds.has(first)).toBe(true);
     expect(reloaded.spotCheckComplete).toBe(false);
-    expect(reloaded.outstandingFactIds).not.toContain(first.id);
+    expect(reloaded.outstandingFactIds).not.toContain(first);
   });
 
   // Two runs of the same company must not see each other's work.
   it("gates each run on its own decisions", async () => {
     const done = await createRun("MSFT", "Microsoft Corporation");
     const fresh = await createRun("MSFT", "Microsoft Corporation");
-    for (const fact of queuedFacts(MSFT_FIXTURE.facts)) {
-      await recordFactDecision(done, fact.id, "CONFIRMED", null);
+    for (const factId of await queuedIdsForRun(done)) {
+      await recordFactDecision(done, factId, "CONFIRMED", null);
     }
 
     await expect(computeAnalysisForRun(done)).resolves.toBeDefined();
