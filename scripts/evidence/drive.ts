@@ -1,7 +1,7 @@
 // scripts/evidence/drive.ts
 import type { Browser, Page } from "playwright";
 import { captureAt } from "./capture";
-import { WIDTHS, TICKERS } from "./config";
+import { WIDTHS, TICKERS, UNDECIDED_SUFFIX } from "./config";
 import type { ProbeDocument } from "./preflight/types";
 import { loadGateState } from "@/lib/analyzer/gate";
 
@@ -168,12 +168,12 @@ export async function driveRun(
     const factsUrl = new URL(`/analyzer/${runId}/facts`, baseUrl).toString();
     for (const width of WIDTHS) {
       const undecidedDoc = await captureAt(browser, {
-        target: `s2-facts-${slug}-undecided`,
+        target: `s2-facts-${slug}${UNDECIDED_SUFFIX}`,
         width,
         url: factsUrl,
         outDir,
       });
-      captured.set(`s2-facts-${slug}-undecided|${width}`, undecidedDoc);
+      captured.set(`s2-facts-${slug}${UNDECIDED_SUFFIX}|${width}`, undecidedDoc);
     }
 
     for (const [index, factId] of queue.entries()) {

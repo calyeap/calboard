@@ -46,7 +46,11 @@ const FIXTURE_DIR = path.join(__dirname, "fixtures");
  * browser is involved; and proving verifyDatabaseReady's FAIL for real would
  * mean dropping analyzer_runs from a live database, which costs more than the
  * branch is worth. checkFont's "no .cb-analyzer node" guard is likewise
- * hand-built only — no fixture omits the root.
+ * hand-built only — no fixture omits the root. Two of checkContinueGated's
+ * four branches are hand-built-only too: "no Continue button found at all"
+ * and "disabled but no reason line" are proven only in checks.test.ts — only
+ * the PASS (found, disabled, has reason) and FAIL (found, not disabled)
+ * branches below are proven via a real fixture through runSelfTest().
  *
  * Fixtures rather than temporary edits to app/globals.css: breaking the
  * application to test the instrument would be the runner changing the thing it

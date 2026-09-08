@@ -45,5 +45,14 @@ export const STATE_MARKERS: Readonly<Record<string, string>> = {
 
 export const TARGETS: readonly string[] = Object.keys(STATE_MARKERS);
 
+/**
+ * The suffix marking a target as the undecided (pre-decision) Screen 2
+ * capture, e.g. `s2-facts-msft-undecided`. Shared by `drive.ts` (which builds
+ * the target name) and `run.ts` (which decides whether to run
+ * `checkContinueGated` against it) so the two stay in lockstep — a drifted
+ * copy in either place would silently skip the gate check with no error.
+ */
+export const UNDECIDED_SUFFIX = "-undecided";
+
 /** Screen 1 tickers, matching the manual capture this runner replaces. */
 export const TICKERS = { resolved: "MSFT", unknown: "ZXQY", unsupported: "SPY" } as const;

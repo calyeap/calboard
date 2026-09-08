@@ -23,12 +23,16 @@ export interface ManifestArgs {
  * the instrument this ports (`C:\Users\Calvin\m7gate\capture-m7-gate.js`,
  * which wrote `targets[label] = { url, ticker, widths }`). It is the field
  * most worth keeping because the run IDs are new on every run — it is what
- * tells a reviewer which run a screenshot came from, and it is what
- * disambiguates `s2-facts-msft` from `s2-facts-oklo`, which otherwise share
- * a state marker. `ticker` was deliberately not restored: it would only add
- * information for the two per-run targets, and for those the run ID is
- * already in `url` and in the top-level `runs` map — a second, narrower
- * field carrying the same fact was not worth the surface.
+ * tells a reviewer which run a screenshot came from, and it disambiguates
+ * `s2-facts-msft` from `s2-facts-oklo` (different runs, different tickers),
+ * which otherwise share a state marker. It does not disambiguate every
+ * same-marker pair, though: `s2-facts-msft-undecided` and `s2-facts-msft`
+ * are the same run and the same route, captured twice, so they share both
+ * marker and `url` — there the target name itself is what tells them apart.
+ * `ticker` was deliberately not restored: it would only add information for
+ * the two per-run targets, and for those the run ID is already in `url` and
+ * in the top-level `runs` map — a second, narrower field carrying the same
+ * fact was not worth the surface.
  */
 export function buildManifest(args: ManifestArgs): unknown {
   const targets: Record<string, unknown> = {};

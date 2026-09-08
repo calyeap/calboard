@@ -3,7 +3,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { chromium } from "playwright";
 import { config as loadEnv } from "dotenv";
-import { DEFAULT_BASE_URL, STATE_MARKERS, TARGETS, WIDTHS } from "./config";
+import { DEFAULT_BASE_URL, STATE_MARKERS, TARGETS, UNDECIDED_SUFFIX, WIDTHS } from "./config";
 import { verifyAppReachable, verifyDatabaseReady, verifyFrozenArtefacts } from "./gates";
 import { driveRun, driveScreen1 } from "./drive";
 import {
@@ -104,7 +104,7 @@ async function main(): Promise<void> {
     results.push(checkFont(target, doc));
     results.push(checkConsoleErrors(target, doc));
     results.push(checkStatesAppeared(target, STATE_MARKERS[target], doc));
-    if (target.endsWith("-undecided")) {
+    if (target.endsWith(UNDECIDED_SUFFIX)) {
       results.push(checkContinueGated(target, doc));
     }
   }

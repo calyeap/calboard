@@ -6,6 +6,7 @@ import {
   checkConsoleErrors,
   checkStatesAppeared,
   checkContinueGated,
+  CONTINUE_LABEL,
 } from "./checks";
 import type { ProbeDocument, ProbeNode } from "./types";
 
@@ -164,7 +165,7 @@ describe("checkStatesAppeared", () => {
 
 describe("checkContinueGated", () => {
   it("PASSes when Continue is disabled and a reason line is present", () => {
-    const button = node({ tag: "button", cls: "act", text: "Continue to gates", disabled: true });
+    const button = node({ tag: "button", cls: "act", text: CONTINUE_LABEL, disabled: true });
     const reason = node({
       tag: "span",
       cls: "reason",
@@ -175,7 +176,7 @@ describe("checkContinueGated", () => {
   });
 
   it("FAILs naming the step when Continue is enabled on an undecided capture", () => {
-    const button = node({ tag: "button", cls: "act", text: "Continue to gates", disabled: false });
+    const button = node({ tag: "button", cls: "act", text: CONTINUE_LABEL, disabled: false });
     const d = doc({ nodes: [button] });
     const r = checkContinueGated("s2-facts-msft-undecided", d);
     expect(r.status).toBe("FAIL");
@@ -192,7 +193,7 @@ describe("checkContinueGated", () => {
   });
 
   it("FAILs when Continue is disabled but no reason line accompanies it", () => {
-    const button = node({ tag: "button", cls: "act", text: "Continue to gates", disabled: true });
+    const button = node({ tag: "button", cls: "act", text: CONTINUE_LABEL, disabled: true });
     const d = doc({ nodes: [button] });
     const r = checkContinueGated("s2-facts-msft-undecided", d);
     expect(r.status).toBe("FAIL");
@@ -206,7 +207,7 @@ describe("checkContinueGated", () => {
     // "not disabled === true, so FAIL" would be correct by accident; this
     // proves the FAIL is for the right reason on a button, not a coincidence
     // of node shape.
-    const link = node({ tag: "a", cls: "act", text: "Continue to gates", disabled: null });
+    const link = node({ tag: "a", cls: "act", text: CONTINUE_LABEL, disabled: null });
     const r = checkContinueGated("s2-facts-msft-undecided", doc({ nodes: [link] }));
     expect(r.status).toBe("FAIL");
     expect(r.detail).toContain("no");

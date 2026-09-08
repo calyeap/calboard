@@ -133,6 +133,14 @@ export function checkStatesAppeared(
 export const CONTINUE_LABEL = "Continue to gates";
 
 /**
+ * The reason line's fixed substring, rendered by the app whenever the gate is
+ * holding (app/analyzer/[runId]/facts/page.tsx:125 — the `<span
+ * className="reason">` text, e.g. "N material fact(s) still undecided —
+ * Continue is unavailable until every fact carries a decision.").
+ */
+export const REASON_TOKEN = "still undecided";
+
+/**
  * On the undecided capture, Continue to gates is disabled and carries a
  * reason — proof the gate is holding, not merely that the control exists.
  *
@@ -143,8 +151,9 @@ export const CONTINUE_LABEL = "Continue to gates";
  * Matched by tag + label rather than by class, because the decided screen's
  * control is an `<a>` carrying the same "act" class and the same label —
  * matching on class alone would let that control satisfy this check by
- * accident. A `<button>` is also the only element on this screen whose
- * `disabled` the probe can read as a real boolean rather than `null`.
+ * accident. The Continue control is a `<button>` in the gated state and an
+ * `<a>` in the released one; only the `<button>` variant's `disabled` reads a
+ * real boolean rather than `null`.
  *
  * Judges only two objective facts: the `disabled` IDL property Playwright's
  * probe already reads off the live DOM element, and whether a reason string
@@ -167,7 +176,7 @@ export function checkContinueGated(target: string, d: ProbeDocument): CheckResul
   }
 
   const hasReason = d.nodes.some(
-    (n) => n !== button && n.text.toLowerCase().includes("still undecided")
+    (n) => n !== button && n.text.toLowerCase().includes(REASON_TOKEN)
   );
   if (!hasReason) {
     return fail(
