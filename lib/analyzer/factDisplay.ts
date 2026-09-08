@@ -78,7 +78,7 @@ function formatRatio(d: Decimal): string {
  * additions). Below a million the exact figure with separators, because that is
  * the scale at which a filing prints the digits and an analyst compares them.
  */
-function formatUsd(d: Decimal): string {
+export function formatUsd(d: Decimal): string {
   const sign = d.isNegative() ? "-" : "";
   const abs = d.abs();
 

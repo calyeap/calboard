@@ -439,8 +439,15 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
     },
     fairValueRange,
     preRevenue,
+    // Both members are the AI layer's, and the AI layer runs AFTER this
+    // function: §8.1 puts calculation on one side of the boundary and
+    // interpretation on the other, and §8.5.4 says the challenger's findings
+    // enter the report only once its own call has completed. Assembly
+    // therefore produces an analysis that is complete and says nothing —
+    // lib/analyzer/ai/run.ts merges the two in, and a report whose calls have
+    // not run renders both sections honestly empty rather than inventing copy.
     challenger: null,
-    interpretation: { statements: [] },
+    interpretation: { statements: [], pageOne: null },
     policy: {
       constants: POLICY,
       undefinedConstants: fixture.configuredConstants,

@@ -497,8 +497,38 @@ function buildQuickRead(result: AnalysisResult): QuickReadItem[] {
   ];
 }
 
+// §10.7 rule 2 — the four page-one sentences that "genuinely vary" between
+// companies. Where the interpretation call has run, its prose replaces the
+// template for exactly these four and no others; rule 1 keeps every
+// fixed-shape sentence deterministic, and "no model may rewrite one after it
+// is filled".
+//
+// The substitution happens HERE, after buildQuickRead has produced the full
+// eight-item template set, so the fallback is never a gap: a run whose call
+// has not completed shows the same eight items with their [S] copy, which is
+// §10.7's first legitimate provenance rather than an absence.
+const VARIABLE_ITEM_TO_PAGE_ONE_KEY: Record<string, keyof NonNullable<AnalysisResult["interpretation"]["pageOne"]>> = {
+  "Main finding": "mainFinding",
+  "What supports the case": "whatSupportsTheCase",
+  "What worries Calboard": "whatWorriesCalboard",
+  "Biggest uncertainty": "biggestUncertainty",
+};
+
+function applyInterpretedPageOne(items: QuickReadItem[], result: AnalysisResult): QuickReadItem[] {
+  const pageOne = result.interpretation.pageOne;
+  if (pageOne === null) return items;
+
+  return items.map((item) => {
+    const key = VARIABLE_ITEM_TO_PAGE_ONE_KEY[item.label];
+    if (key === undefined) return item;
+    // Every figure in this sentence was substituted from the Analysis Result
+    // before it reached here (§10.7 rule 3, enforced in lib/analyzer/ai).
+    return { label: item.label, body: <p className="qlead">{pageOne[key].statement}</p> };
+  });
+}
+
 export function QuickRead({ result }: { result: AnalysisResult }) {
-  const items = buildQuickRead(result);
+  const items = applyInterpretedPageOne(buildQuickRead(result), result);
   const profileLabel = PROFILE_LABELS[result.profile.confirmedOrOverridden];
 
   return (

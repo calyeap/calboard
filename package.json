@@ -12,9 +12,11 @@
     "record-reconciliation": "tsx scripts/record-reconciliation.ts",
     "evidence": "tsx scripts/evidence/run.ts",
     "acquire": "tsx scripts/analyzer/acquire-run.ts",
+    "ai-run": "tsx scripts/analyzer/ai-run.ts",
     "acquire:capture": "tsx scripts/analyzer/capture-companyfacts.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
     "decimal.js": "^10.4.3",
     "next": "^15.0.0",
     "pg": "^8.13.0",

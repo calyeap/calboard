@@ -1,12 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { AnalyzerShell } from "@/app/components/AnalyzerShell";
 import { AnalyzerReport } from "@/app/components/AnalyzerReport";
-import {
-  computeAnalysisForRun,
-  loadGateState,
-  RunNotFoundError,
-  SpotCheckIncompleteError,
-} from "@/lib/analyzer/gate";
+import { loadGateState, RunNotFoundError, SpotCheckIncompleteError } from "@/lib/analyzer/gate";
+import { analysisForReport } from "@/lib/analyzer/reportAnalysis";
 
 // Screen 4 — Steps 8–10, output. No human input.
 //
@@ -32,9 +28,14 @@ export default async function ReportPage({ params }: { params: Promise<{ runId: 
     redirect(`/analyzer/${runId}/profile`);
   }
 
-  let result;
+  // M8-b: the same gated computation, followed by the §8.2 interpretation and
+  // the §8.5 blind challenger. The order is the boundary — every number on this
+  // page is settled before either call is made, and neither can change one.
+  // A run whose calls have already completed reads the stored prose rather than
+  // rolling new words on a refresh.
+  let report;
   try {
-    result = await computeAnalysisForRun(runId);
+    report = await analysisForReport(runId);
   } catch (err) {
     if (err instanceof SpotCheckIncompleteError) {
       redirect(`/analyzer/${runId}/facts`);
@@ -77,7 +78,7 @@ export default async function ReportPage({ params }: { params: Promise<{ runId: 
         </div>
       )}
 
-      <AnalyzerReport result={result} />
+      <AnalyzerReport result={report.result} aiLayer={report.aiLayer} />
     </AnalyzerShell>
   );
 }
