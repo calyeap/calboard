@@ -42,6 +42,8 @@ The rule catches ordinary phrasing too. A number word CARRYING A UNIT is a quant
 
 The claimOrFactId field is the one exception — it is an id, not prose, and you copy it exactly as given even where it contains digits.
 
+STATE NAMES ARE NOT NUMERALS EITHER. The active states listed below are tokens out of a fixed vocabulary this system owns, so naming one in full — LEVERAGE UNSUPPORTED IN v1, for instance — is fine despite the digit in it. A digit of your own next to one is not.
+
 Prefer few findings that bear real weight over many that do not. If the record supports no disconfirming finding at all, return an empty list — that is an honest answer.`;
 
 const RESPONSE_SCHEMA: Record<string, unknown> = {
@@ -137,7 +139,10 @@ export async function runChallenger(payload: ChallengerPayload, call: AnalystCal
   // Before the call, not after. The boundary is on what the model receives.
   assertChallengerPayloadClean(payload);
 
-  const catalogue = buildFactSlotCatalogue(payload.facts);
+  const catalogue = buildFactSlotCatalogue(
+    payload.facts,
+    payload.activeStates.suppressing.map((s) => s.state)
+  );
   const factsById = new Map(payload.facts.map((f) => [f.id, f]));
 
   return callWithOneRegeneration(

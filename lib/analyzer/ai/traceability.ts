@@ -144,6 +144,61 @@ function withoutSlotReferences(text: string): string {
 }
 
 /**
+ * The state names THIS RUN's catalogue carries, longest first.
+ *
+ * Derived from the Analysis Result, never maintained by hand. A suppressed
+ * slot's only rendering is its state name (slots.ts), so this set is exactly
+ * the state vocabulary the system itself would have substituted for this run —
+ * and `slots.test.ts` asserts every member of it is one of the fourteen
+ * literals in `stateCatalogue.ALL_SUPPRESSING_STATES`, which is checked against
+ * the `SuppressingState` union at compile time in both directions.
+ *
+ * Longest first, so a state name containing a shorter one is removed whole.
+ */
+function systemVocabularyOf(catalogue: SlotCatalogue): string[] {
+  const states = new Set<string>();
+  for (const slot of catalogue.values()) {
+    if (slot.suppressed) states.add(slot.formatted);
+  }
+  return [...states].sort((a, b) => b.length - a.length);
+}
+
+/**
+ * Removes the run's own state names before the figure scan.
+ *
+ * THIS IS A NARROWING OF SCOPE, NOT A PERMITTED EXCEPTION, and the difference
+ * is the whole reason it is written this way. A permit list would say "these
+ * numerals are allowed" and would grow one argument at a time — the next
+ * exception always argued from the last — and this guard is the entire control
+ * on §8.3 limit 2, because a base rate recalled from memory reaches the page
+ * only as a numeral the model typed.
+ *
+ * What happens instead is that a state name is not authored text at all. It is
+ * a token out of a closed vocabulary the system owns, restated. So it is
+ * removed before anyone asks what the model wrote, exactly as a slot reference
+ * is — the same shape as the slot design itself, where the model cannot write a
+ * figure rather than being told not to.
+ *
+ * Three properties make this safe to rely on, and each has a test:
+ *
+ *  - The set comes from this run's Analysis Result. A state this run did not
+ *    produce is not exempt, and its digits are refused like anyone else's.
+ *  - Every member is one of the fourteen frozen suppressing-state literals, so
+ *    adding one means adding a state to the analyzer's own vocabulary — a
+ *    spec-level act with a compile-time contract — not editing a list of
+ *    exceptions sitting next to this guard.
+ *  - Only the EXACT string is removed. A numeral beside a state name, or one
+ *    appended to it, survives to be refused.
+ */
+function withoutSystemVocabulary(text: string, catalogue: SlotCatalogue): string {
+  let remaining = text;
+  for (const state of systemVocabularyOf(catalogue)) {
+    remaining = remaining.split(state).join(" ");
+  }
+  return remaining;
+}
+
+/**
  * Every way this text fails to trace, in one pass.
  *
  * Returns all defects rather than the first: a report-back that names one
@@ -157,7 +212,11 @@ export function traceText(text: string, catalogue: SlotCatalogue): TraceDefect[]
     if (!catalogue.has(id)) defects.push({ kind: "UNKNOWN SLOT", detail: id });
   }
 
-  const prose = withoutSlotReferences(text);
+  // Two removals before anything is scanned, and they are the same idea twice:
+  // what the system substitutes, and what the system names, are not figures the
+  // model wrote. What remains is the model's own prose, and the rules below
+  // apply to that.
+  const prose = withoutSystemVocabulary(withoutSlotReferences(text), catalogue);
 
   for (const match of prose.matchAll(NUMERAL)) {
     defects.push({

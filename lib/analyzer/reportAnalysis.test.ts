@@ -133,6 +133,39 @@ describe("analysisForReport", () => {
     expect(report.result.challenger).toBeNull();
   });
 
+  it("logs a refusal without console.error, so an expected refusal is not raised as a crash", async () => {
+    // RULED. A fail-closed refusal is designed behaviour. Next's development
+    // overlay hooks console.error, so logging there rendered correct operation
+    // as a red crash screen — which made an acceptance run unreadable and made
+    // a working control indistinguishable from a defect.
+    const runId = await decidedRun("MSFT", "Microsoft Corporation");
+    const seenOnConsole: unknown[] = [];
+    const seenOnStderr: string[] = [];
+    const realConsoleError = console.error;
+    const realStderrWrite = process.stderr.write.bind(process.stderr);
+    console.error = (...args: unknown[]) => {
+      seenOnConsole.push(args);
+    };
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      seenOnStderr.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      const report = await analysisForReport(runId, async () => {
+        throw Object.assign(new Error("refused"), { diagnostic: 'NUMERAL FROM MODEL ("14.2%")' });
+      });
+
+      expect(report.aiLayer.status).toBe("FAILED");
+      expect(seenOnConsole).toEqual([]);
+      // Nothing is lost — the full diagnostic still reaches the log.
+      expect(seenOnStderr.join("")).toContain('NUMERAL FROM MODEL ("14.2%")');
+    } finally {
+      console.error = realConsoleError;
+      process.stderr.write = realStderrWrite;
+    }
+  });
+
   it("does the same for OKLO, whose pre-revenue analysis suppresses most of the grid", async () => {
     const runId = await decidedRun("OKLO", "Oklo Inc.");
 

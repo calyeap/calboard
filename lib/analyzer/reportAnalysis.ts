@@ -58,7 +58,17 @@ function messageOf(err: unknown): string {
 function logDiagnostic(err: unknown): void {
   const diagnostic = (err as { diagnostic?: unknown }).diagnostic;
   if (typeof diagnostic === "string" && diagnostic !== "") {
-    console.error(`[analyzer] AI layer refused — ${diagnostic}`);
+    // Written to the stream DIRECTLY rather than through console.error, and
+    // that is the whole point of the line (ruled). Next's development overlay
+    // hooks console.error, so a refusal — which is designed behaviour, the
+    // control doing exactly its job — came up as a red crash screen. Correct
+    // operation then looks identical to a defect, and the acceptance run it
+    // interrupted could not be read at all.
+    //
+    // Nothing is lost: the full diagnostic goes to the log unchanged, and the
+    // report still says the AI layer refused and why (AiLayerNote, Section I).
+    // Only the channel is different.
+    process.stderr.write(`[analyzer] AI layer refused — ${diagnostic}\n`);
   }
 }
 

@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 import { formatFactValue, formatUsd } from "../factDisplay";
 import { factUnit } from "../acquisition/factUnit";
-import type { AnalysisResult, FactRecord, Figure } from "../types";
+import type { AnalysisResult, FactRecord, Figure, SuppressingState } from "../types";
 import type { FigureSlot, SlotCatalogue } from "./traceability";
 
 // ---------------------------------------------------------------------------
@@ -129,9 +129,21 @@ function addFacts(b: CatalogueBuilder, facts: readonly FactRecord[]): void {
  * it. This builds up from the fact set instead, so a new valuation output
  * cannot appear here by omission.
  */
-export function buildFactSlotCatalogue(facts: readonly FactRecord[]): SlotCatalogue {
+export function buildFactSlotCatalogue(
+  facts: readonly FactRecord[],
+  // §8.5.1 gives the challenger "gate results and active states, so it does
+  // not challenge a suppressed output". Naming one is therefore correct
+  // behaviour, and a state name carries no company figure — so the states this
+  // payload actually told it about belong in the catalogue, on exactly the
+  // reasoning traceability.ts's `withoutSystemVocabulary` sets out. Empty by
+  // default, so a caller that supplies none exempts nothing.
+  activeSuppressingStates: readonly SuppressingState[] = []
+): SlotCatalogue {
   const b = new CatalogueBuilder();
   addFacts(b, facts);
+  for (const state of new Set(activeSuppressingStates)) {
+    b.add(`states.${state}`, "an active suppressing state on this run", state, true, state);
+  }
   return b.build();
 }
 

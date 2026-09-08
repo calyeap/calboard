@@ -72,6 +72,29 @@ describe("runChallenger", () => {
     expect(sent).toContain(someFactId);
   });
 
+  it("lets a finding name a state the payload told it about, digits and all", async () => {
+    // §8.5.1 gives the challenger "gate results and active states, so it does
+    // not challenge a suppressed output" — so naming one is the correct
+    // behaviour, and the version token in it is system vocabulary, not a
+    // figure the challenger wrote.
+    const withState = {
+      ...payload,
+      activeStates: {
+        ...payload.activeStates,
+        suppressing: [
+          { state: "LEVERAGE UNSUPPORTED IN v1" as const, appliesTo: "every rate-dependent output" },
+        ],
+      },
+    };
+    const call = fakeCall(
+      findings([{ evidence: "The rate-dependent outputs are held at LEVERAGE UNSUPPORTED IN v1." }])
+    );
+
+    const result = await runChallenger(withState, call);
+
+    expect(result.findings[0].evidence).toContain("LEVERAGE UNSUPPORTED IN v1");
+  });
+
   // --- the negative tests -------------------------------------------------
 
   it("REFUSES to call at all when the payload carries a valuation output", async () => {

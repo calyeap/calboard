@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
 import { assembleAnalysisResult } from "../assemble";
 import { formatUsd } from "../factDisplay";
+import { ALL_SUPPRESSING_STATES } from "../stateCatalogue";
 import { MSFT_FIXTURE } from "../fixtures/msft";
 import { OKLO_FIXTURE } from "../fixtures/oklo";
 import { buildSlotCatalogue, buildFactSlotCatalogue } from "./slots";
@@ -56,6 +57,26 @@ describe("buildSlotCatalogue", () => {
     );
     // A per-share figure keeps its cents — it is read against a quote.
     expect(catalogue.get("price")?.formatted).toBe(`$${msft.price.value.toFixed(2)}`);
+  });
+
+  it("exempts only the frozen state vocabulary from the figure scan — never a company figure", () => {
+    // This is what keeps traceability's scope narrowing from being a permit
+    // list. The guard removes the formatted value of every SUPPRESSED slot
+    // before scanning, so that set must contain nothing but state names: if a
+    // suppressed slot could ever carry a company figure, exempting it would
+    // hand the model a way to write one.
+    //
+    // ALL_SUPPRESSING_STATES is checked against the SuppressingState union in
+    // both directions at compile time, so a new exempt string cannot appear
+    // without a state being added to the analyzer's own vocabulary.
+    for (const result of [msft, oklo]) {
+      const exempt = [...buildSlotCatalogue(result).values()].filter((s) => s.suppressed);
+
+      expect(exempt.length).toBeGreaterThan(0);
+      for (const slot of exempt) {
+        expect(ALL_SUPPRESSING_STATES as readonly string[]).toContain(slot.formatted);
+      }
+    }
   });
 
   it("never puts an unrounded figure into a computed money slot either", () => {

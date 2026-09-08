@@ -83,6 +83,60 @@ describe("traceText", () => {
     ]);
   });
 
+  // --- system-owned vocabulary is not authored text -----------------------
+  //
+  // A live MSFT run refused on NUMERAL FROM MODEL ("1"): the prose said
+  // LEVERAGE UNSUPPORTED IN v1, and the guard read the version token as a
+  // figure the model had written.
+  //
+  // The fix narrows WHAT IS SCANNED rather than permitting anything. A state
+  // name is not authored — it is a token out of a closed vocabulary the system
+  // owns, and this run's own catalogue is where the guard learns which ones
+  // exist. That is the slot design applied to states: the only text exempt
+  // from the scan is text the system itself would have substituted.
+
+  function withState(state: string): SlotCatalogue {
+    return catalogueOf(slot("price", "$499.70"), slot("priceImplied.steadyStateEv", state, { suppressed: true }));
+  }
+
+  it("does not read a state name's version token as a figure the model wrote", () => {
+    const catalogue = withState("LEVERAGE UNSUPPORTED IN v1");
+
+    expect(traceText("Every rate-dependent output reads LEVERAGE UNSUPPORTED IN v1.", catalogue)).toEqual([]);
+  });
+
+  it("STILL refuses a genuine numeral written beside a state name", () => {
+    // The exact case a scope change could open: exempting the state must not
+    // exempt its neighbours.
+    const catalogue = withState("LEVERAGE UNSUPPORTED IN v1");
+
+    const defects = traceText(
+      "Every rate-dependent output reads LEVERAGE UNSUPPORTED IN v1, though growth of 14% is implied.",
+      catalogue
+    );
+
+    expect(defects).toMatchObject([{ kind: "NUMERAL FROM MODEL", detail: "14%" }]);
+  });
+
+  it("exempts nothing on a run whose catalogue does not carry that state", () => {
+    // The exemption is derived from THIS run's Analysis Result, not from a
+    // list of strings the guard permits. A state this run never produced is
+    // not system-owned vocabulary here, and its digits are refused.
+    const catalogue = catalogueOf(slot("price", "$499.70"));
+
+    expect(traceText("Everything reads LEVERAGE UNSUPPORTED IN v1.", catalogue)).toMatchObject([
+      { kind: "NUMERAL FROM MODEL", detail: "1" },
+    ]);
+  });
+
+  it("refuses a numeral the model appended to a state name it did carry", () => {
+    const catalogue = withState("LEVERAGE UNSUPPORTED IN v1");
+
+    expect(traceText("It reads LEVERAGE UNSUPPORTED IN v12.", catalogue)).toMatchObject([
+      { kind: "NUMERAL FROM MODEL", detail: "2" },
+    ]);
+  });
+
   it("leaves ordinary counting words alone — they are prose, not figures", () => {
     const catalogue = catalogueOf(slot("price", "$499.70"));
 
