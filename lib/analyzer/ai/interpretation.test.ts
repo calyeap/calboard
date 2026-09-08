@@ -3,6 +3,7 @@ import { assembleAnalysisResult } from "../assemble";
 import { MSFT_FIXTURE } from "../fixtures/msft";
 import type { AnalystCall, AnalystCallRequest } from "./analystCall";
 import { runInterpretation, INTERPRETATION_RESPONSIBILITIES } from "./interpretation";
+import { INTERPRETATION_RESPONSIBILITY_KEYS } from "../types";
 import { UntraceableFigureError } from "./traceability";
 import { ProhibitedCopyError } from "./prohibitions";
 
@@ -31,10 +32,12 @@ function fakeCall(response: unknown, seen?: AnalystCallRequest[]): AnalystCall {
  */
 function statementsOf(texts: string[]): unknown {
   return {
-    statements: INTERPRETATION_RESPONSIBILITIES.map((responsibility, i) => ({
-      responsibility,
-      text: texts[i] ?? "Nothing further on this responsibility for this run.",
-    })),
+    statements: Object.fromEntries(
+      INTERPRETATION_RESPONSIBILITY_KEYS.map((key, i) => [
+        key,
+        texts[i] ?? "Nothing further on this responsibility for this run.",
+      ])
+    ),
     pageOne: {
       mainFinding: "The price rests on growth the company has not yet delivered.",
       whatSupportsTheCase: "Returns on new capital sit above every discount rate in the policy grid.",
@@ -208,41 +211,49 @@ describe("runInterpretation", () => {
     });
   });
 
-  it("REFUSES a second statement against a responsibility already discharged", async () => {
-    // A real OKLO run returned six statements, the last a restatement of the
-    // fifth "for the reader who wants one line". §8.2 is a table of five
-    // responsibilities, and the dispatch says to build to that table: a
-    // sixth entry is padding, and padding on a page that must not carry a
-    // verdict is where one arrives sounding like a summary.
-    const call = fakeCall({
-      statements: [
-        ...INTERPRETATION_RESPONSIBILITIES.map((responsibility) => ({ responsibility, text: "Clean." })),
-        { responsibility: INTERPRETATION_RESPONSIBILITIES[4], text: "Restated plainly." },
-      ],
-      pageOne: (statementsOf([]) as { pageOne: unknown }).pageOne,
-    });
+  // --- the shape of §8.2's table ------------------------------------------
+  //
+  // A live OKLO run returned SIX statements, the sixth a restatement of the
+  // fifth "for the reader who wants one line" — which is how a summary, and
+  // then a verdict, arrives on a page that must carry neither. The old array
+  // schema could not forbid it: the API rejects any `minItems` but 0 or 1, so
+  // the contract could only be CHECKED, and a check costs a run every time it
+  // fires.
+  //
+  // The response is now an object with five required keys, so "answered twice"
+  // is not something to refuse — it is something that cannot be expressed. The
+  // tests below cover what remains expressible, and the code that refuses it is
+  // kept even though the schema should stop it first.
 
-    await expect(runInterpretation(msft, call)).rejects.toThrow(/once/i);
+  it("cannot represent a responsibility answered twice — parsing collapses the key", () => {
+    // Through JSON.parse, because that is how a response actually arrives.
+    // TypeScript will not even compile a literal with a repeated key, which is
+    // the same fact one layer earlier.
+    const twice = JSON.parse(
+      '{"growthPathAgainstBaseRatesAndHistory":"First answer.","growthPathAgainstBaseRatesAndHistory":"Restated plainly."}'
+    ) as Record<string, string>;
+
+    expect(Object.keys(twice)).toEqual(["growthPathAgainstBaseRatesAndHistory"]);
+    expect(INTERPRETATION_RESPONSIBILITY_KEYS).toHaveLength(INTERPRETATION_RESPONSIBILITIES.length);
+  });
+
+  it("keeps the §8.2 table's own order, so Section I cannot silently reorder it", async () => {
+    const interpretation = await runInterpretation(msft, fakeCall(statementsOf([])));
+
+    expect(interpretation.statements.map((s) => s.responsibility)).toEqual([...INTERPRETATION_RESPONSIBILITIES]);
   });
 
   it("REFUSES a set that leaves one of §8.2's five undischarged", async () => {
-    const call = fakeCall({
-      statements: INTERPRETATION_RESPONSIBILITIES.slice(0, 4).map((responsibility) => ({
-        responsibility,
-        text: "Clean.",
-      })),
-      pageOne: (statementsOf([]) as { pageOne: unknown }).pageOne,
-    });
+    const partial = statementsOf([]) as { statements: Record<string, string> };
+    delete partial.statements[INTERPRETATION_RESPONSIBILITY_KEYS[3]];
 
-    await expect(runInterpretation(msft, call)).rejects.toThrow(/five/i);
+    await expect(runInterpretation(msft, fakeCall(partial))).rejects.toThrow(/went unanswered/i);
   });
 
-  it("REFUSES a responsibility outside §8.2's five", async () => {
-    const call = fakeCall({
-      statements: [{ responsibility: "OVERALL VERDICT", text: "Nothing numeric." }],
-      pageOne: (statementsOf([]) as { pageOne: unknown }).pageOne,
-    });
+  it("REFUSES a key outside §8.2's five, even though the schema should have stopped it", async () => {
+    const extra = statementsOf([]) as { statements: Record<string, string> };
+    extra.statements.overallVerdict = "Nothing numeric.";
 
-    await expect(runInterpretation(msft, call)).rejects.toThrow(/OVERALL VERDICT/);
+    await expect(runInterpretation(msft, fakeCall(extra))).rejects.toThrow(/overallVerdict/);
   });
 });

@@ -3,7 +3,7 @@ import { assembleAnalysisResult } from "../assemble";
 import { MSFT_FIXTURE } from "../fixtures/msft";
 import type { AnalystCall, AnalystCallRequest } from "./analystCall";
 import { runAiLayer, mergeAiLayer, MergeOrderingError } from "./run";
-import { INTERPRETATION_RESPONSIBILITIES } from "../types";
+import { INTERPRETATION_RESPONSIBILITIES, INTERPRETATION_RESPONSIBILITY_KEYS } from "../types";
 
 // §8.5.4 — "The challenger's output is merged into the final report ONLY AFTER
 // the independent call has completed. The merge is assembly, not synthesis —
@@ -21,12 +21,14 @@ function scriptedCall(seen: AnalystCallRequest[]): AnalystCall {
     seen.push(request);
     if (request.label === "interpretation") {
       return {
-        // All five §8.2 responsibilities — Section I is that table, and an
-        // incomplete set is refused.
-        statements: INTERPRETATION_RESPONSIBILITIES.map((responsibility, i) => ({
-          responsibility,
-          text: i === 2 ? INTERPRETATION_TEXT : "Nothing further on this responsibility for this run.",
-        })),
+        // An object with all five §8.2 keys — Section I is that table, and the
+        // schema makes any other shape unrepresentable.
+        statements: Object.fromEntries(
+          INTERPRETATION_RESPONSIBILITY_KEYS.map((key, i) => [
+            key,
+            i === 2 ? INTERPRETATION_TEXT : "Nothing further on this responsibility for this run.",
+          ])
+        ),
         pageOne: {
           mainFinding: INTERPRETATION_TEXT,
           whatSupportsTheCase: "Returns on new capital sit above the policy rates.",

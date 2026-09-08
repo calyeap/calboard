@@ -1,8 +1,8 @@
 import { computeAnalysisForRun } from "./gate";
 import { getAiOutputs, saveAiOutputs } from "./aiOutputStore";
-import { runAiLayer, mergeAiLayer } from "./ai/run";
+import { runAiLayer, mergeAiLayer, type AiLayerOutputs } from "./ai/run";
 import { analystCallIfConfigured, ANALYST_MODEL } from "./ai/anthropicCall";
-import type { AnalystCall } from "./ai/analystCall";
+import { writeAnalystLog, type AnalystCall } from "./ai/analystCall";
 import type { AnalysisResult } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -58,18 +58,70 @@ function messageOf(err: unknown): string {
 function logDiagnostic(err: unknown): void {
   const diagnostic = (err as { diagnostic?: unknown }).diagnostic;
   if (typeof diagnostic === "string" && diagnostic !== "") {
-    // Written to the stream DIRECTLY rather than through console.error, and
-    // that is the whole point of the line (ruled). Next's development overlay
-    // hooks console.error, so a refusal — which is designed behaviour, the
-    // control doing exactly its job — came up as a red crash screen. Correct
-    // operation then looks identical to a defect, and the acceptance run it
-    // interrupted could not be read at all.
+    // Through the AI layer's own channel, which writes to the stream directly
+    // rather than through console.error (ruled). Next's development overlay
+    // hooks console.error, so a refusal — designed behaviour, the control doing
+    // exactly its job — came up as a red crash screen; correct operation was
+    // then indistinguishable from a defect.
     //
-    // Nothing is lost: the full diagnostic goes to the log unchanged, and the
-    // report still says the AI layer refused and why (AiLayerNote, Section I).
-    // Only the channel is different.
-    process.stderr.write(`[analyzer] AI layer refused — ${diagnostic}\n`);
+    // This line is the FINAL failure, after the one regeneration also failed.
+    // The near miss that a regeneration recovers is logged by
+    // callWithOneRegeneration, so the log now carries both.
+    writeAnalystLog(`AI layer refused after regenerating — ${diagnostic}`);
   }
+}
+
+/**
+ * Generations currently running, keyed by run.
+ *
+ * AN IN-FLIGHT REGISTRY, NOT A CACHE, and the distinction is ruled rather than
+ * stylistic. An entry lives only while its generation is running and is deleted
+ * the moment the promise settles, whichever way it settles. Nothing completed
+ * is held here, so nothing outlives the request that produced it — which is the
+ * line R7 draws: the run lives at its URL, there is no index, and a cache of
+ * completed analyses is a step toward Saved Analysis and Research Memory
+ * (§13.1), neither of which is v1's to build.
+ *
+ * What it fixes: a report takes the better part of a minute, so a reader
+ * refreshes, and every refresh used to start its own generation. Three
+ * overlapping requests meant six model calls, three generations, one stored row
+ * — the last write silently winning — and nothing anywhere recording that it
+ * had happened.
+ *
+ * SCOPE, stated because it is a real limit: this is per process. Two Node
+ * instances behind a load balancer would each hold their own registry and could
+ * each start a generation. Calboard is single-user and local (§1.5), so the
+ * process is the boundary; a database-level guard would be the answer if that
+ * ever stops being true, and that is a different decision.
+ */
+const generationsInFlight = new Map<string, Promise<AiLayerOutputs>>();
+
+function generateOnce(
+  runId: string,
+  result: AnalysisResult,
+  call: AnalystCall
+): Promise<AiLayerOutputs> {
+  const running = generationsInFlight.get(runId);
+  if (running !== undefined) return running;
+
+  const started = (async () => {
+    const outputs = await runAiLayer(result, call);
+    await saveAiOutputs(runId, ANALYST_MODEL, outputs);
+    return outputs;
+  })();
+
+  generationsInFlight.set(runId, started);
+
+  // Removed on settle, success or failure. A failure must not latch: the next
+  // request should be free to try again rather than inherit a dead entry.
+  // Registered with both handlers so a rejection is never unhandled here — the
+  // caller's own `await` is what reports it.
+  const forget = (): void => {
+    if (generationsInFlight.get(runId) === started) generationsInFlight.delete(runId);
+  };
+  void started.then(forget, forget);
+
+  return started;
 }
 
 /**
@@ -110,8 +162,7 @@ export async function analysisForReport(
   }
 
   try {
-    const outputs = await runAiLayer(result, call);
-    await saveAiOutputs(runId, ANALYST_MODEL, outputs);
+    const outputs = await generateOnce(runId, result, call);
     return {
       result: mergeAiLayer(result, outputs),
       aiLayer: { status: "COMPLETED", model: ANALYST_MODEL, detail: null },

@@ -1,6 +1,8 @@
 import Decimal from "decimal.js";
 import {
   INTERPRETATION_RESPONSIBILITIES,
+  INTERPRETATION_RESPONSIBILITY_BY_KEY,
+  INTERPRETATION_RESPONSIBILITY_KEYS,
   type AnalysisResult,
   type InterpretationResponsibility,
   type InterpretationResult,
@@ -78,23 +80,29 @@ const RESPONSE_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
   required: ["statements", "pageOne"],
   properties: {
+    // AN OBJECT WITH FIVE REQUIRED KEYS, not an array of five entries (ruled).
+    //
+    // The array version asked for statements and then CHECKED that each
+    // responsibility appeared exactly once. That is detection, and it costs a
+    // run every time it fires — a live OKLO run returned six, the sixth a
+    // restatement of the fifth, and the whole output was refused. The array
+    // could not carry the constraint either: the API rejects any `minItems`
+    // other than 0 or 1, so the schema had no way to say "exactly five".
+    //
+    // An object can. A key cannot appear twice, and `additionalProperties:
+    // false` with all five required makes a missing or extra one a schema
+    // violation before the response is parsed. The wrong shape is now
+    // unrepresentable rather than refused — the same move as the slot design.
     statements: {
-      type: "array",
-      // NOT minItems: 5. Structured outputs reject any minItems other than 0
-      // or 1 — "For 'array' type, 'minItems' values other than 0 or 1 are not
-      // supported" — and the whole request 400s, which costs the report both
-      // calls. The "exactly five, one per responsibility" rule is stated in
-      // the prompt and ENFORCED in code below; the schema cannot carry it.
-      minItems: 1,
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["responsibility", "text"],
-        properties: {
-          responsibility: { type: "string", enum: [...INTERPRETATION_RESPONSIBILITIES] },
-          text: { type: "string" },
-        },
-      },
+      type: "object",
+      additionalProperties: false,
+      required: [...INTERPRETATION_RESPONSIBILITY_KEYS],
+      properties: Object.fromEntries(
+        INTERPRETATION_RESPONSIBILITY_KEYS.map((key) => [
+          key,
+          { type: "string", description: INTERPRETATION_RESPONSIBILITY_BY_KEY[key] },
+        ])
+      ),
     },
     pageOne: {
       type: "object",
@@ -181,17 +189,21 @@ ${catalogueBlock(catalogue)}
 
 WHAT TO WRITE
 
-EXACTLY FIVE STATEMENTS — one for each responsibility below, in this order, and
-no others. Not four, not six. Do not add a summary, a restatement, an overall
-reading, or a line "for the reader in a hurry": Section I is this table, and a
-sixth entry is where a verdict arrives wearing the clothes of a summary. An
-answer with a responsibility repeated, or one missing, is refused in full.
+The statements object has exactly these five keys — one per §8.2
+responsibility. There is no sixth: Section I is this table, and an extra entry
+is where a verdict arrives wearing the clothes of a summary. Do not add an
+overall reading or a line "for the reader in a hurry".
 
 Where a responsibility has nothing to say on this run because its inputs are
 suppressed, say that, name the state by referencing its slot, and stop. That is
 a complete answer to that responsibility.
 
-${INTERPRETATION_RESPONSIBILITIES.map((r) => `  ${r}\n    ${RESPONSIBILITY_BRIEF[r]}`).join("\n")}
+${INTERPRETATION_RESPONSIBILITY_KEYS.map(
+  (key) =>
+    `  ${key}\n    ${INTERPRETATION_RESPONSIBILITY_BY_KEY[key]} — ${
+      RESPONSIBILITY_BRIEF[INTERPRETATION_RESPONSIBILITY_BY_KEY[key]]
+    }`
+).join("\n")}
 
 Then page one's four sentences. These are read first and quoted most, so they
 carry the same limits and no latitude at all:
@@ -224,20 +236,21 @@ function toStatement(
   };
 }
 
-interface RawStatement {
-  responsibility: string;
-  text: string;
-}
-
 interface RawResponse {
-  statements: RawStatement[];
+  statements: Record<string, string>;
   pageOne: Record<string, string>;
 }
 
 function readResponse(raw: unknown): RawResponse {
   const value = raw as Partial<RawResponse> | null;
-  if (value === null || typeof value !== "object" || !Array.isArray(value.statements)) {
-    throw new MalformedAnalystResponseError("interpretation", "no statements array");
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    value.statements === undefined ||
+    typeof value.statements !== "object" ||
+    Array.isArray(value.statements)
+  ) {
+    throw new MalformedAnalystResponseError("interpretation", "no statements object");
   }
   if (value.pageOne === undefined || typeof value.pageOne !== "object" || value.pageOne === null) {
     throw new MalformedAnalystResponseError("interpretation", "no pageOne object");
@@ -271,32 +284,39 @@ function interpretResponse(raw: unknown, catalogue: SlotCatalogue): Interpretati
   // returned six, the last a restatement of the fifth "for the reader who
   // wants one line" — which is how a summary, and then a verdict, arrives on a
   // page that must carry neither.
-  const seen = new Set<string>();
-  for (const s of response.statements) {
-    if (!(INTERPRETATION_RESPONSIBILITIES as readonly string[]).includes(s.responsibility)) {
+  // KEPT, though the schema should now make this unreachable (ruled). A control
+  // is not removed because a better one exists upstream: if the API ever
+  // accepts a shape `additionalProperties: false` and `required` should have
+  // stopped, this is what stands between that and the page.
+  //
+  // "Answered twice" is gone as a CHECK because it is gone as a POSSIBILITY —
+  // an object cannot hold one key twice. That is the difference the ruling was
+  // about, and it is why this block is shorter than the one it replaces.
+  for (const key of Object.keys(response.statements)) {
+    if (!(INTERPRETATION_RESPONSIBILITY_KEYS as readonly string[]).includes(key)) {
       throw new MalformedAnalystResponseError(
         "interpretation",
-        `"${s.responsibility}" is not one of §8.2's five responsibilities`
+        `"${key}" is not one of §8.2's five responsibilities`
       );
     }
-    if (seen.has(s.responsibility)) {
-      throw new MalformedAnalystResponseError(
-        "interpretation",
-        `§8.2 gives each responsibility once; "${s.responsibility}" was answered twice`
-      );
-    }
-    seen.add(s.responsibility);
-  }
-  if (seen.size !== INTERPRETATION_RESPONSIBILITIES.length) {
-    const missing = INTERPRETATION_RESPONSIBILITIES.filter((r) => !seen.has(r));
-    throw new MalformedAnalystResponseError(
-      "interpretation",
-      `§8.2 has five responsibilities and ${missing.length} went unanswered: ${missing.join(", ")}`
-    );
   }
 
-  const statements = response.statements.map((s, i) => {
-    return toStatement(`interpretation statement ${i + 1}`, s.responsibility as InterpretationResponsibility, s.text, catalogue);
+  // Built in the table's own order, so Section I renders §8.2 as §8.2 has it
+  // rather than in whatever order the response happened to arrive.
+  const statements = INTERPRETATION_RESPONSIBILITY_KEYS.map((key, i) => {
+    const text = response.statements[key];
+    if (typeof text !== "string") {
+      throw new MalformedAnalystResponseError(
+        "interpretation",
+        `§8.2's "${INTERPRETATION_RESPONSIBILITY_BY_KEY[key]}" went unanswered`
+      );
+    }
+    return toStatement(
+      `interpretation statement ${i + 1}`,
+      INTERPRETATION_RESPONSIBILITY_BY_KEY[key],
+      text,
+      catalogue
+    );
   });
 
   // Page one's four sentences carry the §8.2 responsibility they discharge so

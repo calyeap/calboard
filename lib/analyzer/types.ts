@@ -664,6 +664,47 @@ export const INTERPRETATION_RESPONSIBILITIES = [
 
 export type InterpretationResponsibility = (typeof INTERPRETATION_RESPONSIBILITIES)[number];
 
+// The §8.2 table as a SHAPE rather than a list, so the interpretation call's
+// response schema can make a wrong one unrepresentable: five named keys,
+// additionalProperties false, all five required.
+//
+// Why this exists at all. The first version asked for an array of statements
+// and CHECKED that it held each responsibility exactly once. A live OKLO run
+// returned six — the sixth a restatement of the fifth — and the check did its
+// job, which is to say it refused the whole output and cost the run. Detection
+// is not prevention. The array could not carry the constraint either: the API
+// rejects any `minItems` other than 0 or 1, so the schema had no way to say
+// "exactly five". An object can: a key cannot appear twice, and a missing one
+// is a schema violation before the response is ever parsed.
+//
+// Written in §8.2's own order, and `interpretation.test.ts` asserts that
+// mapping these keys through the table reproduces INTERPRETATION_RESPONSIBILITIES
+// exactly, order included — so Section I cannot silently reorder the table.
+export const INTERPRETATION_RESPONSIBILITY_BY_KEY = {
+  growthPathAgainstBaseRatesAndHistory: "GROWTH PATH AGAINST BASE RATES AND HISTORY",
+  modelFragility: "MODEL FRAGILITY",
+  priceImpliedDiagnostics: "PRICE-IMPLIED DIAGNOSTICS",
+  scenarioConstruction: "SCENARIO CONSTRUCTION",
+  assumptionPlausibilityAndWhatThePriceRequires: "ASSUMPTION PLAUSIBILITY AND WHAT THE PRICE REQUIRES",
+} as const satisfies Record<string, InterpretationResponsibility>;
+
+export type InterpretationResponsibilityKey = keyof typeof INTERPRETATION_RESPONSIBILITY_BY_KEY;
+
+export const INTERPRETATION_RESPONSIBILITY_KEYS = Object.keys(
+  INTERPRETATION_RESPONSIBILITY_BY_KEY
+) as InterpretationResponsibilityKey[];
+
+// Tuple-wrapped to defeat conditional-type distribution, exactly as
+// stateCatalogue.ts does for the suppressing states. If a responsibility is
+// added to the table without a key, or a key maps to something that is not a
+// responsibility, this assignment stops compiling.
+type IsExactUnion<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const _everyResponsibilityHasAKey: IsExactUnion<
+  InterpretationResponsibility,
+  (typeof INTERPRETATION_RESPONSIBILITY_BY_KEY)[InterpretationResponsibilityKey]
+> = true;
+export { _everyResponsibilityHasAKey as __interpretationKeyMapContractCheck };
+
 export interface InterpretationStatement {
   // Which §8.2 responsibility this statement discharges.
   responsibility: InterpretationResponsibility;

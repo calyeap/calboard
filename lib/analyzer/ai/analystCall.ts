@@ -57,6 +57,19 @@ function diagnosticOf(err: unknown): string | null {
 }
 
 /**
+ * The analyzer's log channel for the AI layer.
+ *
+ * Written to the stream directly rather than through console.error: Next's
+ * development overlay hooks that, and these lines are all designed behaviour —
+ * rendering them as a crash makes a working control indistinguishable from a
+ * defect. Exported so reportAnalysis writes its own failure line the same way;
+ * one place owns the channel.
+ */
+export function writeAnalystLog(line: string): void {
+  process.stderr.write(`[analyzer] ${line}\n`);
+}
+
+/**
  * Calls once; on a refusal, tells the model exactly what failed and calls once
  * more. Two attempts, then the refusal stands.
  *
@@ -84,6 +97,14 @@ export async function callWithOneRegeneration<T>(
     const diagnostic = diagnosticOf(err);
     if (diagnostic === null) throw err;
 
+    // A refusal the regeneration RECOVERS used to leave no trace at all: the
+    // only log line fired when both attempts failed. So the near misses were
+    // invisible, and nobody could say how often a check was firing — which is
+    // exactly why the recurrence question could not be answered from history.
+    // A control that reports its total failures and stays silent about its near
+    // misses cannot tell you it is degrading.
+    writeAnalystLog(`${request.label} refused, regenerating — ${diagnostic}`);
+
     const corrected: AnalystCallRequest = {
       ...request,
       user:
@@ -93,6 +114,8 @@ export async function callWithOneRegeneration<T>(
         `see it and it no longer exists. Every figure must be a slot reference from the catalogue above, and ` +
         `no digit may appear anywhere outside one.`,
     };
-    return interpret(await call(corrected));
+    const recovered = interpret(await call(corrected));
+    writeAnalystLog(`${request.label} regeneration recovered — the second attempt passed every check`);
+    return recovered;
   }
 }

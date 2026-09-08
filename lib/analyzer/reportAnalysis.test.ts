@@ -3,7 +3,7 @@ import { getPool } from "./../db";
 import { createRun, recordFactDecision } from "./runStore";
 import { loadGateState } from "./gate";
 import { analysisForReport } from "./reportAnalysis";
-import { INTERPRETATION_RESPONSIBILITIES } from "./types";
+import { INTERPRETATION_RESPONSIBILITIES, INTERPRETATION_RESPONSIBILITY_KEYS } from "./types";
 import type { AnalystCall, AnalystCallRequest } from "./ai/analystCall";
 
 // The AI layer as the report sees it. §8.1 draws the boundary this file
@@ -18,10 +18,12 @@ function scriptedCall(seen: AnalystCallRequest[] = []): AnalystCall {
     seen.push(request);
     if (request.label === "interpretation") {
       return {
-        statements: INTERPRETATION_RESPONSIBILITIES.map((responsibility, i) => ({
-          responsibility,
-          text: i === 2 ? STATEMENT : "Nothing further on this responsibility for this run.",
-        })),
+        statements: Object.fromEntries(
+          INTERPRETATION_RESPONSIBILITY_KEYS.map((key, i) => [
+            key,
+            i === 2 ? STATEMENT : "Nothing further on this responsibility for this run.",
+          ])
+        ),
         pageOne: {
           mainFinding: STATEMENT,
           whatSupportsTheCase: "Returns on new capital sit above the policy rates.",
@@ -110,10 +112,9 @@ describe("analysisForReport", () => {
     const untraceable: AnalystCall = async (request) => {
       if (request.label === "interpretation") {
         return {
-          statements: INTERPRETATION_RESPONSIBILITIES.map((responsibility, i) => ({
-            responsibility,
-            text: i === 2 ? "Growth of 14.2% is implied." : "Clean.",
-          })),
+          statements: Object.fromEntries(
+            INTERPRETATION_RESPONSIBILITY_KEYS.map((key, i) => [key, i === 2 ? "Growth of 14.2% is implied." : "Clean."])
+          ),
           pageOne: {
             mainFinding: "x",
             whatSupportsTheCase: "y",
@@ -164,6 +165,93 @@ describe("analysisForReport", () => {
       console.error = realConsoleError;
       process.stderr.write = realStderrWrite;
     }
+  });
+
+  describe("a generation already in flight", () => {
+    /** Counts model calls and takes long enough for requests to overlap. */
+    function slowCountingCall(counter: { calls: number }): AnalystCall {
+      return async (request) => {
+        counter.calls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return request.label === "interpretation"
+          ? {
+              statements: Object.fromEntries(
+                INTERPRETATION_RESPONSIBILITY_KEYS.map((key) => [key, "Nothing further on this responsibility."])
+              ),
+              pageOne: {
+                mainFinding: "A.",
+                whatSupportsTheCase: "B.",
+                whatWorriesCalboard: "C.",
+                biggestUncertainty: "D.",
+              },
+            }
+          : { findings: [] };
+      };
+    }
+
+    it("serves three overlapping requests from ONE generation, not three", async () => {
+      // A page that looks stuck for the best part of a minute is a page people
+      // refresh, and every refresh used to start its own generation: three
+      // requests, six model calls, one row, and nothing anywhere saying it had
+      // happened. The last write silently won.
+      const runId = await decidedRun("MSFT", "Microsoft Corporation");
+      const counter = { calls: 0 };
+      const call = slowCountingCall(counter);
+
+      const reports = await Promise.all([
+        analysisForReport(runId, call),
+        analysisForReport(runId, call),
+        analysisForReport(runId, call),
+      ]);
+
+      expect(counter.calls).toBe(2); // one interpretation, one challenger
+      for (const report of reports) {
+        expect(report.aiLayer.status).toBe("COMPLETED");
+        expect(report.result.challenger).not.toBeNull();
+      }
+    });
+
+    it("gives every waiting request the same prose, so a refresh does not change the words", async () => {
+      const runId = await decidedRun("MSFT", "Microsoft Corporation");
+      const call = slowCountingCall({ calls: 0 });
+
+      const [first, second] = await Promise.all([
+        analysisForReport(runId, call),
+        analysisForReport(runId, call),
+      ]);
+
+      expect(second.result.interpretation).toEqual(first.result.interpretation);
+      expect(second.result.challenger).toEqual(first.result.challenger);
+    });
+
+    it("starts a fresh generation once the first has finished — the guard is in-flight only, not a cache", async () => {
+      const runId = await decidedRun("MSFT", "Microsoft Corporation");
+      const counter = { calls: 0 };
+
+      await analysisForReport(runId, slowCountingCall(counter));
+      // Second request arrives after the first completed. It reads the run's
+      // stored outputs (migration 003) rather than the guard, and calls nothing.
+      await analysisForReport(runId, slowCountingCall(counter));
+
+      expect(counter.calls).toBe(2);
+    });
+
+    it("lets the next request try again after a failed generation, rather than latching the failure", async () => {
+      const runId = await decidedRun("MSFT", "Microsoft Corporation");
+      let attempts = 0;
+      const failing: AnalystCall = async () => {
+        attempts += 1;
+        throw new Error("the model was unreachable");
+      };
+
+      const first = await analysisForReport(runId, failing);
+      const second = await analysisForReport(runId, failing);
+
+      expect(first.aiLayer.status).toBe("FAILED");
+      expect(second.aiLayer.status).toBe("FAILED");
+      // Both requests reached the model; nothing is stuck holding a dead entry.
+      expect(attempts).toBeGreaterThan(2);
+    });
   });
 
   it("does the same for OKLO, whose pre-revenue analysis suppresses most of the grid", async () => {
