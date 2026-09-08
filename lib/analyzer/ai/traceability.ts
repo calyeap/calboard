@@ -132,6 +132,20 @@ export function traceText(text: string, catalogue: SlotCatalogue): TraceDefect[]
 }
 
 /**
+ * The slot ids a piece of copy cites, in citation order, each once.
+ *
+ * Read through the SAME pattern the validator and the renderer use, and not by
+ * searching for a literal "{{id}}". The three must agree: a reference the
+ * renderer substitutes but this list omits would leave a figure on the page
+ * with no recorded field behind it, which is §10.0.1's "each statement
+ * referencing the values it rests on" quietly incomplete — and it is exactly
+ * the kind of gap that looks like nothing until someone audits a sentence.
+ */
+export function slotIdsIn(text: string): string[] {
+  return [...new Set([...text.matchAll(SLOT_REFERENCE)].map((m) => m[1]))];
+}
+
+/**
  * Substitutes each slot reference with the figure [S] computed for it.
  *
  * Throws rather than rendering an unresolved reference. §10.7's consequence

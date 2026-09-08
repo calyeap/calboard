@@ -57,6 +57,15 @@ describe("runInterpretation", () => {
     expect(interpretation.statements[0].referencesValueIds.sort()).toEqual([CLEAN_CAGR_SLOT, "price"].sort());
   });
 
+  it("records a reference written with inner spaces, which the renderer substitutes either way", async () => {
+    const call = fakeCall(statementsOf(["Today's price is {{ price }}."]));
+
+    const interpretation = await runInterpretation(msft, call);
+
+    expect(interpretation.statements[0].referencesValueIds).toEqual(["price"]);
+    expect(interpretation.statements[0].statement).toContain(msft.price.value.toFixed(2));
+  });
+
   it("gives [C] the catalogue of referenceable figures, so it chooses from this run rather than from memory", async () => {
     const seen: AnalystCallRequest[] = [];
     await runInterpretation(msft, fakeCall(statementsOf(["Nothing numeric here."]), seen));

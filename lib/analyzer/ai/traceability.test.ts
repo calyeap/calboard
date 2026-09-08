@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { traceText, renderText, type SlotCatalogue, type FigureSlot } from "./traceability";
+import { traceText, renderText, slotIdsIn, type SlotCatalogue, type FigureSlot } from "./traceability";
 
 // §8.3 limit 3 — "Any figure in [C] output that is not traceable to the
 // acquired fact set is a defect" — and §10.7 rule 3 — "[A [C] call] may
@@ -70,6 +70,24 @@ describe("traceText", () => {
 
     expect(defects).toHaveLength(2);
     expect(defects.map((d) => d.kind).sort()).toEqual(["NUMERAL FROM MODEL", "UNKNOWN SLOT"]);
+  });
+});
+
+describe("slotIdsIn", () => {
+  it("lists the slots a sentence cites, in the order it cites them", () => {
+    expect(slotIdsIn("At {{price}} the price implies {{cagr}}.")).toEqual(["price", "cagr"]);
+  });
+
+  it("reads a reference written with inner spaces, exactly as the validator and the renderer do", () => {
+    // The three must agree. A reference the renderer substitutes but the
+    // provenance list omits would leave a figure on the page with no recorded
+    // field behind it — §10.0.1's "each statement referencing the values it
+    // rests on", quietly incomplete.
+    expect(slotIdsIn("At {{ price }} today.")).toEqual(["price"]);
+  });
+
+  it("lists a repeated slot once", () => {
+    expect(slotIdsIn("{{price}} against {{price}}.")).toEqual(["price"]);
   });
 });
 

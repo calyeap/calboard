@@ -8,7 +8,7 @@ import {
   type PageOneProse,
 } from "../types";
 import { buildSlotCatalogue } from "./slots";
-import { renderText, traceText, UntraceableFigureError, type SlotCatalogue } from "./traceability";
+import { renderText, slotIdsIn, traceText, UntraceableFigureError, type SlotCatalogue } from "./traceability";
 import { scanProhibitedCopy, ProhibitedCopyError } from "./prohibitions";
 import { MalformedAnalystResponseError, type AnalystCall } from "./analystCall";
 
@@ -182,10 +182,6 @@ function validate(where: string, text: string, catalogue: SlotCatalogue): void {
   if (prohibited.length > 0) throw new ProhibitedCopyError(where, prohibited);
 }
 
-function slotsCited(text: string, catalogue: SlotCatalogue): string[] {
-  return [...catalogue.keys()].filter((id) => text.includes(`{{${id}}}`));
-}
-
 function toStatement(
   where: string,
   responsibility: InterpretationResponsibility,
@@ -196,7 +192,7 @@ function toStatement(
   return {
     responsibility,
     statement: renderText(text, catalogue),
-    referencesValueIds: slotsCited(text, catalogue),
+    referencesValueIds: slotIdsIn(text),
   };
 }
 
