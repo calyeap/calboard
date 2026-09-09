@@ -194,15 +194,26 @@ async function main(): Promise<void> {
     await browser.close();
   }
 
-  const results: CheckResult[] = [checkRendered(TARGETS, WIDTHS, captured)];
-  for (const [key, doc] of captured) {
-    const target = key.split("|")[0];
-    results.push(checkOverflow(target, doc));
-    results.push(checkFont(target, doc));
-    results.push(checkConsoleErrors(target, doc));
-    results.push(checkStatesAppeared(target, STATE_MARKERS[target], doc));
-    if (target.endsWith(UNDECIDED_SUFFIX)) {
-      results.push(checkContinueGated(target, doc));
+  const results: CheckResult[] = [];
+  // The capture checks are evaluated only when the drive actually finished.
+  //
+  // After a lost consequential write the run aborted part-way, so the targets
+  // it never reached are missing by construction. Judging them would turn an
+  // incomplete run into a preflight FAIL — a verdict about the application
+  // that this run never measured — and that FAIL would then exit 1, which is
+  // exactly the code §5.5 says a lost write must not borrow. The run is
+  // reported as the UNKNOWN it is, with its required checks unaccounted for.
+  if (lostWrite === null) {
+    results.push(checkRendered(TARGETS, WIDTHS, captured));
+    for (const [key, doc] of captured) {
+      const target = key.split("|")[0];
+      results.push(checkOverflow(target, doc));
+      results.push(checkFont(target, doc));
+      results.push(checkConsoleErrors(target, doc));
+      results.push(checkStatesAppeared(target, STATE_MARKERS[target], doc));
+      if (target.endsWith(UNDECIDED_SUFFIX)) {
+        results.push(checkContinueGated(target, doc));
+      }
     }
   }
   // The gate-phase results, captured above rather than re-run, so the
