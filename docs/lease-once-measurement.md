@@ -210,23 +210,32 @@ an observation about a holding company with almost no filed history.
 
 ## 6. The decision this needs
 
-The question is what `total-debt` is to mean, and it is a mapping-semantics
-decision that moves the EV bridge, net debt and the leverage precondition for
-every company at once — which is why it is not being taken here. Roughly:
+### Ruled, 2026-09-09 — what `total-debt` means
 
-- Does `total-debt` mean interest-bearing debt **excluding** lease obligations,
-  with the nested filers' debt figure adjusted down to match? That is one
-  meaning, applied uniformly, and it changes acquired values for nested filers.
-- Or does it mean the filer's own debt total **as presented**, with the lease
-  term made conditional on what that total already contains? That keeps
-  acquired values and moves the complexity into the consumers.
+**`total-debt` means interest-bearing debt EXCLUDING lease obligations.** This
+is reconciliation rather than a new decision: CalFinance's construction is
+"interest-bearing debt + lease liabilities", and if the debt term already
+contained leases that sum would double-count by its own arithmetic. So the
+nested filers' debt figure is the one that has to move, not the lease term.
 
-Either way the per-filer nesting determination has to come from somewhere, and
-for three of ten companies here it came from a human reading the lease note.
-Whether that is a §4.4-style recorded judgment, a §3.8.1 fallback, or a new
-mapping-level element test is the part I have no authority to choose.
+### Still open — how nesting is determined
 
-Until it is chosen, invested capital cannot be constructed to the ruling as
-written, and the batching argument holds in reverse: the version bump that
-would carry the invested-capital entries is the same bump that would carry
-NVDA's dilution derivation, so neither has been made.
+With CalFinance: **how nesting is established for a filer that tags no combined
+element, and what happens when it cannot be.** Both halves are needed before
+anything is built. Three of the ten companies here could not be settled from
+tags at all — OKLO, RIVN and COST each needed a human to read the lease note —
+and one, XOM, is still unsettled. Whether that determination belongs in a
+§4.4-style recorded judgment, a §3.8.1 fallback, or a new mapping-level element
+test is not decided.
+
+Until it is, invested capital is not constructed, and the batching argument
+holds in reverse: the version bump that would carry the invested-capital
+entries is the same bump that would carry NVDA's dilution derivation, so
+neither has been made.
+
+### The defect is sized separately
+
+The live EV double-count this measurement exposed is quantified in
+[`ev-double-count-sizing.md`](./ev-double-count-sizing.md) — one company of the
+ten affected, by $105M — along with a second defect found while sizing it: the
+bridge combines debt-side inputs struck on different balance sheets.
