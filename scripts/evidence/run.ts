@@ -300,16 +300,22 @@ async function main(): Promise<void> {
   // Packaging got us LOCAL_READY at best. DELIVERED requires that an owner
   // elsewhere can actually retrieve it, and the only acceptable proof of that
   // is fetching the archive back and finding the same bytes.
+  //
+  // The repo slug comes from source.repo (already resolved once by
+  // readSourceIdentity) rather than being re-derived here — CB-G2-EVIDENCE-03
+  // was exactly that kind of duplication: a second, wrong resolution
+  // (REPO_ROOT, a filesystem path) reaching gh's --repo flag where this
+  // slug was required.
   if (delivery.status === "LOCAL_READY") {
-    const capability = await probeRouteCapability();
+    const capability = await probeRouteCapability(source.repo);
     const routeDecision = decideRetrievalRoute(capability);
-    if (routeDecision.route === null || capability.gh === null) {
+    if (routeDecision.route === null || capability.gh === null || capability.repoSlug === null) {
       delivery = promoteToDelivered(delivery, null, routeDecision.gap);
     } else {
       try {
         const proof = await deliverViaGitHubDraftRelease(
           capability.gh,
-          REPO_ROOT,
+          capability.repoSlug,
           zipPath,
           outcomeId
         );
