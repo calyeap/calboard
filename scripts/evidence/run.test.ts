@@ -1,6 +1,6 @@
 // scripts/evidence/run.test.ts
 import { describe, it, expect } from "vitest";
-import { EXIT_RUNNER_ERROR, formatRunnerError } from "./run";
+import { EXIT_RUNNER_ERROR, formatRunnerError } from "./runnerError";
 
 // §main().catch: an unexpected runner crash never produced a verdict, so it
 // must not exit with the code reserved for a completed preflight FAIL (1).
