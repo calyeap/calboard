@@ -296,23 +296,36 @@ reason, but by luck of it also being retired: on a filer that still tags it as a
 component, candidate #3 would win and be wrong. Not addressed in this pass —
 it is a candidate-scoping question, not a staleness one.
 
-### 6.2 The comparator's window is selected by index, not by fiscal year
+### 6.2 The comparator's window was selected by index, not by fiscal year — **FIXED**
 
 Newly visible because NVDA's series is now current and therefore actually read.
 
 NVIDIA tagged FY2019 revenue only under the ASC 606 element, so `us-gaap:Revenues`
 — correctly chosen now, eighteen years long — **has no FY2019 row at all**.
-`achievedRevenueCagr` takes its far endpoint by index
+`achievedRevenueCagr` took its far endpoint by index
 (`observations[length - 1 - horizonYears]`), which equals selection by year only
-on a contiguous series. NVDA's ten-year comparator therefore reports
+on a contiguous series. NVDA's ten-year comparator therefore reported
 **FY2015→FY2026 — eleven fiscal years — under a `horizonYears: 10` label**, and
-compounds eleven years of growth over ten.
+compounded eleven years of growth over ten.
 
-The record still carries the window and the horizon separately, so the
-inconsistency is visible rather than hidden, and a test now asserts it so the
-next reader meets it as a known defect with a measurement. **Not fixed here:**
-it is comparator work, outside an acquisition pass, and the fix is to select the
-endpoint by fiscal year and refuse where that year is absent.
+**Fixed in this branch** (no mapping change, no second version bump — this is
+comparator code, not acquisition). The far endpoint is now `FY(to − horizon)`,
+looked up by fiscal year:
+
+- A gap **inside** the window is tolerated and is not a defect. A CAGR is a
+  function of its two endpoints and nothing between them; §3.7's concern is that
+  the window sit on one accounting basis, which a single-tag series already
+  guarantees.
+- A gap **at** the endpoint blocks, naming the year: *"us-gaap:Revenues carries
+  no FY2015 observation; a 10-year CAGR ending FY2025 needs 11 annual years"*.
+  That is the same §10.6.2 rule as the too-short case with a different cause.
+
+**Effect, measured:** NVDA's ten-year comparator corrects from **46.69%
+(FY2015→FY2026, eleven years) to 45.70% (FY2016→FY2026, ten years)**. MSFT and
+LLY are unchanged. The ten-year count stays 3/10 and the five-year 7/10 — no
+company gained or lost a comparator, one company's figure stopped being wrong.
+The blocked message also improved: it now names the missing fiscal year instead
+of reporting an observation count.
 
 ### 6.3 Staleness the rule cannot reach, now measurable
 
@@ -356,7 +369,7 @@ run.** It will not: zero of ten produce a usable observation, unchanged.
 | **Input A** — price location within the scenario range | 0 / 10 | **0 / 10** |
 | **Input B** — required growth (M7's nine cells) | 0 / 10 | **0 / 10** |
 | **Usable** (both, as §10.6.2 requires) | 0 / 10 | **0 / 10** |
-| achieved comparator, ten-year | 2 / 10 | **3 / 10** |
+| achieved comparator, ten-year | 2 / 10 | **3 / 10** — and NVDA's corrects to 45.70% under §6.2 |
 | achieved comparator, five-year | 6 / 10 | **7 / 10** |
 | counterfactual EV computes (§4.4 resolved) | 2 / 10 | **2 / 10** |
 | mapping gaps reported across the set | 17 | **16** |
@@ -385,13 +398,16 @@ spot-check, both years out of date and neither flagged.
 
 - Eight frozen-artefact SHA-256 hashes verified against the contract before any
   work. All matched. No frozen artefact was read for a fix or modified.
-- Full suite: **1357 passed, 116 files.** Typecheck clean. Build clean.
+- Full suite: **1360 passed, 116 files.** Typecheck clean. Build clean.
 - Negative tests, each watched failing before its fix:
   - a retired-but-first candidate losing to a current one — failed, then passed;
   - the same for an instant entry;
   - the same for `annualSeries`;
   - the added candidate on OKLO — failed with the candidate removed, passed with
     it, while the MSFT "unchanged" test passed in both states.
+- The §6.2 comparator defect this pass exposed was then fixed in the same
+  branch, with its three tests watched failing first. It needed no second
+  version bump: `achievedRevenueCagr` is comparator code and acquires nothing.
 - Three Defect D pins that deliberately recorded the *deferral* of this work were
   updated to record the transition, each with the reason written at the
   assertion. They were the mechanism that made this change conscious rather than

@@ -389,33 +389,27 @@ describe("NVDA — the defect, pinned against a real capture", () => {
     expect(result.value!.staleWindowDisclosure).toBeNull();
   });
 
-  it("shows the ten-year window spanning ELEVEN fiscal years, because the series has a hole at FY2019", () => {
-    // NOT A REGRESSION AND NOT A PASSING GRADE — a defect this pass exposed and
-    // deliberately did not fix. See docs/tag-mapping-version-review.md §6.
+  it("measures its ten-year window FY2016→FY2026 across the real FY2019 hole", () => {
+    // The endpoint case on a real filing rather than a synthetic one.
     //
     // NVIDIA tagged FY2019 revenue only under the ASC 606 element, so
-    // us-gaap:Revenues — correctly chosen now, and eighteen years long — has no
-    // FY2019 row at all. `achievedRevenueCagr` takes its endpoint by INDEX
-    // (`observations[length - 1 - horizonYears]`), which is the same thing as
-    // by year only on a contiguous series. Here the ten-year endpoint lands on
-    // FY2015 and the figure compounds eleven years of growth over ten.
-    //
-    // It is asserted rather than left unwritten so the next reader meets it as
-    // a known defect with a measurement, not as a surprise. Fixing it means
-    // selecting the endpoint by fiscal year and refusing where that year is
-    // absent — comparator work, outside an acquisition pass's scope.
+    // us-gaap:Revenues — correctly chosen since -09-2, and eighteen years long
+    // — has no FY2019 row. Selecting the far endpoint by POSITION landed on
+    // FY2015 and compounded eleven years of growth under a ten-year label;
+    // selecting it by FISCAL YEAR lands on FY2016, which is present, and the
+    // interior hole is irrelevant to a two-endpoint calculation.
     const doc = capture("nvda");
     const result = achievedRevenueCagr(revenueSeries(doc), 10, comparatorRecency(doc, revenueSeries(doc)!));
 
     expect(result.value).not.toBeNull();
     expect(result.value!.window.horizonYears).toBe(10);
-    expect(result.value!.window.fromFiscalYear).toBe(2015);
+    expect(result.value!.window.fromFiscalYear).toBe(2016);
     expect(result.value!.window.toFiscalYear).toBe(2026);
-    // The inconsistency, stated as arithmetic: the window is one year wider
-    // than the horizon it is labelled with.
+    // The window spans exactly the horizon it is labelled with.
     expect(
       result.value!.window.toFiscalYear - result.value!.window.fromFiscalYear
-    ).toBe(result.value!.window.horizonYears + 1);
+    ).toBe(result.value!.window.horizonYears);
+    // The hole is still there — it is tolerated, not papered over.
     expect(revenueSeries(doc)!.observations.map((o) => o.fiscalYear)).not.toContain(2019);
   });
 });
@@ -429,5 +423,69 @@ describe("MSFT — a healthy comparator is untouched by the guard", () => {
     expect(result.value?.staleWindowDisclosure).toBeNull();
     expect(result.value?.window.toFiscalYear).toBe(2026);
     expect(result.value?.window.fromFiscalYear).toBe(2016);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The window endpoint is a FISCAL YEAR, not an array index.
+//
+// Exposed by the acquisition pass (calboard-secmap-2026-09-2): once NVDA's
+// series was chosen correctly it was actually read, and it has a genuine hole
+// at FY2019 — NVIDIA tagged that year's revenue only under the ASC 606 element
+// that us-gaap:Revenues does not carry. Taking the far endpoint by index made
+// the ten-year window span ELEVEN fiscal years and compounded eleven years of
+// growth over ten.
+//
+// A hole INSIDE the window is not a defect: a CAGR is a function of its two
+// endpoints and nothing between them. A hole AT an endpoint is, because there
+// is then no observation for the year the horizon asks about.
+// ---------------------------------------------------------------------------
+
+describe("the comparator window is selected by fiscal year, not by position", () => {
+  it("measures a ten-year horizon from FY(to - 10), even when a year inside the window is missing", () => {
+    // FY2016..FY2026 with FY2019 absent — NVDA's real shape. The endpoints are
+    // FY2016 and FY2026 whatever sits between them.
+    const withHole = series(
+      "us-gaap:Revenues",
+      [2016, 2017, 2018, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(
+        (fy) => [fy, 100 * Math.pow(1.1, fy - 2016)] as [number, number]
+      )
+    );
+
+    const result = achievedRevenueCagr(withHole, 10, current(2026));
+    expect(result.value).not.toBeNull();
+    expect(result.value!.window.fromFiscalYear).toBe(2016);
+    expect(result.value!.window.toFiscalYear).toBe(2026);
+    // The window now spans exactly the horizon it is labelled with.
+    expect(result.value!.window.toFiscalYear - result.value!.window.fromFiscalYear).toBe(
+      result.value!.window.horizonYears
+    );
+    expect(result.value!.cagr.toDecimalPlaces(6).toString()).toBe("0.1");
+  });
+
+  it("REFUSES where the year the horizon asks for is the missing one", () => {
+    // The endpoint itself is absent. There is no ten-year comparator here, and
+    // the nearest available year under a ten-year label is the horizon mismatch
+    // §10.6.2 forbids — the same rule as the too-short case, a different cause.
+    const missingEndpoint = series(
+      "us-gaap:Revenues",
+      [2015, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(
+        (fy) => [fy, 100] as [number, number]
+      )
+    );
+
+    const result = achievedRevenueCagr(missingEndpoint, 10, current(2026));
+    expect(result.value).toBeNull();
+    expect(result.blockedBy[0]).toContain("FY2016");
+  });
+
+  it("still refuses a horizon longer than the history, naming the year it wanted", () => {
+    const short = series(
+      "us-gaap:Revenues",
+      Array.from({ length: 10 }, (_, i) => [2016 + i, 100] as [number, number])
+    );
+    const result = achievedRevenueCagr(short, 10, current(2025));
+    expect(result.value).toBeNull();
+    expect(result.blockedBy[0]).toContain("FY2015");
   });
 });

@@ -21,9 +21,9 @@ same day under `calboard-secmap-2026-09-2`. See
 >
 > **Consequence for §5's table below: NVDA is no longer INCOMPLETE.** With
 > acquisition choosing the live series, the comparator has nothing stale to
-> refuse — NVDA returns 66.90% over FY2021→FY2026 (five-year) and 46.69% over
-> FY2015→FY2026 (ten-year, and see the review's §6.2 on that window's
-> off-by-one). The guard is unchanged and still fires on the synthetic cases;
+> refuse — NVDA returns 66.90% over FY2021→FY2026 (five-year) and 45.70% over
+> FY2016→FY2026 (ten-year). The guard is unchanged and still fires on the
+> synthetic cases;
 > it simply has no real-company instance left in this set.
 
 No frozen artefact was touched by either half.
