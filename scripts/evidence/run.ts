@@ -273,7 +273,7 @@ async function main(): Promise<void> {
 
   // EVIDENCE DELIVERED, and the two things that forbid it: evidence that does
   // not describe the code it claims to, and evidence that is not all there.
-  const gate = decideDeliveryGate(served.binding, completeness.complete);
+  const gate = decideDeliveryGate(served.binding, completeness.complete, inventory.complete);
   const zipPath = `${outDir}.zip`;
   let delivery: DeliveryResult = gate.allowed
     ? await deliverArchive(outDir, zipPath)
@@ -376,7 +376,9 @@ async function main(): Promise<void> {
   // preflight FAIL and nothing else — so an UNKNOWN verdict still exits 0,
   // while incomplete evidence (2) and failed delivery (3) can no longer be
   // reported as success.
-  process.exit(exitCodeFor(verdict.status, completeness.complete, delivery.status));
+  process.exit(
+    exitCodeFor(verdict.status, completeness.complete, delivery.status, inventory.complete)
+  );
 }
 
 main().catch((err) => {

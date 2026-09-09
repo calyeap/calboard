@@ -60,8 +60,17 @@ export interface DeliveryResult {
  */
 export function decideDeliveryGate(
   binding: ServedBinding,
-  evidenceComplete: boolean
+  evidenceComplete: boolean,
+  executionComplete = true
 ): DeliveryGate {
+  if (!executionComplete) {
+    return {
+      allowed: false,
+      reason:
+        "a required check was never executed and never declared not-run — " +
+        "this evidence does not cover what it claims to (§3 puts EXECUTION COMPLETE first)",
+    };
+  }
   if (binding === "MISMATCH") {
     return {
       allowed: false,

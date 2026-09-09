@@ -118,3 +118,17 @@ describe("promoteToDelivered", () => {
     expect(promoteToDelivered(failed, proof, "").status).toBe("FAILED");
   });
 });
+
+describe("decideDeliveryGate — execution completeness", () => {
+  // §3 orders the chain EXECUTION COMPLETE -> EVIDENCE COMPLETE -> DELIVERED.
+  // Evidence from a run that skipped a required check is not deliverable.
+  it("REFUSES delivery when a required check was never accounted for", () => {
+    const g = decideDeliveryGate("MATCH", true, false);
+    expect(g.allowed).toBe(false);
+    expect(g.reason).toContain("required check");
+  });
+
+  it("allows delivery when execution was complete", () => {
+    expect(decideDeliveryGate("MATCH", true, true).allowed).toBe(true);
+  });
+});

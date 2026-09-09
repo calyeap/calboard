@@ -145,10 +145,15 @@ export function buildReturnObject(args: ReturnArgs) {
 export function exitCodeFor(
   verdict: CheckStatus,
   evidenceComplete: boolean,
-  delivery: DeliveryStatus
+  delivery: DeliveryStatus,
+  executionComplete = true
 ): number {
   if (verdict === "FAIL") return 1;
-  if (!evidenceComplete) return 2;
+  // An unaccounted-for required check shares code 2 with incomplete evidence:
+  // in both, the archive does not cover what it claims. Without this a run
+  // that skipped a required check could still exit 0 by delivering, which is
+  // precisely the silent pass §5.6 forbids.
+  if (!executionComplete || !evidenceComplete) return 2;
   if (delivery !== "DELIVERED") return 3;
   return 0;
 }

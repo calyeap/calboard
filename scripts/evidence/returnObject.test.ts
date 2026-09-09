@@ -172,3 +172,19 @@ describe("buildReturnObject — locations an off-machine owner can act on", () =
     expect(r.delivery.gap).toContain("no native retrieval route");
   });
 });
+
+describe("exitCodeFor — an unaccounted-for required check is never a silent pass", () => {
+  // §5.6. Without this, a run that skipped a required check could still exit 0
+  // as long as it delivered, which is a silent pass at the shell boundary.
+  it("exits 2 when a required check was never accounted for", () => {
+    expect(exitCodeFor("PASS", true, "DELIVERED", false)).toBe(2);
+  });
+
+  it("exits 0 only when execution was complete too", () => {
+    expect(exitCodeFor("PASS", true, "DELIVERED", true)).toBe(0);
+  });
+
+  it("still reports a preflight FAIL ahead of an incomplete execution", () => {
+    expect(exitCodeFor("FAIL", true, "DELIVERED", false)).toBe(1);
+  });
+});
