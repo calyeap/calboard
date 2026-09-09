@@ -1,3 +1,4 @@
+import { latestAnnualFiscalYear } from "./history";
 import type { CompanyFactsDocument, XbrlFactUnitRow } from "./secClient";
 import type { TagCandidate, TagMapEntry, TagRef } from "./tagMap";
 
@@ -9,6 +10,15 @@ import type { TagCandidate, TagMapEntry, TagRef } from "./tagMap";
 // on the result — which tag resolved, which period, which filing, and which
 // summed components were absent — because §3.1 admits a derived figure only
 // where its own inputs are recorded.
+//
+// THE SELECTION RULE IS PART OF THE MAPPING, not an implementation detail of
+// reading it. §3.8.1 requires a FIXED, versioned mapping with the version
+// recorded on the fact; if one version could resolve different tags depending
+// on logic living outside the mapping, the version would no longer identify
+// how the fact was obtained. Changing anything here that decides WHICH
+// candidate wins therefore bumps TAG_MAPPING_VERSION exactly as adding a
+// candidate does, and puts every previously acquired fact under the §3.8.1
+// version review.
 // ---------------------------------------------------------------------------
 
 export interface ContributingTag {
@@ -144,19 +154,77 @@ function componentAtSamePeriod(
 }
 
 /**
+ * Mapping order, with RETIRED candidates moved out of the way.
+ *
+ * The mapping's order is a decision — most-specific first — and this rule does
+ * not re-derive it. It removes the one thing that order cannot express:
+ * whether the candidate it puts first is still being reported. NVIDIA retired
+ * RevenueFromContractWithCustomerExcludingAssessedTax after its FY2022 10-K
+ * and kept filing under us-gaap:Revenues, which is candidate #2 of the same
+ * entry. Taking the first candidate that yielded anything gave a §3.8 material
+ * fact — the headline current-period revenue — a four-year-stale value of
+ * $26.9bn against a real FY2026 $215.9bn, exempt from spot-check and heading
+ * for a report (Defect D).
+ *
+ * "Current" is the filer's own latest reported annual fiscal year, taken
+ * tag-blind by `latestAnnualFiscalYear`. That definition is not chosen here:
+ * it is the one Defect D already ruled on for the comparator, and a second
+ * copy of it that drifted would let acquisition and the comparator disagree
+ * about the same filing. It is not the clock — every filer is months behind
+ * the calendar between its year end and its 10-K — and it is not the chosen
+ * tag, because asking the chosen tag how far it runs is the question that
+ * produced the defect.
+ *
+ * TWO BOUNDS, both load-bearing rather than cautious:
+ *
+ *  1. Where NO candidate is current, the first still wins. A short window is a
+ *     §3.7 disclosure for the comparator to make, not a reason to withhold the
+ *     figure. Refusing would move the fact off the §3.8.1 exempt path and into
+ *     the spot-check queue — changing WHICH facts are exempt rather than only
+ *     which values they carry, which is a Command Center decision and not an
+ *     acquisition fix.
+ *  2. Where the filer has filed no annual figure at all, the rule is inert.
+ *     There is nothing to measure retirement against, and absence of evidence
+ *     is not evidence of retirement.
+ *
+ * The test is on the fiscal YEAR, not on the day. An instant carried on a
+ * later 10-Q, or a 52/53-week year end drifting across a calendar boundary,
+ * must not read as a different generation of the series.
+ */
+function preferCurrent<T extends { primary: XbrlFactUnitRow }>(
+  picks: T[],
+  filerCurrentFiscalYear: number | null
+): T | null {
+  if (picks.length === 0) return null;
+  if (filerCurrentFiscalYear === null) return picks[0];
+
+  const current = picks.filter(
+    (p) => new Date(p.primary.end).getUTCFullYear() >= filerCurrentFiscalYear
+  );
+  return current.length > 0 ? current[0] : picks[0];
+}
+
+/**
  * Resolves one mapping entry against one company's facts.
  *
- * Candidates are tried in mapping order and the FIRST that resolves wins; the
- * winner is recorded on the result, so a run always says which tag it used
- * rather than which ones it might have used.
+ * Candidates are tried in mapping order and the first that resolves wins,
+ * EXCEPT that a candidate whose series has stopped being reported does not win
+ * over one that is current (`preferCurrent`). The winner is recorded on the
+ * result, so a run always says which tag it used rather than which ones it
+ * might have used.
  */
 export function resolveEntry(doc: CompanyFactsDocument, entry: TagMapEntry): TagResolution {
   const tried = entry.candidates.map((c) => c.ref);
   let sawTagButNoPeriod = false;
 
+  // Every candidate that resolves at all, in mapping order. The list is built
+  // before a winner is chosen because retirement can only be judged by
+  // comparing the candidates against the filer, which the old first-hit loop
+  // had no position to do.
+  const picks: { candidate: TagCandidate; primary: XbrlFactUnitRow }[] = [];
+
   for (const candidate of entry.candidates) {
-    const ref = candidate.ref;
-    const rows = rowsFor(doc, ref, entry.unit);
+    const rows = rowsFor(doc, candidate.ref, entry.unit);
     if (rows.length === 0) continue;
 
     const primary = pickRow(rows, entry);
@@ -167,7 +235,14 @@ export function resolveEntry(doc: CompanyFactsDocument, entry: TagMapEntry): Tag
       sawTagButNoPeriod = true;
       continue;
     }
+    picks.push({ candidate, primary });
+  }
 
+  const won = preferCurrent(picks, latestAnnualFiscalYear(doc));
+
+  if (won !== null) {
+    const { candidate, primary } = won;
+    const ref = candidate.ref;
     const contributing: ContributingTag[] = [{ ref, value: primary.val, row: primary }];
     const absent: TagRef[] = [];
     let total = primary.val;

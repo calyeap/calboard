@@ -145,13 +145,31 @@ describe("latestAnnualFiscalYear — the period a comparator window is measured 
     expect(latestAnnualFiscalYear(capture("oklo"))).toBe(2025);
   });
 
-  it("reads the filer's real position even where the chosen revenue tag stopped years ago", () => {
+  it("reads the filer's real position independently of any one tag", () => {
     // NVDA retired RevenueFromContractWithCustomerExcludingAssessedTax after
     // its FY2022 10-K. The filer is nonetheless four years further on, and
     // this is the fact that makes the staleness visible.
+    //
+    // THIS TEST PREVIOUSLY PINNED THE OPPOSITE and said so: under Defect D the
+    // comparator was fixed to REFUSE a stale window while acquisition still
+    // CHOSE one, and the pin existed so the comparator fix could not quietly
+    // become the acquisition change it was deferring. That change has now been
+    // made deliberately, under its own TAG_MAPPING_VERSION bump and §3.8.1
+    // review (docs/tag-mapping-version-review.md), so the series reaches FY2026
+    // and the pin records the transition instead of the deferral.
+    //
+    // What the assertion still tests is the part that must never change:
+    // latestAnnualFiscalYear is TAG-BLIND. It read 2026 when the chosen tag
+    // said 2022, and it must go on reading the filer rather than the choice.
     const nvda = capture("nvda");
     expect(latestAnnualFiscalYear(nvda)).toBe(2026);
-    expect(annualSeries(nvda, revenueTags)!.observations.at(-1)!.fiscalYear).toBe(2022);
+    expect(annualSeries(nvda, revenueTags)!.observations.at(-1)!.fiscalYear).toBe(2026);
+    // The retired element is still there and still stops where it stopped —
+    // the tag was not removed from the mapping, it was out-ranked.
+    expect(
+      annualSeries(nvda, [{ ref: { ns: "us-gaap", tag: "RevenueFromContractWithCustomerExcludingAssessedTax" } }])!
+        .observations.at(-1)!.fiscalYear
+    ).toBe(2022);
   });
 
   it("is never older than a series drawn from the same document", () => {
@@ -168,5 +186,74 @@ describe("latestAnnualFiscalYear — the period a comparator window is measured 
 
   it("returns null where the filer has no annual figure at all", () => {
     expect(latestAnnualFiscalYear({ cik: 0, entityName: "Empty", facts: {} })).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The staleness rule, history half. Defect D §6.
+//
+// `annualSeries` shares `resolveEntry`'s precedence rule, and therefore shared
+// its defect: it took the first candidate that yielded any annual observation
+// and never asked whether that series was still being reported. The rule is
+// the same one, for the same reason, and it is applied here so that the
+// headline fact and the history that contextualises it continue to come from
+// the same element — which is what the precedence rule was written to protect
+// and what the staleness rule must not break.
+// ---------------------------------------------------------------------------
+
+describe("annualSeries — a retired candidate does not win over a current one", () => {
+  it("builds NVDA's series from the tag that is still being reported", () => {
+    // Was: the series ran FY2017→FY2022 off the retired ASC 606 element while
+    // us-gaap:Revenues — candidate #2 of the same entry — ran through FY2026.
+    const nvda = capture("nvda");
+    const series = annualSeries(nvda, revenueTags)!;
+
+    expect(series.tag).toBe("us-gaap:Revenues");
+    expect(series.observations.at(-1)!.fiscalYear).toBe(2026);
+    expect(series.observations.at(-1)!.value).toBe(215938000000);
+    // And it now reaches the filer's own current period, which is the whole
+    // point: the comparator no longer has a stale window to refuse.
+    expect(series.observations.at(-1)!.fiscalYear).toBe(latestAnnualFiscalYear(nvda));
+  });
+
+  it("does not disturb a filer whose first candidate is current", () => {
+    // MSFT's ASC 606 element runs to FY2026. §3.7's single-basis rule and the
+    // mapping's most-specific-first order are both unchanged here.
+    const msft = capture("msft");
+    const series = annualSeries(msft, revenueTags)!;
+
+    expect(series.tag).toBe("us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax");
+    expect(series.observations.at(-1)!.fiscalYear).toBe(2026);
+  });
+
+  it("still returns a series where every candidate has stopped", () => {
+    // The same boundary invariant resolveEntry keeps: a short window is a §3.7
+    // disclosure, not a reason to return nothing. The comparator decides what
+    // to do with it; acquisition does not withhold it.
+    const doc: CompanyFactsDocument = {
+      cik: 1,
+      entityName: "Retired Co",
+      facts: {
+        "us-gaap": {
+          RevenueFromContractWithCustomerExcludingAssessedTax: {
+            units: {
+              USD: [
+                { start: "2020-01-01", end: "2020-12-31", val: 400, form: "10-K", filed: "2021-02-01" },
+                { start: "2021-01-01", end: "2021-12-31", val: 500, form: "10-K", filed: "2022-02-01" },
+              ],
+            },
+          },
+          OperatingIncomeLoss: {
+            units: {
+              USD: [{ start: "2025-01-01", end: "2025-12-31", val: 90, form: "10-K", filed: "2026-02-01" }],
+            },
+          },
+        },
+      },
+    };
+
+    const series = annualSeries(doc, revenueTags)!;
+    expect(series.tag).toBe("us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax");
+    expect(series.observations).toHaveLength(2);
   });
 });

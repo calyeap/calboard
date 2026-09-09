@@ -22,10 +22,28 @@
 
 /**
  * Bump on ANY change to the entries below — a tag added, removed, reordered or
- * re-scoped. Recorded on every fact acquired through this mapping (§3.8.1),
- * and it is the handle a later reviewer uses to ask what a run was built on.
+ * re-scoped — AND on any change to the rule that decides which candidate wins
+ * (`selectTagged.resolveEntry`). §3.8.1 requires the version to identify how a
+ * fact was obtained; a version that could resolve different tags depending on
+ * selection logic would not do that, so selection is part of what this string
+ * names. Recorded on every fact acquired through this mapping, and it is the
+ * handle a later reviewer uses to ask what a run was built on.
+ *
+ * -09-2 (9 September 2026) — the acquisition and mapping pass. Two changes,
+ * one bump, one review (docs/tag-mapping-version-review.md):
+ *
+ *   1. SELECTION: a candidate whose series the filer has stopped reporting no
+ *      longer wins over one that is current. Defect D's acquisition half.
+ *   2. CANDIDATES: one added — the noncurrent/current debt pair under
+ *      `total-debt`, below.
+ *
+ * The review measured five facts across the ten calibration companies whose
+ * resolution changes, and NO fact moving between the §3.8.1 exempt and queued
+ * sides. That second finding is the one that mattered: it is what kept the
+ * bump inside an acquisition pass rather than making it a Command Center
+ * decision.
  */
-export const TAG_MAPPING_VERSION = "calboard-secmap-2026-09-1";
+export const TAG_MAPPING_VERSION = "calboard-secmap-2026-09-2";
 
 export interface TagRef {
   ns: "us-gaap" | "dei";
@@ -138,12 +156,39 @@ export const TAG_MAP: readonly TagMapEntry[] = [
     // to it. Absent for most filers, and recorded as absent rather than as
     // zero. The combined-amount fallback already includes them, so it takes no
     // components of its own.
+    // The third candidate is the same quantity ASSEMBLED FROM ITS PARTS, and
+    // it is last on purpose. LongTermDebt is the total as the filer states it;
+    // the combined element is the same total under a different name; only
+    // where a filer reports NEITHER total is the figure reconstructed from the
+    // current and noncurrent halves it foots to.
+    //
+    // Added -09-2. Oklo tags LongTermDebtNoncurrent and no total at all, so
+    // total-debt was NOT ACQUIRED and enterprise value was INCOMPLETE for a
+    // reason that had nothing to do with §4.4. Costco and Rivian are the
+    // second case: both stopped tagging LongTermDebt (2022 and 2024) while
+    // continuing to report both halves, so both were carrying a stale total
+    // that the selection rule alone could not rescue — there was nothing
+    // current to rescue it WITH until this candidate existed.
+    //
+    // Why the parts and not LongTermDebtNoncurrent alone, which is what the
+    // filers above have in common: noncurrent debt is not total debt. Taking
+    // it alone would silently drop the current portion — $9.2bn of Microsoft's
+    // $40.3bn — and understate the EV bridge for every filer this candidate
+    // ever reaches. The current half is summed onto it, and where a filer does
+    // not tag one (Oklo has no current portion) its absence is RECORDED on the
+    // fact rather than read as a zero, per §4.3.
     candidates: [
       withPlus(usGaap("LongTermDebt"), usGaap("CommercialPaper"), usGaap("ShortTermBorrowings")),
       only(usGaap("DebtLongtermAndShorttermCombinedAmount")),
+      withPlus(
+        usGaap("LongTermDebtNoncurrent"),
+        usGaap("LongTermDebtCurrent"),
+        usGaap("CommercialPaper"),
+        usGaap("ShortTermBorrowings")
+      ),
     ],
     basis:
-      "§3.5's EV bridge takes 'total debt' separately from finance leases. us-gaap:LongTermDebt carries the full long-term carrying amount including the current portion; commercial paper and other short-term borrowings sit outside it and are added where tagged. Verified against the frozen mock-report-msft.html: 40.294 + 66.594 finance leases - 76.843 cash = 30.045, the mock's stated $30.0B net debt.",
+      "§3.5's EV bridge takes 'total debt' separately from finance leases. us-gaap:LongTermDebt carries the full long-term carrying amount including the current portion; commercial paper and other short-term borrowings sit outside it and are added where tagged. Verified against the frozen mock-report-msft.html: 40.294 + 66.594 finance leases - 76.843 cash = 30.045, the mock's stated $30.0B net debt. Where a filer reports no debt total at all, the same quantity is reconstructed from LongTermDebtNoncurrent + LongTermDebtCurrent — the two halves us-gaap:LongTermDebt is defined to foot to, which is why the footing cross-check can be run against it unchanged.",
   },
   {
     factId: "finance-lease-liabilities",
