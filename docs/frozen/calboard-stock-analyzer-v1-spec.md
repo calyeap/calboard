@@ -96,6 +96,14 @@ Two rules govern this step.
 
 **1 — Instrument class is checked at resolution.** Only a **listed operating company** proceeds. A fund, an index, or a currency or crypto pair returns **UNSUPPORTED INSTRUMENT** here (§1.2, §9.3.1) — not at Step 2, and not as a downstream failure on a fact set that was never going to exist. The check narrows this analyzer's use of the invalid-symbol contract and changes neither that contract nor the portfolio side, where ETFs remain valid holdings.
 
+**1a — A registrant with no annual filing history is refused at Step 1, and the reason is stated.** A ticker may resolve to a listed operating company that has filed nothing annual — a successor holdco after a reorganisation is the ordinary case, where the filing history sits under the predecessor's registrant. Every method in this document takes a company apart through its filings. A registrant with none has nothing to take apart, so the run can only fail late and confusingly on a fact set that was never going to exist. This is the same reasoning as the instrument-class check and it is enforced in the same place.
+
+**This is NOT UNSUPPORTED INSTRUMENT.** That state is a class judgment — a fund, an index, a pair — and the registrant here is a listed operating company. Saying otherwise would state something false about what it is.
+
+**Calboard does not follow corporate succession.** Selecting a predecessor registrant is a judgment that one entity's history is another's, which is an accounting judgment about continuity of the reporting entity and not one the software may make. Getting it wrong attributes one company's filings to another silently, and no state says "these figures came from a different registrant than you asked for". A heuristic is no better than a hardcoded mapping: "fall back where there are no annual filings" misfires on genuinely new filers, which is where being wrong is easiest and least visible.
+
+**The analyst resolves it by entering the registrant they mean.** Identity stays decided at identity resolution.
+
 **2 — Step 1 does not auto-advance.** Resolution displays the **resolved company name** and waits. The analyst confirms that this is the company they meant, and the run commits only on that confirmation. A ticker that silently resolves and advances puts the analyst three screens into a run against the wrong company before anything says so, and the cost of discovering it there is a repeated Step 2.
 
 **No price renders on Step 1.** Price is acquired with the fact set and carries its timestamp (§3.4); showing it at entry would put an unsourced, untimestamped figure on screen before the fact contract applies, and would open the run with the number the analyst is trying not to anchor on.
@@ -1059,6 +1067,16 @@ Both inputs are fields the analyzer already computes. Nothing new is measured an
 
 **The comparator fact is REQUIRED.** The achieved figure must be a section B fact **on the same series and the same horizon** as the implied-growth figure it is read against. A ten-year implied CAGR is compared to a ten-year achieved CAGR of the same series, on the same accounting basis, or it is not compared at all. Where no such fact exists, the gap is **INCOMPLETE**, and the position and its action clause do not render.
 
+**Two horizons are valid, and the horizon travels with the result** (CalFinance Methodology v2, ruled 8 September 2026). Ten years is preferred. **A five-year comparator is permitted where a valid ten-year one cannot be constructed** — which is the common case rather than the exception: ASC 606 split most filers' revenue across two tagged elements partway through the decade, and §3.7 refuses to join two series into one comparator, so only a minority of companies can produce a ten-year figure at all.
+
+**Five-year and ten-year comparators are related but not semantically identical**, so the horizon is carried with the figure and is never implied. **Both sides must be the same horizon**: a five-year achieved comparator is read against a five-year required-growth figure. Mixing the two sides is not a fallback, it is a different comparison.
+
+**No cross-series stitching.** §3.7's refusal stands, and a five-year window that spans a tag change is not a valid five-year comparator.
+
+**Where neither horizon can be constructed, the growth input is UNAVAILABLE and the position is INCONCLUSIVE.** It does not degrade to a weaker reading, and it does not fall back to FAIR — FAIR is a positive claim, not the absence of one.
+
+**For calibration:** observations from the two horizons are not pooled without evidence that common thresholds hold across them. Whether they do is a testable question and must be answered from observations rather than assumed. Where they do not, thresholds are calibrated per horizon.
+
 **Bands and the disagreement rule are policy constants**, recorded in `policy` (§10.0.1) and marked **PROVISIONAL** with what they were calibrated on. Two rules are fixed here and are not configuration:
 
 1. **The same inputs always produce the same position.** No per-company adjustment, no override, no model in the path.
@@ -1251,6 +1269,7 @@ Observable conditions. Each is PASS / FAIL, not a judgment.
 | A25 | Step 1 refuses a fund, an index, or a currency or crypto pair with UNSUPPORTED INSTRUMENT at identity resolution, before any fact is acquired. No run is opened |
 | A26 | Step 1 displays the resolved company name and does not auto-advance; the run commits only on the analyst's confirmation |
 | A27 | No price renders on Screen 1 |
+| A28 | Step 1 refuses a registrant with no annual filing history, stating that reason, before any fact is acquired. No run is opened, and the software does not select a predecessor registrant |
 
 ### 12.2 Gates and states
 
@@ -1545,6 +1564,38 @@ Out of scope for this amendment. Each is a real defect, recorded so it is not lo
 | **F4** | **UNSUPPORTED INSTRUMENT has no entry-screen visual treatment.** §9.3.1 defines the state; the design's §6 vocabulary covers report cells, and this state never reaches a report | A new design treatment is beyond changes 13–16. Command Center should rule on it with the rest of Screen 1 |
 | **F5** | **The design's §7.1 provenance tokens and §9 disclosure levels name the verification-state values.** After change 5 they read against a renamed field | The design changes authorised here are 13–16. This is a mechanical follow-through, but it is not in scope and should not be done silently |
 | **F6** | **`mock-human-steps.html` prints `Spot-check pending` on fact-card stamps**, which survives change 5, but the mock shows no tag-exempt fact and so never renders SPOT-CHECK NOT REQUIRED | The mock changes authorised here are 17 and 18. Worth a card in a later pass, since the exempt path is now the common one |
+
+### 14.7 Amendment M8-2 — two rulings, 8 September 2026
+
+**Documents only. Four changes, one file.** Drafted 9 September 2026 against the frozen artefacts, whose SHA-256 hashes were verified byte-exact before any edit:
+
+| File | SHA-256 verified before edit |
+|---|---|
+| `calboard-stock-analyzer-v1-spec.md` | `9801dfef269c435d8be955db2099f097aba54f0fac1da3f6cf30c4430d01e3bc` |
+
+The other seven frozen artefacts (`calfinance-methodology-v2.md`, `calboard-valuation-methodology.md`, `calboard-stock-analyzer-v1-design.md`, `mock-screen1-entry.html`, `mock-human-steps.html`, `mock-report-msft.html`, `mock-report-oklo.html`) were verified against the same manifest and are untouched by this amendment.
+
+Two rulings, unrelated to each other, landed in one amendment because both close a v1 build-blocking gap and neither required design or app-code changes to record:
+
+| Ruling | Authority | Where it lands |
+|---|---|---|
+| Two horizons — five-year and ten-year — are valid growth comparators, and the horizon travels with the result rather than being implied | CalFinance Methodology v2, ruled 8 September 2026 | §10.6.2 |
+| A registrant with no annual filing history is refused at Step 1, stating the reason, rather than following corporate succession to a predecessor registrant | Calboard Command Center, 8 September 2026 | §2 (new rule 1a), §12.1 A28 |
+
+**The four changes:**
+
+| # | Change | Sections touched |
+|---|---|---|
+| S1 | The comparator paragraph gains the five-year fallback, the no-mixing rule, the no-cross-series-stitching rule, the UNAVAILABLE/INCONCLUSIVE floor, and the per-horizon calibration note | §10.6.2 |
+| S2 | New Step 1 rule 1a: a registrant with no annual filing history is refused, is not UNSUPPORTED INSTRUMENT, and is not resolved by following succession to a predecessor registrant | §2 |
+| S3 | New acceptance criterion for rule 1a | §12.1 A28 |
+| S4 | This record | §14.7 |
+
+**Reading M8-2-a — the new criterion is A28, not A26.** The instruction read "append after A25, following the existing numbering," written against a state of §12.1 that ended at A25. M7 had already extended the table to A27 (§12.1 A26, A27) by the time this amendment was drafted. Renumbering A26 and A27 to open a literal slot after A25 would cascade into every existing reference to them — §14.2 change 9 cites "A26–A27" by number — for no product benefit; the criterion itself does not depend on where in the table it sits. **Following the existing numbering**, read against what the table actually contains rather than against the instruction's stale mental model of it, means appending at the table's true end. The criterion is A28.
+
+**The Step 1 registrant-refusal outcome has no entry-screen visual treatment yet, on the same F4 precedent above.** UNSUPPORTED INSTRUMENT was specified in §9.3.1 with no entry-screen treatment, and that gap was recorded as a design follow-up rather than resolved in the spec (F4). The same applies here: Screen 1 now needs a fifth outcome rendered, alongside UNSUPPORTED INSTRUMENT's still-outstanding one, and both are DESIGN's to take up, not this amendment's.
+
+**Not in this amendment.** No §9.3 or §9.4 vocabulary count changes — neither ruling adds a suppressing state or a qualifying flag, and the state vocabulary stays at twenty-four. No thresholds, cut-points or position-renderer changes. No design-document or mock changes. No application code.
 
 ---
 ## APPENDIX — TRACEABILITY
