@@ -41,6 +41,7 @@ import {
 } from "./retrieval";
 import { LostWriteError, describeLostWrite } from "./consequential";
 import { buildReturnObject, exitCodeFor } from "./returnObject";
+import { EXIT_RUNNER_ERROR, formatRunnerError } from "./runnerError";
 import type { CheckResult, ProbeDocument } from "./preflight/types";
 
 loadEnv({ path: ".env.local" });
@@ -399,6 +400,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(`\nSTOP — runner error\n  ${(err as Error).stack ?? String(err)}\n`);
-  process.exit(1);
+  console.error(formatRunnerError(err));
+  process.exit(EXIT_RUNNER_ERROR);
 });
