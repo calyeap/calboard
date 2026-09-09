@@ -5,6 +5,7 @@ import {
   annualSeries,
   operatingMarginSeries,
   filedAnnualYearsCount,
+  latestAnnualFiscalYear,
   quarterlySeries,
 } from "./history";
 import { TAG_MAP } from "./tagMap";
@@ -135,5 +136,37 @@ describe("quarterlySeries — discrete quarters, never year-to-date", () => {
   it("is chronological, oldest first", () => {
     const ends = quarterlySeries(capture("msft"), revenueTags).map((q) => q.periodEnd);
     expect([...ends].sort()).toEqual(ends);
+  });
+});
+
+describe("latestAnnualFiscalYear — the period a comparator window is measured against", () => {
+  it("is the most recent fiscal year the filer has reported an annual figure for", () => {
+    expect(latestAnnualFiscalYear(capture("msft"))).toBe(2026);
+    expect(latestAnnualFiscalYear(capture("oklo"))).toBe(2025);
+  });
+
+  it("reads the filer's real position even where the chosen revenue tag stopped years ago", () => {
+    // NVDA retired RevenueFromContractWithCustomerExcludingAssessedTax after
+    // its FY2022 10-K. The filer is nonetheless four years further on, and
+    // this is the fact that makes the staleness visible.
+    const nvda = capture("nvda");
+    expect(latestAnnualFiscalYear(nvda)).toBe(2026);
+    expect(annualSeries(nvda, revenueTags)!.observations.at(-1)!.fiscalYear).toBe(2022);
+  });
+
+  it("is never older than a series drawn from the same document", () => {
+    // The invariant the guard rests on: a series' own rows are annual rows of
+    // this document, so the latest annual year is at least the series' end.
+    // Were that not so, staleness could not be determined from the record and
+    // the defect would lie elsewhere.
+    for (const ticker of ["msft", "nvda"]) {
+      const doc = capture(ticker);
+      const series = annualSeries(doc, revenueTags)!;
+      expect(latestAnnualFiscalYear(doc)!).toBeGreaterThanOrEqual(series.observations.at(-1)!.fiscalYear);
+    }
+  });
+
+  it("returns null where the filer has no annual figure at all", () => {
+    expect(latestAnnualFiscalYear({ cik: 0, entityName: "Empty", facts: {} })).toBeNull();
   });
 });

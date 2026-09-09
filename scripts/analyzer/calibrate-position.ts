@@ -16,6 +16,7 @@ import { UNDEFINED_POLICY_CONSTANTS } from "../../lib/analyzer/policy";
 import { CALIBRATION_SET, type CalibrationCompany } from "../../lib/analyzer/calibration/set";
 import {
   achievedRevenueCagr,
+  comparatorRecency,
   isUsable,
   priceLocationWithinRange,
   requiredGrowthCells,
@@ -204,8 +205,16 @@ async function runOne(company: CalibrationCompany, offline: boolean): Promise<Co
 
   // --- Input B — required versus achieved ----------------------------------
   const series = revenueSeries(loaded.companyFacts);
-  const achievedTenYear = achievedRevenueCagr(series, 10);
-  const achievedFiveYear = achievedRevenueCagr(series, 5);
+  // How far this filer has reported, and whether a live series sat unread
+  // beside the chosen one. Without it a comparator cannot be computed at all
+  // (defect D): the M8-c run returned NVDA at 31.25% over a window that ended
+  // four years before the price, and said nothing.
+  const recency =
+    series === null
+      ? { currentFiscalYear: 0, reachedBy: null }
+      : comparatorRecency(loaded.companyFacts, series);
+  const achievedTenYear = achievedRevenueCagr(series, 10, recency);
+  const achievedFiveYear = achievedRevenueCagr(series, 5, recency);
 
   const grid = computeReverseDcfGrid({
     baseYearRevenue: get("current-revenue"),
@@ -326,7 +335,13 @@ function report(runs: CompanyRun[], failures: { ticker: string; error: string }[
     for (const [label, input] of [["10-year", o.achievedTenYear], ["5-year", o.achievedFiveYear]] as const) {
       if (input.value !== null) {
         const a = input.value;
-        lines.push(`      ${label} revenue CAGR ${pct(a.cagr)}  [${a.tag}, FY${a.fromFiscalYear}→FY${a.toFiscalYear}]`);
+        lines.push(
+          `      ${label} revenue CAGR ${pct(a.cagr)}  [${a.tag}, FY${a.window.fromFiscalYear}→FY${a.window.toFiscalYear}]`
+        );
+        // The window never travels separately from the figure it belongs to.
+        if (a.staleWindowDisclosure !== null) {
+          lines.push(`        STALE WINDOW: ${a.staleWindowDisclosure}`);
+        }
       } else {
         for (const reason of input.blockedBy) lines.push(`      ${label} BLOCKED: ${reason}`);
       }

@@ -171,13 +171,15 @@ export function operatingMarginSeries(
 }
 
 /**
- * How many annual reports this filer has on record.
+ * Every fiscal year this filer carries a full-year figure for, under any tag.
  *
- * Gate 1's only input (§4.2). Counted from distinct fiscal years carrying a
- * full-year figure in an annual form, not from the number of filings — an
- * amended 10-K is not another year of history.
+ * Deliberately tag-blind. Two callers read it for different questions — how
+ * much history exists, and how far the history runs — and both must agree on
+ * what counts as a filed year. A second copy of the eligibility rule that
+ * drifted from this one would make Gate 1 and the comparator disagree about
+ * the same filing.
  */
-export function filedAnnualYearsCount(doc: CompanyFactsDocument): number {
+function annualFiscalYears(doc: CompanyFactsDocument): Set<number> {
   const years = new Set<number>();
   for (const ns of Object.keys(doc.facts ?? {})) {
     for (const tag of Object.keys(doc.facts[ns])) {
@@ -192,7 +194,40 @@ export function filedAnnualYearsCount(doc: CompanyFactsDocument): number {
       }
     }
   }
-  return years.size;
+  return years;
+}
+
+/**
+ * The most recent fiscal year this filer has reported an annual figure for.
+ *
+ * This is the period a comparator window has to reach (§10.6.2). It is taken
+ * from the filer's own filings rather than from the clock, because "current"
+ * for a comparator means "as far as this company has reported", not "today" —
+ * every filer is some months behind the calendar between its year end and its
+ * 10-K, and a clock-based test would call all of them stale.
+ *
+ * Tag-blind on purpose. Asking the chosen revenue tag how far it runs is the
+ * question that produced the defect: it can only ever answer "as far as I go".
+ *
+ * Null where the filer has no full-year figure under any tag at all.
+ */
+export function latestAnnualFiscalYear(doc: CompanyFactsDocument): number | null {
+  let latest: number | null = null;
+  for (const year of annualFiscalYears(doc)) {
+    if (latest === null || year > latest) latest = year;
+  }
+  return latest;
+}
+
+/**
+ * How many annual reports this filer has on record.
+ *
+ * Gate 1's only input (§4.2). Counted from distinct fiscal years carrying a
+ * full-year figure in an annual form, not from the number of filings — an
+ * amended 10-K is not another year of history.
+ */
+export function filedAnnualYearsCount(doc: CompanyFactsDocument): number {
+  return annualFiscalYears(doc).size;
 }
 
 export interface QuarterObservation {
