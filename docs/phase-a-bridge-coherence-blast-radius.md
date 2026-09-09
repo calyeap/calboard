@@ -1,5 +1,24 @@
 # Phase A — bridge-coherence blast radius, and the stop it produces
 
+> **SUPERSEDED IN TWO PLACES, 2026-09-09.** CalFinance ruled that lease > debt
+> does not establish non-nesting (it proves only that the lease is not FULLY
+> nested), and that a missing XBRL fact is not zero. Under those rules:
+>
+> - **MSFT's non-nesting stands but on different evidence** — its own Note 13
+>   places the whole $66,594M liability in other current and other long-term
+>   liabilities. The lease > debt reasoning below is withdrawn.
+> - **LLY is NESTED, not "nothing to nest"** — its 10-K states finance leases
+>   are included in long-term debt, and never quantifies them. The table below
+>   classified it from tag absence, which is exactly the inference the new rule
+>   forbids. INTC and NVDA are likewise UNKNOWN rather than nil.
+>
+> Corrected classifications, the per-company ceiling this creates, and the three
+> routes for filing-text evidence are in
+> [`filing-text-evidence-routes.md`](./filing-text-evidence-routes.md). The
+> structural findings below — I2 being a property of the resolution model, the
+> absence of dimensional data in companyfacts, and the impact surface — are
+> unaffected.
+
 **Status: STOPPED at the Phase A gate. Phase B was not started.** Two of the
 three named stop signals fire outright and the third fires conditionally on one
 question the ruling leaves open. Nothing was fixed: no mapping change, no
