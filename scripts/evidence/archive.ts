@@ -16,6 +16,9 @@ export async function zipDirectory(dir: string, zipPath: string): Promise<void> 
     "-NoProfile",
     "-NonInteractive",
     "-Command",
-    `Compress-Archive -Path '${dir}\\*' -DestinationPath '${zipPath}' -Force`,
+    // -ErrorAction Stop: without it Compress-Archive reports some failures
+    // non-terminatingly and powershell.exe still exits 0, so a failed
+    // packaging step would look like a successful one to execFile.
+    `Compress-Archive -Path '${dir}\\*' -DestinationPath '${zipPath}' -Force -ErrorAction Stop`,
   ]);
 }
