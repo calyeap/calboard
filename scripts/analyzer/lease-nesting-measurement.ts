@@ -6,6 +6,7 @@ import type { CompanyFactsDocument, XbrlFactUnitRow } from "../../lib/analyzer/a
 import { resolveEntry } from "../../lib/analyzer/acquisition/selectTagged";
 import { tagMapEntry, TAG_MAPPING_VERSION } from "../../lib/analyzer/acquisition/tagMap";
 import { CALIBRATION_SET } from "../../lib/analyzer/calibration/set";
+import { determineNesting, type NestingDetermination } from "./nesting-evidence";
 
 config({ path: ".env.local" });
 
@@ -26,36 +27,38 @@ config({ path: ".env.local" });
 // This script measures that, per company, BEFORE any construction is written.
 // It computes nothing about invested capital and it changes no mapping.
 //
-// WHAT MAKES A VERDICT. Only determinate tests — no tolerances and no
-// thresholds. Every value in an XBRL fact unit is an exact filed figure, so a
-// near-miss is a different quantity rather than a rounding artefact, and a
-// tolerance here would be an invented cut-point deciding a ruling question.
+// CORRECTED 2026-09-09 for the later CalFinance rulings. The verdicts this
+// harness emits now come from `nesting-evidence.determineNesting`, which is
+// shared with the other two harnesses. Two inferences the first version of
+// this file made are rejected and are gone:
 //
-//   NOTHING TO NEST   the filer tags no finance lease liability at all.
-//   EXCLUDED          nesting is arithmetically impossible (the lease exceeds
-//                     the entire debt figure), or the filer tags BOTH the
-//                     lease-inclusive combined element and the plain one and
-//                     the difference between them IS the lease.
-//   NESTED            the filer tags the lease-inclusive combined element and
-//                     its two halves sum to exactly what `total-debt`
-//                     resolved — so the figure the mapping calls total debt is
-//                     this filer's debt-AND-capital-lease total.
-//   UNDETERMINED      none of the above settles it. Deliberately NOT a pass:
-//                     the fail-closed direction (§5.3) is to report that the
-//                     tags cannot answer, leaving the filing's own lease note
-//                     to be read by a human — a mapping-review activity, not
-//                     acquisition.
+//   1. It classified `finance lease > total debt` as EXCLUDED. That proves
+//      only that the lease is not FULLY nested; any amount up to the debt
+//      total could still sit inside it. Now UNKNOWN unless issuer evidence
+//      places the liability. Microsoft was settled this way and is now settled
+//      on its own Note 13 disclosure instead — the conclusion survived, the
+//      reasoning did not.
+//   2. It classified a missing finance-lease tag as NOTHING TO NEST. A missing
+//      XBRL fact is not zero and not an absence of leases. Lilly tags no
+//      finance-lease liability and states in its 10-K that its finance leases
+//      ARE included in long-term debt, so tag absence concealed a nested lease
+//      rather than indicating none.
+//
+// The MEASUREMENTS below are unchanged — same resolver, same mapping, same
+// figures. Only the conclusions drawn from them are corrected.
 // ---------------------------------------------------------------------------
 
 const OUT_DIR = join(".evidence", "lease-nesting");
 
-/** The us-gaap element defined to INCLUDE capital/finance lease obligations. */
+/**
+ * The us-gaap elements defined to INCLUDE capital/finance lease obligations.
+ * Reported as context; the determination itself comes from
+ * `nesting-evidence.determineNesting`.
+ */
 const COMBINED = "LongTermDebtAndCapitalLeaseObligations";
 const COMBINED_CURRENT = "LongTermDebtAndCapitalLeaseObligationsCurrent";
 
 const ELIGIBLE_FORMS = new Set(["10-K", "10-Q", "10-K/A", "10-Q/A", "20-F", "40-F"]);
-
-type Verdict = "NOTHING TO NEST" | "EXCLUDED" | "NESTED" | "UNDETERMINED";
 
 interface Measurement {
   ticker: string;
@@ -68,8 +71,7 @@ interface Measurement {
   financeLeaseVia: string;
   combined: number | null;
   combinedCurrent: number | null;
-  verdict: Verdict;
-  why: string;
+  determination: NestingDetermination;
 }
 
 /**
@@ -101,8 +103,9 @@ function instantAt(doc: CompanyFactsDocument, tag: string, at: string): XbrlFact
  * The filer's finance lease liability at that instant.
  *
  * The total where tagged; otherwise the two halves, which some filers tag
- * without a total. A filer tagging NEITHER reports no finance lease, and that
- * is returned as null — never as zero, per Section 4.3.
+ * without a total. A filer tagging NEITHER returns null, which means UNKNOWN —
+ * never zero (Section 4.3), and never "has no finance leases" either. Lilly
+ * tags none and discloses that its finance leases sit inside long-term debt.
  */
 function financeLeaseAt(
   doc: CompanyFactsDocument,
@@ -119,51 +122,6 @@ function financeLeaseAt(
   if (current !== null) parts.push("FinanceLeaseLiabilityCurrent");
   if (noncurrent !== null) parts.push("FinanceLeaseLiabilityNoncurrent");
   return { value: (current?.val ?? 0) + (noncurrent?.val ?? 0), via: parts.join(" + ") };
-}
-
-function verdictFor(
-  totalDebt: number,
-  financeLease: number | null,
-  combined: number | null,
-  combinedCurrent: number | null
-): { verdict: Verdict; why: string } {
-  if (financeLease === null) {
-    return {
-      verdict: "NOTHING TO NEST",
-      why: "the filer tags no finance lease liability, in any of the three elements",
-    };
-  }
-  if (financeLease > totalDebt) {
-    return {
-      verdict: "EXCLUDED",
-      why:
-        `nesting is impossible: the finance lease (${financeLease}) exceeds the whole ` +
-        `total-debt figure (${totalDebt})`,
-    };
-  }
-  if (combined !== null && combinedCurrent !== null && combined + combinedCurrent === totalDebt) {
-    return {
-      verdict: "NESTED",
-      why:
-        `${COMBINED} (${combined}) + ${COMBINED_CURRENT} (${combinedCurrent}) = ${totalDebt}, ` +
-        `exactly what total-debt resolved. The figure the mapping calls total debt IS this ` +
-        `filer's debt-and-capital-lease total, so the finance lease (${financeLease}) is inside it`,
-    };
-  }
-  if (combined !== null && combined - totalDebt === financeLease) {
-    return {
-      verdict: "EXCLUDED",
-      why:
-        `${COMBINED} (${combined}) minus total-debt (${totalDebt}) is the finance lease ` +
-        `(${financeLease}), so the plain element excludes it`,
-    };
-  }
-  return {
-    verdict: "UNDETERMINED",
-    why:
-      "the filer reports a finance lease but tags nothing that places it relative to the " +
-      "debt total; the tags cannot answer and the filing's lease note has to be read",
-  };
 }
 
 interface Loaded {
@@ -245,12 +203,16 @@ async function main(): Promise<void> {
         financeLeaseVia: "—",
         combined: null,
         combinedCurrent: null,
-        verdict: "UNDETERMINED",
-        why: `total-debt did not resolve (${resolution.outcome}), so there is no figure to test a lease against`,
+        determination: {
+          state: "UNKNOWN",
+          leaseAmount: "UNKNOWN",
+          evidence: "none available",
+          detail: `total-debt did not resolve (${resolution.outcome}), so there is no total for a lease to be inside of`,
+        },
       });
       lines.push(`${company.ticker} — ${loaded.companyName}`);
       lines.push(`   total-debt:    NOT ACQUIRED (${resolution.outcome})`);
-      lines.push(`   VERDICT:       UNDETERMINED`);
+      lines.push(`   NESTING:       UNKNOWN`);
       lines.push("");
       continue;
     }
@@ -264,11 +226,16 @@ async function main(): Promise<void> {
       .map((t) => `${t.ref.tag}=${t.value}`)
       .join(" + ");
 
-    const { verdict, why } = verdictFor(
-      resolved.value,
-      lease?.value ?? null,
-      combined?.val ?? null,
-      combinedCurrent?.val ?? null
+    // The determination is the shared one. Note that `lease` here is pinned to
+    // the debt date for CONTEXT; what the determination is given is the figure
+    // the mapping resolved, which is what a bridge would actually add.
+    const resolvedLease = resolveEntry(doc, tagMapEntry("finance-lease-liabilities")!);
+    const leaseValue = resolvedLease.outcome === "RESOLVED" ? resolvedLease.value.value : null;
+    const determination = determineNesting(
+      doc,
+      company.ticker,
+      { value: resolved.value, asOfDate: at },
+      leaseValue
     );
 
     measurements.push({
@@ -282,8 +249,7 @@ async function main(): Promise<void> {
       financeLeaseVia: lease?.via ?? "—",
       combined: combined?.val ?? null,
       combinedCurrent: combinedCurrent?.val ?? null,
-      verdict,
-      why,
+      determination,
     });
 
     lines.push(`${company.ticker} — ${loaded.companyName}`);
@@ -297,8 +263,10 @@ async function main(): Promise<void> {
     lines.push(
       `   ${COMBINED}: ${combined?.val ?? "not tagged"}  (current ${combinedCurrent?.val ?? "not tagged"})`
     );
-    lines.push(`   VERDICT:       ${verdict}`);
-    lines.push(`   because:       ${why}`);
+    lines.push(`   resolved lease input (what a bridge adds): ${leaseValue ?? "NOT ACQUIRED"}`);
+    lines.push(`   NESTING:       ${determination.state}   lease amount: ${determination.leaseAmount}`);
+    lines.push(`   evidence:      ${determination.evidence}${determination.accession ? ` (${determination.accession})` : ""}`);
+    lines.push(`   because:       ${determination.detail}`);
     lines.push("");
   }
 
@@ -306,17 +274,25 @@ async function main(): Promise<void> {
   lines.push("SUMMARY");
   lines.push("=".repeat(78));
   for (const m of measurements) {
-    lines.push(`${m.ticker.padEnd(6)} ${m.verdict.padEnd(16)} total-debt via ${m.wonVia}`);
+    lines.push(
+      `${m.ticker.padEnd(6)} ${m.determination.state.padEnd(20)} lease amount ${m.determination.leaseAmount.padEnd(14)} total-debt via ${m.wonVia}`
+    );
   }
   lines.push("");
 
-  const nested = measurements.filter((m) => m.verdict === "NESTED");
-  const undetermined = measurements.filter((m) => m.verdict === "UNDETERMINED");
-
-  lines.push(`NESTED:       ${nested.length === 0 ? "none" : nested.map((m) => m.ticker).join(", ")}`);
-  lines.push(
-    `UNDETERMINED: ${undetermined.length === 0 ? "none" : undetermined.map((m) => m.ticker).join(", ")}`
+  const nested = measurements.filter(
+    (m) => m.determination.state === "NESTED" || m.determination.state === "NESTED-UNQUANTIFIED"
   );
+  const unknown = measurements.filter((m) => m.determination.state === "UNKNOWN");
+  const notNested = measurements.filter((m) => m.determination.state === "NOT NESTED");
+
+  lines.push(`NESTED:     ${nested.length === 0 ? "none" : nested.map((m) => `${m.ticker} (${m.determination.state})`).join(", ")}`);
+  lines.push(`NOT NESTED: ${notNested.length === 0 ? "none" : notNested.map((m) => m.ticker).join(", ")}`);
+  lines.push(`UNKNOWN:    ${unknown.length === 0 ? "none" : unknown.map((m) => m.ticker).join(", ")}`);
+  lines.push("");
+  lines.push("UNKNOWN is the fail-closed answer and is neither zero nor non-nesting. A missing");
+  lines.push("finance-lease tag lands here, not in a 'nothing to nest' bucket, and so does a");
+  lines.push("lease that merely exceeds the debt total — that disproves FULL nesting only.");
   lines.push("");
   if (nested.length > 0) {
     lines.push("A NESTED company means the existing `total-debt` mapping does not carry one");

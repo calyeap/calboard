@@ -18,6 +18,15 @@
 > structural findings below — I2 being a property of the resolution model, the
 > absence of dimensional data in companyfacts, and the impact surface — are
 > unaffected.
+>
+> **The headline count moved: eight of ten, not nine.** With the recorded issuer
+> disclosures wired into the harness, OKLO joins MSFT as able to produce a
+> coherent bridge — its nesting was always established by its own note, and its
+> balance-sheet stocks are all at 2026-06-30. The re-run output is in
+> `.evidence/bridge-coherence/blast-radius.txt`. Stop signal 3 is therefore
+> weaker than recorded below (two companies, not one, and neither now depends on
+> unapproved evidence), while stop signal 1 — the same-date requirement reaching
+> the resolution model — is unchanged and remains the binding one.
 
 **Status: STOPPED at the Phase A gate. Phase B was not started.** Two of the
 three named stop signals fire outright and the third fires conditionally on one

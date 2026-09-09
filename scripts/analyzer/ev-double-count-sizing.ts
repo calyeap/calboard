@@ -6,6 +6,7 @@ import type { CompanyFactsDocument, XbrlFactUnitRow } from "../../lib/analyzer/a
 import { resolveEntry } from "../../lib/analyzer/acquisition/selectTagged";
 import { tagMapEntry, TAG_MAPPING_VERSION } from "../../lib/analyzer/acquisition/tagMap";
 import { CALIBRATION_SET } from "../../lib/analyzer/calibration/set";
+import { determineNesting, type NestingDetermination } from "./nesting-evidence";
 
 config({ path: ".env.local" });
 
@@ -31,16 +32,24 @@ config({ path: ".env.local" });
 //
 // TWO CONDITIONS make a company affected TODAY, and both are checked:
 //
-//   1. the lease is nested inside what `total-debt` resolved, AND
+//   1. the lease is established as NESTED by approved issuer evidence, AND
 //   2. `finance-lease-liabilities` actually RESOLVES — because where it does
 //      not, that REQUIRED input is missing and the bridge returns INCOMPLETE
 //      (§5.2) rather than a number, so there is no EV for the defect to be
 //      wrong by. A filer whose debt total quietly includes leases but which
 //      tags no lease element adds nothing twice.
 //
+// CORRECTED 2026-09-09. The determination now comes from `nesting-evidence.ts`,
+// shared with the other harnesses. Two inferences this file previously made are
+// rejected: a lease EXCEEDING the debt total was read as EXCLUDED (it disproves
+// FULL nesting only), and a missing finance-lease tag was read as NOTHING TO
+// NEST (a missing fact is not zero, and Lilly's tag absence concealed a lease
+// disclosed as sitting inside long-term debt). The $105M sizing for UNP is
+// unchanged — it rested on issuer element identity, not on either inference.
+//
 // This script rules NOTHING about how nesting should be determined for a filer
 // that tags no combined element. That half is with CalFinance. Companies it
-// cannot settle are reported as UNDETERMINED and counted in neither direction.
+// cannot settle are reported as UNKNOWN and counted in neither direction.
 // ---------------------------------------------------------------------------
 
 const OUT_DIR = join(".evidence", "ev-double-count");
@@ -50,48 +59,15 @@ const COMBINED_CURRENT = "LongTermDebtAndCapitalLeaseObligationsCurrent";
 
 const ELIGIBLE_FORMS = new Set(["10-K", "10-Q", "10-K/A", "10-Q/A", "20-F", "40-F"]);
 
-/**
- * Nesting determinations that came from reading the filing's own lease note.
- *
- * RECORDED, NOT DERIVED — and separated from the tag tests for that reason. A
- * verdict a human read out of a note must not be presentable as something the
- * tags established, so each carries the accession it was read from and this
- * script prints it as a note-read rather than folding it into the arithmetic.
- *
- * These are the filers whose tags could not settle the question and whose notes
- * did. None contributes to the sized total: all came back EXCLUDED.
- */
-const NOTE_READ_VERDICTS: Record<string, { verdict: "EXCLUDED" | "NESTED"; accession: string; quote: string }> = {
-  OKLO: {
-    verdict: "EXCLUDED",
-    accession: "0001628280-26-054571",
-    quote: "Finance lease liability of $187 is included within other liabilities on the condensed consolidated balance sheets.",
-  },
-  RIVN: {
-    verdict: "EXCLUDED",
-    accession: "0001874178-26-000054",
-    quote: "Balance sheet presents Long-term debt and Non-current lease liabilities as two separate lines.",
-  },
-  COST: {
-    verdict: "EXCLUDED",
-    accession: "0000909832-25-000101",
-    quote:
-      "Lease note, footnote (3) on long-term finance lease liabilities of $1,401: " +
-      "\"Included in other long-term liabilities in the consolidated balance sheets.\" " +
-      "Footnote (2), on the current portion: \"Included in other current liabilities.\" " +
-      "Neither sits in Long-term debt, excluding current portion.",
-  },
-};
-
-type Verdict = "NOTHING TO NEST" | "EXCLUDED" | "NESTED" | "UNDETERMINED";
+// The recorded issuer-disclosure determinations moved to `nesting-evidence.ts`
+// so the three harnesses share one source and cannot drift.
 
 interface Row {
   ticker: string;
   totalDebt: number | null;
   financeLease: number | null;
   cash: number | null;
-  verdict: Verdict;
-  verdictSource: "tags" | "note-read" | "none";
+  determination: NestingDetermination;
   /** Dollars the bridge overstates EV by. Null where not affected or unknown. */
   overstatement: number | null;
   evCompletesToday: boolean;
@@ -241,8 +217,12 @@ async function main(): Promise<void> {
         totalDebt: null,
         financeLease: null,
         cash: null,
-        verdict: "UNDETERMINED",
-        verdictSource: "none",
+        determination: {
+          state: "UNKNOWN",
+          leaseAmount: "UNKNOWN",
+          evidence: "none available",
+          detail: `total-debt did not resolve (${debt.outcome})`,
+        },
         overstatement: null,
         evCompletesToday: false,
         evBlockers: blockers,
@@ -261,12 +241,13 @@ async function main(): Promise<void> {
     const combined = instantAt(doc, COMBINED, at);
     const combinedCurrent = instantAt(doc, COMBINED_CURRENT, at);
 
-    // The BRIDGE'S OWN inputs, not a probe of what the filer happens to tag at
-    // the debt date. `NOTHING TO NEST` has to mean "the bridge adds no lease",
-    // and that is a question about what `finance-lease-liabilities` RESOLVES —
-    // Costco tags no finance lease at its debt date and resolves $1,479M at
-    // an earlier one, so an instant-pinned probe called it unaffected while
-    // the bridge was adding the lease all along.
+    // The BRIDGE'S OWN input, not a probe of what the filer happens to tag at
+    // the debt date. What a bridge adds is whatever `finance-lease-liabilities`
+    // RESOLVES to — Costco tags no finance lease at its debt date and resolves
+    // $1,479M at an earlier one, so an instant-pinned probe called it
+    // unaffected while the bridge was adding the lease all along. A null here
+    // means the bridge adds nothing, which is a fact about the ARITHMETIC and
+    // never a finding that the filer has no finance lease.
     const leaseValue = lease.outcome === "RESOLVED" ? lease.value.value : null;
     const leaseDate = lease.outcome === "RESOLVED" ? lease.value.asOfDate : null;
     const dateMismatch = leaseDate !== null && leaseDate !== at;
@@ -277,47 +258,25 @@ async function main(): Promise<void> {
     // arithmetic tests simply do not run.
     const leaseAtDebtDate = financeLeaseAt(doc, at);
 
-    let verdict: Verdict;
-    let verdictSource: Row["verdictSource"] = "tags";
-    const noteRead = NOTE_READ_VERDICTS[company.ticker];
-    if (leaseValue === null) {
-      verdict = "NOTHING TO NEST";
-    } else if (leaseValue > debt.value.value) {
-      // Both figures here are the bridge's own inputs, which is what makes
-      // this a statement about the bridge rather than about the filer.
-      verdict = "EXCLUDED";
-    } else if (
-      combined !== null &&
-      combinedCurrent !== null &&
-      combined.val + combinedCurrent.val === debt.value.value
-    ) {
-      verdict = "NESTED";
-    } else if (
-      combined !== null &&
-      leaseAtDebtDate !== null &&
-      combined.val - debt.value.value === leaseAtDebtDate.value
-    ) {
-      verdict = "EXCLUDED";
-    } else if (noteRead !== undefined) {
-      verdict = noteRead.verdict;
-      verdictSource = "note-read";
-    } else {
-      verdict = "UNDETERMINED";
-      verdictSource = "none";
-    }
+    const determination = determineNesting(
+      doc,
+      company.ticker,
+      { value: debt.value.value, asOfDate: at },
+      leaseValue
+    );
 
     // Affected today needs BOTH: the lease nested inside what total-debt
     // resolved, and the lease input actually resolving so the bridge adds it a
     // second time.
-    const overstatement = verdict === "NESTED" && leaseValue !== null ? leaseValue : null;
+    const overstatement =
+      determination.state === "NESTED" && leaseValue !== null ? leaseValue : null;
 
     rows.push({
       ticker: company.ticker,
       totalDebt: debt.value.value,
       financeLease: leaseValue,
       cash: cash.outcome === "RESOLVED" ? cash.value.value : null,
-      verdict,
-      verdictSource,
+      determination,
       overstatement,
       evCompletesToday: blockers.length === 0,
       evBlockers: blockers,
@@ -336,11 +295,11 @@ async function main(): Promise<void> {
       lines.push(`   *** MIXED DATES: debt struck @${at}, lease struck @${leaseDate} — the bridge`);
       lines.push(`       is combining two different balance sheets ***`);
     }
-    lines.push(`   nesting verdict       ${verdict}${verdictSource === "note-read" ? "  (from the filing's lease note, not the tags)" : ""}`);
-    if (verdictSource === "note-read") {
-      const nr = NOTE_READ_VERDICTS[company.ticker];
-      lines.push(`      read from ${nr.accession}: "${nr.quote}"`);
-    }
+    lines.push(`   NESTING               ${determination.state}   lease amount: ${determination.leaseAmount}`);
+    lines.push(
+      `   evidence              ${determination.evidence}${determination.accession ? ` (${determination.accession})` : ""}`
+    );
+    lines.push(`      ${determination.detail}`);
     if (overstatement !== null) {
       const netDebt =
         cash.outcome === "RESOLVED"
@@ -355,16 +314,21 @@ async function main(): Promise<void> {
         lines.push(`       as a share of EV: NOT COMPUTED — no price is recorded for ${company.ticker},`);
         lines.push(`       and supplying one to make a percentage look complete is not available here.`);
       }
-    } else if (verdict === "NESTED" && leaseValue === null) {
-      lines.push(`   nested, but the finance-lease input does not resolve — the bridge adds`);
-      lines.push(`   nothing a second time, and returns INCOMPLETE for the missing REQUIRED input`);
+    } else if (
+      determination.state === "NESTED" ||
+      determination.state === "NESTED-UNQUANTIFIED"
+    ) {
+      lines.push(`   nested, but no finance-lease input resolves — the bridge adds nothing a`);
+      lines.push(`   second time, so this is INCOMPLETE for a missing REQUIRED input rather than`);
+      lines.push(`   double-counting. The debt figure is still contaminated by a lease whose size`);
+      lines.push(`   the issuer never states, which no bridge arithmetic can remove.`);
     }
     lines.push(`   EV completes today?   ${blockers.length === 0 ? "yes" : `no — missing: ${blockers.join("; ")}`}`);
     lines.push("");
   }
 
   const affected = rows.filter((r) => r.overstatement !== null);
-  const undetermined = rows.filter((r) => r.verdict === "UNDETERMINED");
+  const unknown = rows.filter((r) => r.determination.state === "UNKNOWN");
 
   lines.push("=".repeat(78));
   lines.push("ANSWER");
@@ -376,18 +340,22 @@ async function main(): Promise<void> {
   lines.push("Not affected, and why:");
   for (const r of rows.filter((r) => r.overstatement === null)) {
     const why =
-      r.verdict === "NOTHING TO NEST"
-        ? "finance-lease input does not resolve, so the bridge adds no lease at all"
-        : r.verdict === "EXCLUDED"
-          ? `lease is outside the debt total (${r.verdictSource === "note-read" ? "note-read" : "from tags"})`
-          : "undetermined — counted in neither direction";
+      r.determination.state === "NOT NESTED"
+        ? `lease is outside the debt total (${r.determination.evidence})`
+        : r.determination.state === "NESTED-UNQUANTIFIED"
+          ? "NESTED but never quantified — INCOMPLETE, not double-counting"
+          : r.determination.state === "NESTED"
+            ? "nested, but no lease input resolves, so nothing is added twice"
+            : "UNKNOWN — counted in neither direction, and not zero";
     lines.push(`   ${r.ticker.padEnd(6)} ${why}`);
   }
   lines.push("");
-  if (undetermined.length > 0) {
-    lines.push(`STILL UNDETERMINED: ${undetermined.map((r) => r.ticker).join(", ")}`);
-    lines.push("These are not zero and not affected — they are unmeasured, and how to settle");
-    lines.push("them is the half of the question that is with CalFinance.");
+  if (unknown.length > 0) {
+    lines.push(`STILL UNKNOWN: ${unknown.map((r) => r.ticker).join(", ")}`);
+    lines.push("Not zero, and not non-nested — unestablished. A missing finance-lease tag lands");
+    lines.push("here, and so does a lease merely exceeding the debt total, which disproves FULL");
+    lines.push("nesting only. Where the limiting factor is the issuer's own disclosure rather");
+    lines.push("than Calboard's access, no route reaches a determination at all.");
     lines.push("");
   }
   const mixed = rows.filter((r) => r.dateMismatch);

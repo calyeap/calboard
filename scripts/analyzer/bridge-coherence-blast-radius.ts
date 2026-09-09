@@ -10,6 +10,11 @@ import {
   CANDIDATE_NON_OPERATING_INVESTMENT_TAGS,
 } from "../../lib/analyzer/acquisition/tagMap";
 import { CALIBRATION_SET } from "../../lib/analyzer/calibration/set";
+import {
+  determineNesting,
+  LEASE_INCLUSIVE_DEBT_ELEMENTS as SHARED_LEASE_INCLUSIVE,
+  type NestingDetermination,
+} from "./nesting-evidence";
 
 config({ path: ".env.local" });
 
@@ -60,16 +65,22 @@ config({ path: ".env.local" });
 // SUMMING to the debt total, which is arithmetic coincidence and is not relied
 // on here; UNP is re-derived below on E3 instead.
 //
-// ONE ASYMMETRY THIS SCRIPT REPORTS RATHER THAN RESOLVES. The three approved
-// kinds all establish what a debt total CONTAINS — they are routes to proving
-// nesting. Counting a lease exactly once needs the opposite answer just as
-// often: proof that a lease is NOT in the total. The only route to that which
-// is available deterministically is DEDUCTIVE IMPOSSIBILITY — a lease larger
-// than the entire debt figure cannot be a subset of it. That is a proof rather
-// than a coincidence, but it is also not one of the three named kinds, and it
-// happens to be the only thing that rescues the reference company. It is
-// reported under its own label so the gap in the rule is visible instead of
-// being quietly filled.
+// CORRECTED 2026-09-09. This script previously admitted DEDUCTIVE
+// IMPOSSIBILITY — a lease larger than the whole debt figure — as a route to
+// establishing EXCLUSION, and flagged it as outside the three approved kinds.
+// CalFinance has since ruled it out entirely: a lease exceeding the debt total
+// proves only that the lease is not FULLY nested, and partial nesting stays
+// mathematically possible. The branch is gone. Microsoft, which was the only
+// company it rescued, is now determined on its own Note 13 disclosure instead
+// (E1), which places the whole liability in other current and other long-term
+// liabilities — so the conclusion survived and the reasoning changed.
+//
+// A missing finance-lease tag is likewise no longer read as "nothing to nest".
+// It is UNKNOWN, per `nesting-evidence.ts`, which this script now shares with
+// the other two harnesses.
+//
+// The MEASUREMENTS below — every date, every resolved figure, every bridge
+// coherence test — are unchanged.
 // ---------------------------------------------------------------------------
 
 const OUT_DIR = join(".evidence", "bridge-coherence");
@@ -77,28 +88,10 @@ const OUT_DIR = join(".evidence", "bridge-coherence");
 const ELIGIBLE_FORMS = new Set(["10-K", "10-Q", "10-K/A", "10-Q/A", "20-F", "40-F"]);
 
 /**
- * Elements whose us-gaap definition INCLUDES capital/finance lease
- * obligations. A filer tagging one of these at the same instant as its plain
- * debt total, with the same value, has asserted the total includes leases.
+ * Reported so the output says which lease-inclusive elements were looked for.
+ * The determination itself is the shared one.
  */
-const LEASE_INCLUSIVE_DEBT_ELEMENTS = [
-  "LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities",
-  "LongTermDebtAndCapitalLeaseObligations",
-  "LongTermDebtAndCapitalLeaseObligationsCurrent",
-  "DebtAndCapitalLeaseObligations",
-] as const;
-
-type NestingState =
-  | "NESTED"
-  | "EXCLUDED"
-  | "NOTHING TO NEST"
-  | "UNRESOLVED";
-
-interface Nesting {
-  state: NestingState;
-  evidence: "E3 issuer element identity" | "deductive impossibility" | "no lease input" | "none available";
-  detail: string;
-}
+const LEASE_INCLUSIVE_DEBT_ELEMENTS = SHARED_LEASE_INCLUSIVE;
 
 interface Stock {
   factId: string;
@@ -111,7 +104,7 @@ interface CompanyResult {
   ticker: string;
   stocks: Stock[];
   marketSide: { factId: string; asOfDate: string | null; outcome: string }[];
-  nesting: Nesting;
+  nesting: NestingDetermination;
   /** Bridge name -> the distinct dates its balance-sheet stocks landed on. */
   bridgeDates: { bridge: string; dates: Record<string, string>; coherent: boolean; missing: string[] }[];
   failsI1: boolean;
@@ -163,65 +156,6 @@ function candidateInvestmentDates(doc: CompanyFactsDocument): Record<string, str
     if (best !== null) out[ref.tag] = best.end;
   }
   return out;
-}
-
-function determineNesting(doc: CompanyFactsDocument, debt: Stock, lease: Stock): Nesting {
-  if (lease.outcome !== "RESOLVED" || lease.value === null) {
-    return {
-      state: "NOTHING TO NEST",
-      evidence: "no lease input",
-      detail:
-        "finance-lease-liabilities does not resolve, so no lease enters any bridge; the " +
-        "REQUIRED input is simply missing and its dependents are INCOMPLETE for that reason",
-    };
-  }
-  if (debt.outcome !== "RESOLVED" || debt.value === null || debt.asOfDate === null) {
-    return {
-      state: "UNRESOLVED",
-      evidence: "none available",
-      detail: "total-debt does not resolve, so there is no total for a lease to be inside of",
-    };
-  }
-
-  // E3 — the issuer's own element identity, at the same instant.
-  for (const element of LEASE_INCLUSIVE_DEBT_ELEMENTS) {
-    const row = instantAt(doc, element, debt.asOfDate);
-    if (row !== null && row.val === debt.value) {
-      return {
-        state: "NESTED",
-        evidence: "E3 issuer element identity",
-        detail:
-          `the filer tags the same instant (${debt.asOfDate}) and the same value ` +
-          `(${debt.value}) under us-gaap:${element}, an element whose definition includes ` +
-          `capital lease obligations — so the issuer has asserted its debt total is a ` +
-          `debt-and-capital-lease total, and the lease (${lease.value}) is inside it`,
-      };
-    }
-  }
-
-  // Deductive impossibility — reported under its own label, not as one of the
-  // three approved kinds, because it is not one of them.
-  if (lease.value > debt.value) {
-    return {
-      state: "EXCLUDED",
-      evidence: "deductive impossibility",
-      detail:
-        `the lease (${lease.value}) exceeds the entire total-debt figure (${debt.value}), ` +
-        `so it cannot be a subset of it. A proof, not a coincidence — but see the header: ` +
-        `the ruling names no approved route to establishing EXCLUSION, and this is the only ` +
-        `deterministic one available`,
-    };
-  }
-
-  return {
-    state: "UNRESOLVED",
-    evidence: "none available",
-    detail:
-      "the filer reports a finance lease, tags no lease-inclusive debt element at this " +
-      "instant, and the lease does not exceed the debt total. Nesting could only be settled " +
-      "by explicit issuer disclosure (note text) or a same-date component reconciliation " +
-      "(dimensional members) — neither of which is present in the companyfacts document",
-  };
 }
 
 interface Loaded {
@@ -325,10 +259,13 @@ async function main(): Promise<void> {
       return { factId: id, asOfDate: s.asOfDate, outcome: s.outcome };
     });
 
+    const debtStock = byId.get("total-debt")!;
+    const leaseStock = byId.get("finance-lease-liabilities")!;
     const nesting = determineNesting(
       doc,
-      byId.get("total-debt")!,
-      byId.get("finance-lease-liabilities")!
+      company.ticker,
+      { value: debtStock.value, asOfDate: debtStock.asOfDate },
+      leaseStock.value
     );
 
     const bridgeDates = BRIDGES.map(({ bridge, stocks: needed }) => {
@@ -343,7 +280,11 @@ async function main(): Promise<void> {
       return { bridge, dates, coherent: distinct.size <= 1, missing };
     });
 
-    const failsI1 = nesting.state === "UNRESOLVED" || nesting.state === "NESTED";
+    const failsI1 =
+      nesting.state === "UNKNOWN" ||
+      nesting.state === "NESTED-UNQUANTIFIED" ||
+      nesting.leaseAmount === "UNKNOWN" ||
+      nesting.state === "NESTED";
     const failsI2 = bridgeDates.some((b) => !b.coherent);
 
     results.push({ ticker: company.ticker, stocks, marketSide, nesting, bridgeDates, failsI1, failsI2 });
@@ -388,29 +329,25 @@ async function main(): Promise<void> {
   lines.push("");
   lines.push("Per company, which invariant makes it INCOMPLETE:");
   lines.push("");
-  lines.push("ticker  I1 nesting            I2 dates    verdict");
+  lines.push("ticker  I1 nesting            lease amount    I2 dates    verdict");
   for (const r of results) {
     const verdict =
-      r.nesting.state === "NOTHING TO NEST"
-        ? "INCOMPLETE (lease input missing, pre-existing)"
-        : r.failsI1 || r.failsI2
-          ? "INCOMPLETE"
-          : "can produce a coherent bridge";
+      r.failsI1 || r.failsI2 ? "INCOMPLETE" : "can produce a coherent bridge";
     lines.push(
-      `${r.ticker.padEnd(7)} ${r.nesting.state.padEnd(21)} ${(r.failsI2 ? "MIXED" : "ok").padEnd(11)} ${verdict}`
+      `${r.ticker.padEnd(7)} ${r.nesting.state.padEnd(21)} ${r.nesting.leaseAmount.padEnd(15)} ${(r.failsI2 ? "MIXED" : "ok").padEnd(11)} ${verdict}`
     );
   }
   lines.push("");
 
-  const producible = results.filter(
-    (r) => !r.failsI2 && (r.nesting.state === "EXCLUDED" || r.nesting.state === "NESTED")
-  );
+  const producible = results.filter((r) => !r.failsI1 && !r.failsI2);
   lines.push(`Companies that could still produce a coherent EV bridge: ${producible.length === 0 ? "NONE" : producible.map((r) => r.ticker).join(", ")}`);
   lines.push("");
-  lines.push("Note the two ways of being INCOMPLETE are different, and the count should not");
-  lines.push("be read as one number: a filer with no lease input at all was already");
-  lines.push("INCOMPLETE before this ruling, and a filer whose nesting is unresolved becomes");
-  lines.push("INCOMPLETE because of it.");
+  lines.push("UNKNOWN is the fail-closed answer: not zero, and not non-nested. A missing");
+  lines.push("finance-lease tag lands there, and so does a lease merely exceeding the debt");
+  lines.push("total — which disproves FULL nesting only. Note the ways of being INCOMPLETE");
+  lines.push("differ, and the count should not be read as one number: a filer with no lease");
+  lines.push("input at all was INCOMPLETE before any of this, and one whose nesting is");
+  lines.push("unresolved becomes INCOMPLETE because of the ruling.");
 
   const text = lines.join("\n");
   mkdirSync(OUT_DIR, { recursive: true });

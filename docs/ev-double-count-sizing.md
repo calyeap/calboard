@@ -1,5 +1,21 @@
 # Sizing the EV double-count
 
+> **THE SIZING STANDS; TWO "NOT AFFECTED" REASONS ARE SUPERSEDED, 2026-09-09.**
+> The $105M for UNP is unchanged — it rested on issuer element identity, not on
+> either rejected inference. But later CalFinance rulings reject the reasons
+> given below for MSFT and for the four filers with no lease tag:
+>
+> - **MSFT** was "nesting arithmetically impossible" because its lease exceeds
+>   its debt. That proves only that the lease is not FULLY nested. MSFT is still
+>   not affected, on its own Note 13 disclosure instead.
+> - **NVDA, KO, INTC, LLY** were "the bridge adds no lease at all" from tag
+>   absence. A missing tag is not zero. They are UNKNOWN — and **LLY is in fact
+>   NESTED**, its 10-K placing its finance leases inside long-term debt without
+>   ever quantifying them. Its bridge is INCOMPLETE rather than double-counting,
+>   but its debt figure is contaminated by an amount no disclosure states.
+>
+> The harness now emits the corrected states. Table below updated in place.
+
 **A report. No fix.** The §3.5 enterprise-value bridge double-counts finance
 leases for any filer whose `total-debt` figure already contains them. This
 document sizes that across the ten calibration companies. It changes no code,
@@ -43,20 +59,24 @@ must actually resolve so the bridge adds it a second time.
 
 | Ticker | Why not affected |
 |---|---|
-| MSFT | lease ($66,594M) exceeds total debt ($40,294M) — nesting arithmetically impossible |
+| MSFT | ~~lease exceeds total debt~~ -> note: whole liability in other current/long-term liabilities |
 | OKLO | note: finance lease is in *other liabilities*, not long-term debt |
-| NVDA | finance-lease input does not resolve — the bridge adds no lease at all |
-| KO | finance-lease input does not resolve |
+| NVDA | ~~adds no lease at all~~ -> **UNKNOWN**; "primarily operating" is not REPORTED NIL |
+| KO | ~~adds no lease at all~~ -> **UNKNOWN**; lease note never addresses the liability |
 | COST | note: finance lease is in *other long-term liabilities* and *other current liabilities* |
 | XOM | **undetermined** — see below |
-| INTC | finance-lease input does not resolve |
-| LLY | finance-lease input does not resolve |
+| INTC | ~~adds no lease at all~~ -> **UNKNOWN**; liability never stated separately |
+| LLY | ~~adds no lease at all~~ -> **NESTED-UNQUANTIFIED**; inside long-term debt, unquantified |
 | RIVN | note: balance sheet presents long-term debt and lease liabilities as separate lines |
 
 Where the finance-lease input does not resolve, that REQUIRED input is missing
 and the bridge returns INCOMPLETE (§5.2) rather than a number — so there is no
-EV for the defect to be wrong by. A filer whose debt total quietly includes
-leases but which tags no lease element adds nothing twice.
+EV for the defect to be wrong by, and no *measurable* overstatement.
+
+That is a statement about the arithmetic only. It is **not** a finding that no
+lease exists, and LLY is why the distinction matters: a filer whose debt total
+includes leases while tagging no lease element adds nothing twice and is still
+wrong, because its debt term carries a lease it cannot remove.
 
 **COST was nearly a false negative, and the correction matters.** An earlier
 pass of this measurement pinned the lease probe to the date `total-debt`

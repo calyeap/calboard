@@ -1,5 +1,24 @@
 # The lease-once measurement — and the stop it produces
 
+> **TWO CONCLUSIONS BELOW ARE SUPERSEDED, 2026-09-09.** Later CalFinance
+> rulings reject both inferences this pass used:
+>
+> - **`finance lease > total debt` does not establish non-nesting.** It proves
+>   only that the lease is not FULLY nested; partial nesting stays possible. The
+>   MSFT row's "EXCLUDED (impossible)" verdict is withdrawn. MSFT is still
+>   non-nested, on its own Note 13 disclosure — other current $4,290M + other
+>   long-term $62,304M = $66,594M, outside long-term debt.
+> - **A missing finance-lease tag is not zero and not "nothing to nest".** The
+>   five filers recorded that way are UNKNOWN. LLY is the case that shows the
+>   cost: it tags none, and its 10-K states its finance leases *are* included in
+>   long-term debt, never quantified — so tag absence concealed a nested lease.
+>
+> The MEASUREMENTS are unchanged and still reproduce. The harness now emits the
+> corrected states (`NOT NESTED` / `NESTED` / `NESTED-UNQUANTIFIED` / `UNKNOWN`)
+> from `scripts/analyzer/nesting-evidence.ts`. Current per-company
+> classifications are in
+> [`filing-text-evidence-routes.md`](./filing-text-evidence-routes.md).
+
 **Status: STOPPED before the construction was written.** Stop condition 2 of the
 RONIC work item fired: *lease liabilities cannot be included exactly once
 without changing the existing debt mapping's meaning.*
@@ -70,15 +89,15 @@ cut-point deciding a ruling question.
 
 | Ticker | total-debt | won via | finance lease | Verdict |
 |---|---:|---|---:|---|
-| MSFT | 40,294M | `LongTermDebt` | 66,594M | EXCLUDED |
+| MSFT | 40,294M | `LongTermDebt` | 66,594M | ~~EXCLUDED (impossible)~~ → **NOT NESTED**, on Note 13 |
 | OKLO | 0.7M | `LongTermDebtNoncurrent` | 0.187M | UNDETERMINED → resolved by note, EXCLUDED |
-| NVDA | 33,366M | `LongTermDebt` | not tagged | NOTHING TO NEST |
-| KO | 42,218M | `LongTermDebt` | not tagged | NOTHING TO NEST |
+| NVDA | 33,366M | `LongTermDebt` | not tagged | ~~NOTHING TO NEST~~ → **UNKNOWN** |
+| KO | 42,218M | `LongTermDebt` | not tagged | ~~NOTHING TO NEST~~ → **UNKNOWN** |
 | **UNP** | **31,814M** | **`LongTermDebt`** | **105M** | **NESTED** |
-| COST | 5,670M | `LongTermDebtNoncurrent` | not tagged | NOTHING TO NEST |
+| COST | 5,670M | `LongTermDebtNoncurrent` | 1,479M | ~~NOTHING TO NEST~~ → **NOT NESTED**, footnote 3 |
 | XOM | not acquired | — | — | UNDETERMINED (separate defect, §5) |
-| INTC | 46,585M | `LongTermDebt` | not tagged | NOTHING TO NEST |
-| LLY | 42,503M | `DebtLongtermAndShorttermCombinedAmount` | not tagged | NOTHING TO NEST |
+| INTC | 46,585M | `LongTermDebt` | not tagged | ~~NOTHING TO NEST~~ → **UNKNOWN** |
+| LLY | 42,503M | `DebtLongtermAndShorttermCombinedAmount` | not tagged | ~~NOTHING TO NEST~~ → **NESTED-UNQUANTIFIED** |
 | RIVN | 4,444M | `LongTermDebtNoncurrent` | 99M | UNDETERMINED → resolved by note, EXCLUDED |
 
 ### The one that decides it — UNP
