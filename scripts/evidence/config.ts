@@ -60,3 +60,29 @@ export const UNDECIDED_SUFFIX = "-undecided";
 
 /** Screen 1 tickers, matching the manual capture this runner replaces. */
 export const TICKERS = { resolved: "MSFT", unknown: "ZXQY", unsupported: "SPY" } as const;
+
+/**
+ * Every check this runner is required to execute, by the step name the check
+ * itself reports.
+ *
+ * Declared here rather than derived from the results, which is the whole
+ * point: a required check that never ran produces no result to derive from,
+ * so a list built from results can never notice its own absence. Comparing
+ * this declaration against what actually ran is what turns a silently skipped
+ * check into an explicit gap (§5.6).
+ *
+ * The step names are constant per check rather than per target — one target
+ * failing `no console or page errors` names the same step as any other — so
+ * this list stays the length of the check set, not the target set.
+ */
+export const REQUIRED_CHECK_STEPS: readonly string[] = [
+  "frozen artefacts match their SHA-256",
+  "app reachable and serving Screen 1",
+  "analyzer run table present",
+  "every requested target rendered at every width",
+  "no document or card overflow",
+  "expected font family declared on .cb-analyzer",
+  "no console or page errors",
+  "every requested state appeared",
+  "Continue to gates disabled with a reason on the undecided capture",
+];

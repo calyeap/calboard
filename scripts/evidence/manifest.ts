@@ -2,13 +2,24 @@
 import { WIDTHS } from "./config";
 import type { ProbeDocument } from "./preflight/types";
 import type { Verdict } from "./preflight/verdict";
+import type { SourceIdentity } from "./identity/source";
+import type { CheckInventory } from "./completeness";
+import type { ExecutionFacts, ServedFacts } from "./returnObject";
 
 export interface ManifestArgs {
+  /** The assignment this evidence belongs to. */
+  outcomeId: string;
   baseUrl: string;
   captured: ReadonlyMap<string, ProbeDocument>;
   verdict: Verdict;
   runIds: Record<string, string>;
   unknowns: { target: string; reason: string }[];
+  source: SourceIdentity;
+  served: ServedFacts;
+  execution: ExecutionFacts;
+  inventory: CheckInventory;
+  /** Earlier runs for this OUTCOME ID, when --repeat authorised re-execution. */
+  priorRuns: string[];
 }
 
 /**
@@ -56,6 +67,17 @@ export function buildManifest(args: ManifestArgs): unknown {
   for (const u of args.unknowns) targets[u.target] = { skipped: u.reason };
 
   return {
+    // Identity first: which assignment, which code, which server. Before
+    // these, an archive could look clean and still not say what it covered.
+    outcomeId: args.outcomeId,
+    source: args.source,
+    served: args.served,
+    execution: args.execution,
+    // Required / executed / not-run, so a consumer can see what was
+    // deliberately skipped without inferring it from an absence.
+    checks: args.inventory,
+    priorRuns: args.priorRuns,
+
     base: args.baseUrl,
     captured: new Date().toISOString(),
     widths: [...WIDTHS],
