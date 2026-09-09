@@ -193,6 +193,32 @@ calibration run before this is resolved will carry the same defect.**
 > that re-resolves previously acquired facts and is §3.8.1 business for the
 > acquisition pass.
 
+> **Amendment, 9 September 2026 — D1 and D2 both resolved, and neither was
+> what this section called it.** The acquisition and mapping pass fixed the
+> selection rule and bumped TAG_MAPPING_VERSION to calboard-secmap-2026-09-2;
+> see docs/tag-mapping-version-review.md.
+>
+> **D1 was not a tag-mapping issue** — us-gaap:Revenues was already candidate #2
+> — and fixing selection also caught four stale facts this section never
+> identified, including a FOURTEEN-YEAR-stale NVDA capex figure of $138.7m
+> against a real $6.042bn.
+>
+> **D2 was not a tag-mapping issue either.** XOM resolves through the SEC ticker
+> directory to CIK 0002115436, "ExxonMobil Holdings Corp", a successor
+> registrant with 100 tags, all from 10-Qs, and no annual report at all. The
+> history is intact under CIK 0000034088 — 19 filed annual years, revenue
+> through FY2025 at $332.238bn — and the current mapping would acquire it
+> unchanged. XOM is a ticker-to-CIK resolution defect, not a missing candidate.
+>
+> **LLY does not tag OperatingIncomeLoss and no defensible substitute exists:**
+> Lilly presents no operating-income subtotal, and the nearest tag is PRE-TAX
+> income, which is a different quantity. Nothing was added. Returned as a
+> Command Center item.
+>
+> Of the gaps listed below, exactly ONE was a missing candidate: OKLO total-debt.
+> It was added. The five-of-ten and six-of-ten counts in this section are
+> otherwise unchanged.
+
 **D2 — XOM acquires almost nothing.** Four facts, no annual revenue under any
 mapped candidate (`Revenues` has zero annual rows in its companyfacts), and no
 operating income. XOM contributes nothing to any calibration. Separately, LLY

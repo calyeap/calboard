@@ -276,3 +276,62 @@ describe("the cross-check suite runs on every acquired input", () => {
     expect(row?.outcome).toBe("PASS");
   });
 });
+
+// ---------------------------------------------------------------------------
+// The one candidate added in calboard-secmap-2026-09-2.
+//
+// §3.8.1's exemption rests on the mapping's version review, so an addition has
+// to be shown doing the job it was added for AND shown leaving alone the
+// filers that did not need it. A candidate that quietly changed a company it
+// was not added for is a mis-mapping, and a mis-mapped tag is wrong for every
+// company at once.
+// ---------------------------------------------------------------------------
+describe("total-debt — the noncurrent/current pair added in -09-2", () => {
+  it("acquires OKLO's total debt, which no debt TOTAL element reaches", () => {
+    // Oklo tags LongTermDebtNoncurrent and neither us-gaap:LongTermDebt nor
+    // the combined element. Before this candidate the fact was NOT ACQUIRED
+    // and enterprise value was INCOMPLETE for a reason unconnected to §4.4.
+    const run = acquire({
+      ticker: "OKLO",
+      cik: "0001849056",
+      companyName: "Oklo Inc.",
+      companyFacts: capture("oklo"),
+      price: null,
+      acquiredAt: ACQUIRED_AT,
+    });
+
+    const debt = run.facts.find((f) => f.id === "total-debt");
+    expect(debt).toBeDefined();
+    expect(debt!.source).toContain("us-gaap:LongTermDebtNoncurrent");
+    // Exempt, like every other fact this mapping produced — the addition
+    // changes what is acquired, never which side of §3.8.1 it sits on.
+    expect(debt!.tagMappingVersion).toBe(TAG_MAPPING_VERSION);
+    expect(debt!.verificationState).toBe("SPOT-CHECK NOT REQUIRED");
+  });
+
+  it("records the absent current portion rather than summing it as zero (§4.3)", () => {
+    const run = acquire({
+      ticker: "OKLO",
+      cik: "0001849056",
+      companyName: "Oklo Inc.",
+      companyFacts: capture("oklo"),
+      price: null,
+      acquiredAt: ACQUIRED_AT,
+    });
+
+    const debt = run.facts.find((f) => f.id === "total-debt")!;
+    expect(debt.source).toContain("not tagged at this period");
+    expect(debt.source).toContain("us-gaap:LongTermDebtCurrent");
+  });
+
+  it("leaves MSFT untouched — it reports a debt total, so the addition never fires", () => {
+    // The company that did NOT need the candidate. MSFT tags us-gaap:LongTermDebt
+    // and the third candidate is never reached; the figure is still the one
+    // checked against the frozen mock's stated $30.0bn net debt.
+    const debt = acquireMsft().facts.find((f) => f.id === "total-debt")!;
+
+    expect(debt.source).toContain("us-gaap:LongTermDebt ");
+    expect(debt.source).not.toContain("LongTermDebtNoncurrent");
+    expect(new Decimal(debt.value as Decimal).toNumber()).toBe(40294000000);
+  });
+});

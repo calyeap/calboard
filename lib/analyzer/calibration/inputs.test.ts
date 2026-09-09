@@ -341,13 +341,22 @@ describe("the comparator window must reach the current period (§10.6.2, defect 
 });
 
 describe("comparatorRecency — read off the filings, not asserted", () => {
-  it("finds the live candidate the first-resolving-candidate rule skipped (NVDA)", () => {
+  it("finds no rescuing candidate where the chosen series is already current (NVDA)", () => {
+    // WAS: "finds the live candidate the first-resolving-candidate rule
+    // skipped". Under Defect D the comparator's job on NVDA was to notice that
+    // us-gaap:Revenues sat unread beside the retired ASC 606 element and to
+    // refuse. Acquisition now applies the same recency rule when it CHOOSES,
+    // so there is nothing left for the comparator to rescue: the series it is
+    // handed is already the live one.
+    //
+    // The machinery is unchanged and still has to work — the reachedBy branch
+    // is exercised by the synthetic cases above, which is where it belongs now
+    // that no company in the calibration set reaches it.
     const doc = capture("nvda");
     const recency = comparatorRecency(doc, revenueSeries(doc)!);
 
     expect(recency.currentFiscalYear).toBe(2026);
-    expect(recency.reachedBy?.tag).toBe("us-gaap:Revenues");
-    expect(recency.reachedBy?.throughFiscalYear).toBe(2026);
+    expect(recency.reachedBy).toBeNull();
   });
 
   it("finds no rescuing candidate where the chosen series is already current (MSFT)", () => {
@@ -360,22 +369,48 @@ describe("comparatorRecency — read off the filings, not asserted", () => {
 });
 
 describe("NVDA — the defect, pinned against a real capture", () => {
-  it("no longer returns the 31.25% five-year figure M8-c reported", () => {
+  it("reads its window off the live tag, now that acquisition chooses one", () => {
+    // The two halves of Defect D, both closed. The comparator half refused a
+    // stale window; this pass fixed the acquisition half that chose one.
+    const chosen = revenueSeries(capture("nvda"))!;
+    expect(chosen.tag).toBe("us-gaap:Revenues");
+    expect(chosen.observations[chosen.observations.length - 1].fiscalYear).toBe(2026);
+  });
+
+  it("returns a current five-year comparator where M8-c reported a four-year-stale 31.25%", () => {
     const doc = capture("nvda");
     const result = achievedRevenueCagr(revenueSeries(doc), 5, comparatorRecency(doc, revenueSeries(doc)!));
 
-    expect(result.value).toBeNull();
-    expect(result.blockedBy[0]).toContain("us-gaap:Revenues");
-    expect(result.blockedBy[0]).toContain("FY2026");
+    expect(result.value).not.toBeNull();
+    expect(result.value!.tag).toBe("us-gaap:Revenues");
+    expect(result.value!.window.toFiscalYear).toBe(2026);
+    expect(result.value!.window.fromFiscalYear).toBe(2021);
+    // Nothing to disclose: the window reaches the filer's own current period.
+    expect(result.value!.staleWindowDisclosure).toBeNull();
   });
 
-  it("still reads its window off the retired tag, because acquisition's candidate choice is not this fix", () => {
-    // The comparator refuses; it does not re-choose the tag. Changing which
-    // candidate resolves re-resolves every previously acquired fact (§3.8.1)
-    // and belongs to the acquisition pass.
-    const chosen = revenueSeries(capture("nvda"))!;
-    expect(chosen.tag).toBe("us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax");
-    expect(chosen.observations[chosen.observations.length - 1].fiscalYear).toBe(2022);
+  it("measures its ten-year window FY2016→FY2026 across the real FY2019 hole", () => {
+    // The endpoint case on a real filing rather than a synthetic one.
+    //
+    // NVIDIA tagged FY2019 revenue only under the ASC 606 element, so
+    // us-gaap:Revenues — correctly chosen since -09-2, and eighteen years long
+    // — has no FY2019 row. Selecting the far endpoint by POSITION landed on
+    // FY2015 and compounded eleven years of growth under a ten-year label;
+    // selecting it by FISCAL YEAR lands on FY2016, which is present, and the
+    // interior hole is irrelevant to a two-endpoint calculation.
+    const doc = capture("nvda");
+    const result = achievedRevenueCagr(revenueSeries(doc), 10, comparatorRecency(doc, revenueSeries(doc)!));
+
+    expect(result.value).not.toBeNull();
+    expect(result.value!.window.horizonYears).toBe(10);
+    expect(result.value!.window.fromFiscalYear).toBe(2016);
+    expect(result.value!.window.toFiscalYear).toBe(2026);
+    // The window spans exactly the horizon it is labelled with.
+    expect(
+      result.value!.window.toFiscalYear - result.value!.window.fromFiscalYear
+    ).toBe(result.value!.window.horizonYears);
+    // The hole is still there — it is tolerated, not papered over.
+    expect(revenueSeries(doc)!.observations.map((o) => o.fiscalYear)).not.toContain(2019);
   });
 });
 
@@ -388,5 +423,69 @@ describe("MSFT — a healthy comparator is untouched by the guard", () => {
     expect(result.value?.staleWindowDisclosure).toBeNull();
     expect(result.value?.window.toFiscalYear).toBe(2026);
     expect(result.value?.window.fromFiscalYear).toBe(2016);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The window endpoint is a FISCAL YEAR, not an array index.
+//
+// Exposed by the acquisition pass (calboard-secmap-2026-09-2): once NVDA's
+// series was chosen correctly it was actually read, and it has a genuine hole
+// at FY2019 — NVIDIA tagged that year's revenue only under the ASC 606 element
+// that us-gaap:Revenues does not carry. Taking the far endpoint by index made
+// the ten-year window span ELEVEN fiscal years and compounded eleven years of
+// growth over ten.
+//
+// A hole INSIDE the window is not a defect: a CAGR is a function of its two
+// endpoints and nothing between them. A hole AT an endpoint is, because there
+// is then no observation for the year the horizon asks about.
+// ---------------------------------------------------------------------------
+
+describe("the comparator window is selected by fiscal year, not by position", () => {
+  it("measures a ten-year horizon from FY(to - 10), even when a year inside the window is missing", () => {
+    // FY2016..FY2026 with FY2019 absent — NVDA's real shape. The endpoints are
+    // FY2016 and FY2026 whatever sits between them.
+    const withHole = series(
+      "us-gaap:Revenues",
+      [2016, 2017, 2018, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(
+        (fy) => [fy, 100 * Math.pow(1.1, fy - 2016)] as [number, number]
+      )
+    );
+
+    const result = achievedRevenueCagr(withHole, 10, current(2026));
+    expect(result.value).not.toBeNull();
+    expect(result.value!.window.fromFiscalYear).toBe(2016);
+    expect(result.value!.window.toFiscalYear).toBe(2026);
+    // The window now spans exactly the horizon it is labelled with.
+    expect(result.value!.window.toFiscalYear - result.value!.window.fromFiscalYear).toBe(
+      result.value!.window.horizonYears
+    );
+    expect(result.value!.cagr.toDecimalPlaces(6).toString()).toBe("0.1");
+  });
+
+  it("REFUSES where the year the horizon asks for is the missing one", () => {
+    // The endpoint itself is absent. There is no ten-year comparator here, and
+    // the nearest available year under a ten-year label is the horizon mismatch
+    // §10.6.2 forbids — the same rule as the too-short case, a different cause.
+    const missingEndpoint = series(
+      "us-gaap:Revenues",
+      [2015, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(
+        (fy) => [fy, 100] as [number, number]
+      )
+    );
+
+    const result = achievedRevenueCagr(missingEndpoint, 10, current(2026));
+    expect(result.value).toBeNull();
+    expect(result.blockedBy[0]).toContain("FY2016");
+  });
+
+  it("still refuses a horizon longer than the history, naming the year it wanted", () => {
+    const short = series(
+      "us-gaap:Revenues",
+      Array.from({ length: 10 }, (_, i) => [2016 + i, 100] as [number, number])
+    );
+    const result = achievedRevenueCagr(short, 10, current(2025));
+    expect(result.value).toBeNull();
+    expect(result.blockedBy[0]).toContain("FY2015");
   });
 });

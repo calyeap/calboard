@@ -1,8 +1,32 @@
 # Defect D — the achieved-growth comparator could be silently stale
 
-**Status: the comparator half is fixed. The acquisition half is reported and
-open.** No frozen artefact was touched. No tag-mapping change was made;
-`TAG_MAPPING_VERSION` remains `calboard-secmap-2026-09-1`.
+**Status: CLOSED, both halves.** The comparator half was fixed on 9 September
+2026 under `calboard-secmap-2026-09-1`; the acquisition half was fixed later the
+same day under `calboard-secmap-2026-09-2`. See
+[`tag-mapping-version-review.md`](tag-mapping-version-review.md).
+
+> **Amendment, 9 September 2026 — the acquisition half is now fixed.** §6 below
+> reported it open, and it was: `resolveEntry` still chose the retired tag, so
+> NVDA's acquired current-period revenue fact was $26.9bn as of 2022-01-30. The
+> acquisition pass applied the same recency rule to `resolveEntry`,
+> `annualSeries` and `quarterlySeries`, bumped `TAG_MAPPING_VERSION` to
+> `calboard-secmap-2026-09-2`, and produced the §3.8.1 review that bump
+> triggers.
+>
+> **The rule found four more stale facts than this document knew about**, none
+> of them revenue: NVDA capex at a **fourteen-year-stale** $138.7m against
+> $6.042bn, INTC D&A at $200m against $11.706bn, LLY total debt a year behind,
+> UNP share-based compensation two years behind. Defect D was named for the
+> comparator; the same rule was mis-selecting across the whole mapping.
+>
+> **Consequence for §5's table below: NVDA is no longer INCOMPLETE.** With
+> acquisition choosing the live series, the comparator has nothing stale to
+> refuse — NVDA returns 66.90% over FY2021→FY2026 (five-year) and 45.70% over
+> FY2016→FY2026 (ten-year). The guard is unchanged and still fires on the
+> synthetic cases;
+> it simply has no real-company instance left in this set.
+
+No frozen artefact was touched by either half.
 
 Reproduce:
 
@@ -114,7 +138,12 @@ real-company instance in this set**. Every stale window found was rescuable.
 That branch is covered by synthetic tests only, and the distinction is recorded
 here so a later reader does not mistake absence of evidence for a dead path.
 
-## 6. What is still open, and where it goes
+## 6. What was still open, and where it went
+
+**CLOSED 9 September 2026 by the acquisition and mapping pass — see the
+amendment at the top of this document. The section is kept as written because it
+is the record of what was deferred and why, and the deferral was the point.**
+
 
 **The same rule governs `resolveEntry`, so the defect is not only in the
 comparator.** NVDA's acquired **current-period revenue fact** is

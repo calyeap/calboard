@@ -1,5 +1,5 @@
 import type { CompanyFactsDocument, XbrlFactUnitRow } from "./secClient";
-import type { TagCandidate } from "./tagMap";
+import type { TagCandidate, TagRef } from "./tagMap";
 
 // ---------------------------------------------------------------------------
 // The historical series the gates and triggers need, taken from the same
@@ -71,14 +71,52 @@ function latestByPeriod(rows: XbrlFactUnitRow[]): Map<string, XbrlFactUnitRow> {
 }
 
 /**
- * The longest single-tag annual series available.
+ * Mapping order, with RETIRED candidates moved out of the way.
  *
- * Candidates are tried in order and the FIRST that yields any annual
+ * The same rule `selectTagged.preferCurrent` applies to the current-period
+ * fact, applied here to the series, and it is written twice rather than shared
+ * because the two operate on different things — one on a single chosen row,
+ * one on a whole series — and a single abstraction over both would have to be
+ * told which it was looking at. What must NOT differ is the definition of
+ * "current", and that is `latestAnnualFiscalYear` in both places.
+ *
+ * Applying it here is what keeps the precedence rule's original promise. That
+ * rule exists so the headline revenue fact and the history contextualising it
+ * come from the same element; fixing only `resolveEntry` would have moved the
+ * fact to `Revenues` while the series stayed on the retired tag, which is the
+ * mixed reading §3.7 refuses and worse than either half alone.
+ *
+ * Where no candidate is current, the first still wins — a short window is a
+ * §3.7 disclosure for the comparator to make, not a reason to return nothing.
+ */
+function preferCurrentSeries(
+  built: { ref: TagRef; observations: AnnualObservation[] }[],
+  filerCurrentFiscalYear: number | null
+): { ref: TagRef; observations: AnnualObservation[] } | null {
+  if (built.length === 0) return null;
+  if (filerCurrentFiscalYear === null) return built[0];
+
+  const current = built.filter(
+    (b) => (b.observations.at(-1)?.fiscalYear ?? -Infinity) >= filerCurrentFiscalYear
+  );
+  return current.length > 0 ? current[0] : built[0];
+}
+
+/**
+ * The single-tag annual series to read this filer's history off.
+ *
+ * Candidates are tried in mapping order and the first that yields any annual
  * observation wins — the same precedence the mapping uses, so the series and
  * the current-period fact come from the same tag wherever both exist. The
  * alternative, picking whichever tag gives the longest history, would let the
  * headline revenue figure and the history that contextualises it come from
  * different elements.
+ *
+ * EXCEPT that a candidate whose series has stopped being reported does not win
+ * over one that is current (`preferCurrentSeries`). NVIDIA's ASC 606 element
+ * yields six clean annual years and stops at FY2022; taking it because it
+ * yielded first put a 31.25% "five-year" CAGR on a window that ended four
+ * years before the price it would be read against (Defect D).
  */
 export function annualSeries(
   doc: CompanyFactsDocument,
@@ -88,6 +126,8 @@ export function annualSeries(
   // assembled from a tag plus its components: the composition of a summed
   // figure can change across the window, and a series that silently switches
   // basis part-way is the mixed basis §3.7 refuses.
+  const built: { ref: TagRef; observations: AnnualObservation[] }[] = [];
+
   for (const { ref } of candidates) {
     const rows = (doc.facts?.[ref.ns]?.[ref.tag]?.units?.USD ?? []).filter((row) => {
       if (!ANNUAL_FORMS.has(row.form ?? "")) return false;
@@ -119,10 +159,13 @@ export function annualSeries(
         accession: row.accn ?? null,
       }));
 
-    return { tag: `${ref.ns}:${ref.tag}`, observations };
+    built.push({ ref, observations });
   }
 
-  return null;
+  const won = preferCurrentSeries(built, latestAnnualFiscalYear(doc));
+  if (won === null) return null;
+
+  return { tag: `${won.ref.ns}:${won.ref.tag}`, observations: won.observations };
 }
 
 export interface MarginSeries {
@@ -242,11 +285,20 @@ export interface QuarterObservation {
  * "Discrete" is the load-bearing word: a 10-Q's year-to-date row is excluded
  * by the duration band, so the run-rate module never receives a six- or
  * nine-month figure labelled as a quarter.
+ *
+ * Carries the same retired-candidate rule as `annualSeries`, and for the same
+ * reason: this is the third caller of the one precedence rule Defect D found
+ * to be missing a recency condition, reading the SAME candidate list off the
+ * SAME filer. Fixing two of the three would leave the run-rate module reading
+ * a quarter from 2022 while the headline fact and the history read 2026 — a
+ * disagreement the codebase does not have today and must not acquire here.
  */
 export function quarterlySeries(
   doc: CompanyFactsDocument,
   candidates: readonly TagCandidate[]
 ): QuarterObservation[] {
+  const built: { ref: TagRef; rows: XbrlFactUnitRow[] }[] = [];
+
   for (const { ref } of candidates) {
     const rows = (doc.facts?.[ref.ns]?.[ref.tag]?.units?.USD ?? []).filter((row) => {
       if (!ALL_FORMS.has(row.form ?? "")) return false;
@@ -257,13 +309,23 @@ export function quarterlySeries(
     const byPeriod = latestByPeriod(rows);
     if (byPeriod.size === 0) continue;
 
-    return [...byPeriod.values()]
-      .sort((a, b) => Date.parse(a.end) - Date.parse(b.end))
-      .map((row) => ({
-        periodStart: row.start as string,
-        periodEnd: row.end,
-        value: row.val,
-      }));
+    built.push({
+      ref,
+      rows: [...byPeriod.values()].sort((a, b) => Date.parse(a.end) - Date.parse(b.end)),
+    });
   }
-  return [];
+
+  const filerCurrent = latestAnnualFiscalYear(doc);
+  const current =
+    filerCurrent === null
+      ? []
+      : built.filter((b) => new Date(b.rows.at(-1)!.end).getUTCFullYear() >= filerCurrent);
+  const won = (current.length > 0 ? current : built)[0];
+  if (won === undefined) return [];
+
+  return won.rows.map((row) => ({
+    periodStart: row.start as string,
+    periodEnd: row.end,
+    value: row.val,
+  }));
 }

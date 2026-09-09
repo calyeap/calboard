@@ -204,17 +204,41 @@ export function achievedRevenueCagr(
     );
   }
 
-  // A CAGR over N years needs N+1 observations: the endpoints and the years
-  // between them. Nine years of history does not produce a ten-year CAGR, and
-  // silently returning the nine-year figure under a ten-year label is exactly
-  // the horizon mismatch §10.6.2 refuses.
-  if (observations.length < horizonYears + 1) {
+  if (observations.length === 0) {
+    return blocked(`${series.tag} carries no annual observations at all`);
+  }
+
+  // THE FAR ENDPOINT IS A FISCAL YEAR, NOT A POSITION.
+  //
+  // `observations[length - 1 - horizonYears]` is the same thing as FY(to - N)
+  // only on a series with no gaps, and a real series can have one: NVIDIA
+  // tagged FY2019 revenue solely under the ASC 606 element, so us-gaap:Revenues
+  // — eighteen years long and the right series to read — simply has no FY2019
+  // row. Counting back ten positions from FY2026 landed on FY2015 and
+  // compounded ELEVEN years of growth under a ten-year label. The window
+  // travelled with the figure and said FY2015→FY2026, so it was visible rather
+  // than hidden, but a reader had to do the subtraction to catch it.
+  //
+  // A gap INSIDE the window is not a defect and is not treated as one: a CAGR
+  // is a function of its two endpoints and nothing between them. §3.7's concern
+  // is that the window sit on ONE accounting basis, which a single-tag series
+  // already guarantees.
+  //
+  // A gap AT the endpoint is a defect, and refusing is the same rule as the
+  // too-short case with a different cause: §10.6.2 requires the achieved figure
+  // to be on the same horizon as the implied one "or it is not compared at
+  // all", and the nearest available year under a ten-year label is precisely
+  // the mismatch that forbids.
+  const to = observations[observations.length - 1];
+  const fromFiscalYear = to.fiscalYear - horizonYears;
+  const from = observations.find((o) => o.fiscalYear === fromFiscalYear);
+
+  if (from === undefined) {
     return blocked(
-      `only ${observations.length} annual observations on ${series.tag}; a ${horizonYears}-year CAGR needs ${horizonYears + 1}`
+      `${series.tag} carries no FY${fromFiscalYear} observation; a ${horizonYears}-year CAGR ending FY${to.fiscalYear} ` +
+        `needs ${horizonYears + 1} annual years, FY${fromFiscalYear} through FY${to.fiscalYear}`
     );
   }
-  const to = observations[observations.length - 1];
-  const from = observations[observations.length - 1 - horizonYears];
 
   const fromValue = new Decimal(from.value);
   const toValue = new Decimal(to.value);
