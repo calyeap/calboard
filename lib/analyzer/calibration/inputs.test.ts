@@ -1,16 +1,22 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import Decimal from "decimal.js";
 import * as calibrationInputs from "./inputs";
 import {
   achievedRevenueCagr,
+  comparatorRecency,
   gapPoints,
   isUsable,
   priceLocationWithinRange,
   requiredGrowthCells,
+  revenueSeries,
+  type WindowRecency,
 } from "./inputs";
 import { computedValue, suppressedValue } from "../figures";
 import { CLEAN_PROVENANCE } from "../provenance";
 import type { AnnualSeries } from "../acquisition/history";
+import type { CompanyFactsDocument } from "../acquisition/secClient";
 import type { ReverseDcfCell } from "../types";
 
 function series(tag: string, values: [number, number][]): AnnualSeries {
@@ -116,17 +122,17 @@ describe("price location within the scenario range (§10.6.2 input A)", () => {
 
 describe("achieved revenue CAGR (§10.6.2's comparator fact)", () => {
   it("computes the CAGR over the requested horizon and names the single tag it came from", () => {
-    const result = achievedRevenueCagr(tenPercentSeries(), 10);
+    const result = achievedRevenueCagr(tenPercentSeries(), 10, current(2025));
     expect(result.value?.cagr.toDecimalPlaces(6).toString()).toBe("0.1");
     expect(result.value?.tag).toBe("us-gaap:Revenues");
-    expect(result.value?.fromFiscalYear).toBe(2015);
-    expect(result.value?.toFiscalYear).toBe(2025);
+    expect(result.value?.window.fromFiscalYear).toBe(2015);
+    expect(result.value?.window.toFiscalYear).toBe(2025);
   });
 
   it("takes the horizon off the END of the series, so the comparator is the most recent window", () => {
-    const result = achievedRevenueCagr(tenPercentSeries(), 5);
-    expect(result.value?.fromFiscalYear).toBe(2020);
-    expect(result.value?.toFiscalYear).toBe(2025);
+    const result = achievedRevenueCagr(tenPercentSeries(), 5, current(2025));
+    expect(result.value?.window.fromFiscalYear).toBe(2020);
+    expect(result.value?.window.toFiscalYear).toBe(2025);
   });
 
   it("REFUSES to shorten the horizon when history is too short", () => {
@@ -135,20 +141,20 @@ describe("achieved revenue CAGR (§10.6.2's comparator fact)", () => {
     // ten-year label is the horizon mismatch that rule exists to forbid, and it
     // would be invisible in the output.
     const nineYears = series("us-gaap:Revenues", Array.from({ length: 10 }, (_, i) => [2016 + i, 100] as [number, number]));
-    const result = achievedRevenueCagr(nineYears, 10);
+    const result = achievedRevenueCagr(nineYears, 10, current(2025));
     expect(result.value).toBeNull();
     expect(result.blockedBy[0]).toContain("needs 11");
   });
 
   it("refuses a CAGR from a zero or negative base rather than returning the number the formula produces", () => {
     const fromZero = series("us-gaap:Revenues", [[2020, 0], [2021, 10], [2022, 20], [2023, 30], [2024, 40], [2025, 50]]);
-    const result = achievedRevenueCagr(fromZero, 5);
+    const result = achievedRevenueCagr(fromZero, 5, current(2025));
     expect(result.value).toBeNull();
     expect(result.blockedBy[0]).toContain("non-positive");
   });
 
   it("yields nothing where no single-tag series exists at all (§3.7)", () => {
-    const result = achievedRevenueCagr(null, 10);
+    const result = achievedRevenueCagr(null, 10, current(2025));
     expect(result.value).toBeNull();
     expect(result.blockedBy[0]).toContain("single-tag");
   });
@@ -192,12 +198,12 @@ describe("required growth, read off M7's grid (§10.6.2 input B)", () => {
 
 describe("the gap, and what counts as a usable observation", () => {
   it("is positive when the price requires more growth than the company has delivered", () => {
-    const achieved = achievedRevenueCagr(tenPercentSeries(), 10).value!;
+    const achieved = achievedRevenueCagr(tenPercentSeries(), 10, current(2025)).value!;
     expect(gapPoints(new Decimal("0.14"), achieved).toDecimalPlaces(4).toString()).toBe("0.04");
   });
 
   it("is negative when the price requires less than the company has delivered", () => {
-    const achieved = achievedRevenueCagr(tenPercentSeries(), 10).value!;
+    const achieved = achievedRevenueCagr(tenPercentSeries(), 10, current(2025)).value!;
     expect(gapPoints(new Decimal("0.06"), achieved).isNegative()).toBe(true);
   });
 
@@ -206,7 +212,7 @@ describe("the gap, and what counts as a usable observation", () => {
     // input alone supports no position and therefore contributes no
     // calibration observation. A set counted on "at least one input" would
     // overstate how much evidence a threshold rests on.
-    const achieved = achievedRevenueCagr(tenPercentSeries(), 10);
+    const achieved = achievedRevenueCagr(tenPercentSeries(), 10, current(2025));
     const required = requiredGrowthCells([solvedCell("current", 0.08, "0.14", "0.11")]);
     const location = priceLocationWithinRange({
       scenarioValues: { bear: new Decimal(100), base: new Decimal(150), bull: new Decimal(200) },
@@ -231,5 +237,156 @@ describe("what this module deliberately does not do", () => {
     // ruling and inventing them in code is the Appendix B failure repeating.
     const names = Object.keys(calibrationInputs);
     expect(names.some((n) => /threshold|band|cutpoint|cutPoint|classify|position/i.test(n))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Defect D — the comparator window's recency.
+//
+// M8-c returned NVDA at a 31.25% five-year CAGR measured FY2017→FY2022, four
+// years before the price it would have been read against, with nothing in the
+// output saying so. These tests pin the rule that replaced it. The rule is
+// about window recency, not about NVDA: every case below except the last two
+// is synthetic, and NVDA is one instance of it.
+// ---------------------------------------------------------------------------
+
+function capture(ticker: string): CompanyFactsDocument {
+  return JSON.parse(
+    readFileSync(join(__dirname, "..", "acquisition", "captures", `${ticker}-companyfacts.json`), "utf8")
+  ) as CompanyFactsDocument;
+}
+
+/** A window that reaches the filer's latest reported year. Nothing to disclose. */
+function current(year: number): WindowRecency {
+  return { currentFiscalYear: year, reachedBy: null };
+}
+
+describe("the comparator window must reach the current period (§10.6.2, defect D)", () => {
+  it("does NOT return a bare figure when the window ends before the current period", () => {
+    // The defect in one line: a plausible number answering a different
+    // question than the one asked. The figure may still travel, but never
+    // without the window it was measured over.
+    const stale = series("us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+      Array.from({ length: 6 }, (_, i) => [2017 + i, 100 * 1.2 ** i] as [number, number]));
+
+    const result = achievedRevenueCagr(stale, 5, current(2026));
+
+    expect(result.value).not.toBeNull();
+    expect(result.value?.window.yearsStale).toBe(4);
+    expect(result.value?.staleWindowDisclosure).not.toBeNull();
+    expect(result.value?.staleWindowDisclosure).toContain("FY2022");
+    expect(result.value?.staleWindowDisclosure).toContain("FY2026");
+  });
+
+  it("returns normally on a series that IS current — the guard must not fire on a healthy company", () => {
+    const result = achievedRevenueCagr(tenPercentSeries(), 10, current(2025));
+
+    expect(result.blockedBy).toEqual([]);
+    expect(result.value?.cagr.toDecimalPlaces(6).toString()).toBe("0.1");
+    expect(result.value?.window.yearsStale).toBe(0);
+    expect(result.value?.staleWindowDisclosure).toBeNull();
+  });
+
+  it("returns INCOMPLETE rather than a labelled figure when another mapped candidate DOES reach the current period", () => {
+    // §10.6.2's split. A truncated series that is all the filer has is a
+    // shortened window (§3.7) and may travel labelled. A truncated series
+    // chosen while a live one sat unread in the same mapping entry is not
+    // stale — it is wrong, and a label would dress it as a judgment call.
+    const stale = series("us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+      Array.from({ length: 6 }, (_, i) => [2017 + i, 100 * 1.2 ** i] as [number, number]));
+
+    const result = achievedRevenueCagr(stale, 5, {
+      currentFiscalYear: 2026,
+      reachedBy: { tag: "us-gaap:Revenues", throughFiscalYear: 2026, observations: 18 },
+    });
+
+    expect(result.value).toBeNull();
+    expect(result.blockedBy[0]).toContain("us-gaap:Revenues");
+    expect(result.blockedBy[0]).toContain("FY2026");
+  });
+
+  it("says nothing about the length of a superseded series", () => {
+    // "Only 6 observations" is true of the wrong tag and would read as a
+    // finding about the company's history, which has 18 years in it.
+    const stale = series("us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+      Array.from({ length: 6 }, (_, i) => [2017 + i, 100 * 1.2 ** i] as [number, number]));
+
+    const result = achievedRevenueCagr(stale, 10, {
+      currentFiscalYear: 2026,
+      reachedBy: { tag: "us-gaap:Revenues", throughFiscalYear: 2026, observations: 18 },
+    });
+
+    expect(result.blockedBy).toHaveLength(1);
+    expect(result.blockedBy[0]).not.toContain("needs 11");
+  });
+
+  it("carries the disclosure exactly when the window is stale, never otherwise", () => {
+    for (const [currentYear, expectStale] of [[2025, false], [2026, true], [2030, true]] as const) {
+      const result = achievedRevenueCagr(tenPercentSeries(), 10, current(currentYear));
+      expect((result.value?.staleWindowDisclosure !== null)).toBe(expectStale);
+      expect(result.value!.window.yearsStale > 0).toBe(expectStale);
+    }
+  });
+
+  it("carries the horizon in the same record that carries the window", () => {
+    // The mechanism the 8 September horizon ruling extends rather than
+    // replaces: one travelling record naming both the horizon a figure was
+    // measured on and the window it covered.
+    const result = achievedRevenueCagr(tenPercentSeries(), 5, current(2025));
+    expect(result.value?.window.horizonYears).toBe(5);
+    expect(result.value?.window.fromFiscalYear).toBe(2020);
+    expect(result.value?.window.toFiscalYear).toBe(2025);
+    expect(result.value?.window.currentFiscalYear).toBe(2025);
+  });
+});
+
+describe("comparatorRecency — read off the filings, not asserted", () => {
+  it("finds the live candidate the first-resolving-candidate rule skipped (NVDA)", () => {
+    const doc = capture("nvda");
+    const recency = comparatorRecency(doc, revenueSeries(doc)!);
+
+    expect(recency.currentFiscalYear).toBe(2026);
+    expect(recency.reachedBy?.tag).toBe("us-gaap:Revenues");
+    expect(recency.reachedBy?.throughFiscalYear).toBe(2026);
+  });
+
+  it("finds no rescuing candidate where the chosen series is already current (MSFT)", () => {
+    const doc = capture("msft");
+    const recency = comparatorRecency(doc, revenueSeries(doc)!);
+
+    expect(recency.currentFiscalYear).toBe(2026);
+    expect(recency.reachedBy).toBeNull();
+  });
+});
+
+describe("NVDA — the defect, pinned against a real capture", () => {
+  it("no longer returns the 31.25% five-year figure M8-c reported", () => {
+    const doc = capture("nvda");
+    const result = achievedRevenueCagr(revenueSeries(doc), 5, comparatorRecency(doc, revenueSeries(doc)!));
+
+    expect(result.value).toBeNull();
+    expect(result.blockedBy[0]).toContain("us-gaap:Revenues");
+    expect(result.blockedBy[0]).toContain("FY2026");
+  });
+
+  it("still reads its window off the retired tag, because acquisition's candidate choice is not this fix", () => {
+    // The comparator refuses; it does not re-choose the tag. Changing which
+    // candidate resolves re-resolves every previously acquired fact (§3.8.1)
+    // and belongs to the acquisition pass.
+    const chosen = revenueSeries(capture("nvda"))!;
+    expect(chosen.tag).toBe("us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax");
+    expect(chosen.observations[chosen.observations.length - 1].fiscalYear).toBe(2022);
+  });
+});
+
+describe("MSFT — a healthy comparator is untouched by the guard", () => {
+  it("returns its ten-year CAGR with nothing to disclose", () => {
+    const doc = capture("msft");
+    const result = achievedRevenueCagr(revenueSeries(doc), 10, comparatorRecency(doc, revenueSeries(doc)!));
+
+    expect(result.blockedBy).toEqual([]);
+    expect(result.value?.staleWindowDisclosure).toBeNull();
+    expect(result.value?.window.toFiscalYear).toBe(2026);
+    expect(result.value?.window.fromFiscalYear).toBe(2016);
   });
 });

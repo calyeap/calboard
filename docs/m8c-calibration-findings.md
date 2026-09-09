@@ -173,6 +173,26 @@ consistent. A threshold calibrated on this figure would be calibrated on a
 window that ended four years before the price it is read against. **Any
 calibration run before this is resolved will carry the same defect.**
 
+> **Amendment, 9 September 2026 — D1's comparator half is fixed; its
+> acquisition half is not.** The 31.25% figure above is no longer produced:
+> the comparator now refuses it as INCOMPLETE, naming the window, the filer's
+> real latest period, and the live candidate that was skipped. See
+> `docs/defect-d-stale-comparator.md`. **The figure in §3's table below is
+> retained as the record of what the 9 September run returned, and is not a
+> current output.**
+>
+> D1 was reported here as a tag-mapping issue. It is not one. `Revenues` is
+> already candidate #2 of the `current-revenue` entry — the mapping reaches
+> it; the first-resolving-candidate rule never asks whether the series it
+> built is still alive. No candidate was added, removed or reordered and
+> `TAG_MAPPING_VERSION` is unchanged.
+>
+> **What remains open is larger than the comparator.** The same rule governs
+> `resolveEntry`, so NVDA's acquired *current-period revenue fact* is
+> $26.9bn as of 2022-01-30 against a real FY2026 figure of $215.9bn. Fixing
+> that re-resolves previously acquired facts and is §3.8.1 business for the
+> acquisition pass.
+
 **D2 — XOM acquires almost nothing.** Four facts, no annual revenue under any
 mapped candidate (`Revenues` has zero annual rows in its companyfacts), and no
 operating income. XOM contributes nothing to any calibration. Separately, LLY
