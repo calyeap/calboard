@@ -94,6 +94,8 @@ Screen 4  REPORT           rendering of the Analysis Result, sections A–J,
 
 **Instrument class is refused here.** A fund, an index, or a currency or crypto pair returns **UNSUPPORTED INSTRUMENT** at resolution (spec §9.3.1). It is a rejection, not a suppressing state: no run opens and no report exists, so it needs an entry-screen treatment rather than a `StateSlot`. That treatment is not specified in this document — see §20.
 
+**A registrant with no annual filing history is refused here too**, under spec §2 rule 1a from amendment M8-2. It is a second rejection at identity resolution and is not UNSUPPORTED INSTRUMENT: that state is a class judgment about funds, indices and currency or crypto pairs, while this registrant is an operating company. Like UNSUPPORTED, it opens no run, reaches no report and takes no `StateSlot`. Its treatment is specified in `mock-screen1-entry.html` — see §20.
+
 **Why Steps 3–5 have no screen.** They are software and instantaneous. Giving them a screen would add a click that decides nothing. They render as a read-only computed band at the top of Screen 3, which is where their only human consequence — an override — actually lives.
 
 **The Gate 0 branch.** §2 says Gate 0 failure stops the analysis before Step 5; §6.1 permits a human override. Screen 3 therefore has two entry states:
@@ -118,7 +120,7 @@ Screen 4  REPORT           rendering of the Analysis Result, sections A–J,
 | `/analyzer/[runId]/profile` | Profile | 3–5 display, 6–7 input | confirm/override, then scenarios |
 | `/analyzer/[runId]/report` | Report | 8–10 output | none |
 
-**`/analyzer` holds no `[runId]` because no run exists yet.** The run is created when the analyst confirms the resolved company, not when the ticker is typed — which is what makes Screen 1 a step rather than a form field. A ticker that fails instrument-class resolution never creates a run at all.
+**`/analyzer` holds no `[runId]` because no run exists yet.** The run is created when the analyst confirms the resolved company, not when the ticker is typed — which is what makes Screen 1 a step rather than a form field. A ticker that fails instrument-class resolution, or that resolves to a registrant with no annual filing history, never creates a run at all.
 
 `[runId]` is in the URL so a refresh does not destroy Step 2 work. **There is no index of runs, no history list, no retrieval UI and no listing endpoint.** Lose the URL and the run is gone. This keeps Saved Analysis (§13.1) out of scope while not being hostile to a browser refresh.
 
@@ -1181,8 +1183,15 @@ Not on the numbered list, but required for the numbered changes to be coherent. 
 | **R10** | **Verification-state token copy.** §7.1's provenance tokens and §9's disclosure levels print the verification state, whose values the spec renamed to CONFIRMED / NOT CONFIRMED / SPOT-CHECK PENDING / SPOT-CHECK NOT REQUIRED | Mechanical follow-through, but outside changes 13–16 and not to be done silently. Tracked as spec §14.6 F5 |
 | **R11** | **How the tag-exempt fact appears in section B.** SPOT-CHECK NOT REQUIRED is now the common verification state, and no mock renders it | Tracked as spec §14.6 F6 |
 | **R12** | **`SpotCheckProgress` counts "n material facts".** Since change 1 the queue is a subset of the material facts, so the label now overstates what the analyst must decide | A one-word copy change, but it is a §3.2 component contract and belongs with R10's vocabulary pass rather than being made in passing |
+| **R13** | **Entry-screen treatment for the Step 1 registrant refusal.** Spec §2 rule 1a (M8-2) refuses a registrant with no annual filing history at identity resolution, on the same F4 precedent that left UNSUPPORTED INSTRUMENT's treatment to DESIGN | **Ruled by Command Center, 9 September 2026: renders in `mock-screen1-entry.html` as STATE 6, with the existing SUPPRESSION decoration, disabled Begin analysis, a stated reason and no retry control. It gains no `StateSlot`, no §6 entry and no place in the state counts** |
 
 **Known stale after this amendment, deliberately not fixed:** `mock-report-msft.html` carries a `Step 6` reference that the renumber makes stale. The report mocks were explicitly out of scope for M7. Tracked as spec §14.6 F1.
+
+---
+
+### 20.5 Amendment M8-2-D — Screen 1's fifth outcome
+
+Spec amendment M8-2 (§14.7, 8 September 2026) added rule 1a — a registrant with no annual filing history is refused at Step 1 — and left its entry-screen treatment to DESIGN, on the same F4 precedent that left UNSUPPORTED INSTRUMENT's treatment outstanding (spec §14.6 F4, §14.7). This amendment supplies it: rendered in `mock-screen1-entry.html` as STATE 6, recorded above as R13.
 
 ---
 
