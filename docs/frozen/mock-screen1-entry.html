@@ -207,7 +207,8 @@ button.primary{font:inherit;font-size:14px;padding:12px 24px;border:1px solid va
     <dt>What this does not tell you</dt>
     <dd>Whether there is usable data behind the symbol. Identity and data availability are separate questions.
     A symbol can resolve cleanly here and still turn out to have too little filed history to analyse, which is
-    found later and reported as its own state.</dd>
+    found later and reported as its own state — a registrant with no filing history at all is a different
+    question, and it is refused here, not later.</dd>
     <dt>What to examine</dt>
     <dd>The company name that comes back. Four letters are easy to get wrong and the name is the cheapest place
     to catch it.</dd>
@@ -370,6 +371,47 @@ button.primary{font:inherit;font-size:14px;padding:12px 24px;border:1px solid va
     <button class="act" type="button">Try again</button>
     <button class="primary" type="button" disabled>Begin analysis</button>
     <span class="reason">Identity is not yet resolved, which is not the same as having been rejected.</span>
+  </div>
+</div>
+
+
+<!-- ============================================================
+     STATE 6 — NO FILING HISTORY
+     Rejection at identity resolution, spec §2 rule 1a (amendment M8-2).
+     Same SUPPRESSION decoration as UNSUPPORTED. No retry control:
+     re-querying the same symbol cannot change the answer.
+     ============================================================ -->
+<div class="panelgap"></div>
+<p class="mockcaption">Screen 1 of 4 · /analyzer · state: no filing history</p>
+
+<div class="entryfield">
+  <label for="t6">Ticker</label>
+  <div class="tickerrow">
+    <input class="inset ticker" id="t6" type="text" value="VNTC" autocomplete="off" spellcheck="false">
+  </div>
+</div>
+
+<div class="result">
+  <div class="state">
+    <span class="plain">This resolves to a real, listed operating company. It has filed no annual report.</span>
+    <span class="name">No filing history — zero annual filings on record</span>
+    <span class="cause">Provider identifies VNTC as a listed operating company, common stock · SEC filing search
+    returns zero annual reports for this registrant</span>
+  </div>
+
+  <p class="note">Every step after this one takes a company apart through its annual filings, and this registrant
+  has none — a run would only fail late, against a fact set that was never going to exist.</p>
+
+  <p class="note">A company can be listed under one registrant while its filing history sits under another, after
+  a reorganisation. Calboard does not follow that link: continuity of the reporting entity is an accounting
+  judgment the software may not make. Identity stays decided here — enter the registrant you mean.</p>
+
+  <p class="note">This is not the same as too little history to analyse. How many years are filed is a later
+  question, and it is reported as its own state.</p>
+
+  <div class="continue">
+    <button class="primary" type="button" disabled>Begin analysis</button>
+    <span class="reason">Resolved, and refused: no annual filing history.</span>
   </div>
 </div>
 
