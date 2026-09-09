@@ -14,6 +14,7 @@ import { evaluateLeverage } from "../../lib/analyzer/gates";
 import { activeProvider } from "../../lib/marketdata";
 import { UNDEFINED_POLICY_CONSTANTS } from "../../lib/analyzer/policy";
 import { CALIBRATION_SET, type CalibrationCompany } from "../../lib/analyzer/calibration/set";
+import { authoredScenariosFor } from "../../lib/analyzer/calibration/scenarios";
 import {
   achievedRevenueCagr,
   comparatorRecency,
@@ -197,8 +198,14 @@ async function runOne(company: CalibrationCompany, offline: boolean): Promise<Co
     leveredResidualExceptionApplies: false,
   });
 
+  // Calvin's authored set first, the validation fixtures only where he has
+  // authored nothing. The two disagree on purpose: the fixtures reproduce the
+  // frozen mocks and the authored set revises them, so a company Calvin has
+  // authored must not fall back to a mock's drivers.
+  const authored = authoredScenariosFor(company.ticker);
   const priceLocation = priceLocationWithinRange({
-    scenarioValues: bundle?.inputs.scenarioValues ?? null,
+    scenarioValues: authored !== null ? authored.scenarioValues : bundle?.inputs.scenarioValues ?? null,
+    scenarioValuesUnavailableReason: authored?.scenarioValuesUnavailable ?? null,
     currentPrice: price?.value ?? null,
     rangeSuppressedBy: leverage.result === "PASS" ? null : leverage.result,
   });

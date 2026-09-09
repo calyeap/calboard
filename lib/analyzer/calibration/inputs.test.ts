@@ -112,6 +112,21 @@ describe("price location within the scenario range (§10.6.2 input A)", () => {
     expect(result.blockedBy).toHaveLength(3);
   });
 
+  it("separates 'nobody authored scenarios' from 'scenarios exist, their values do not'", () => {
+    // Two different failures with two different fixes. The first needs a Step
+    // 7 interface or a recorded bundle; the second needs a NOPAT tax rate and
+    // a §4.4 judgment, and the scenarios are already written. Reporting the
+    // default message for the second sends a reader to build the wrong thing.
+    const authoredButUnvalued = priceLocationWithinRange({
+      scenarioValues: null,
+      scenarioValuesUnavailableReason: "authored, but §7.1's NOPAT tax rate is undefined",
+      currentPrice: new Decimal(150),
+      rangeSuppressedBy: null,
+    });
+    expect(authoredButUnvalued.blockedBy).toEqual(["authored, but §7.1's NOPAT tax rate is undefined"]);
+    expect(authoredButUnvalued.blockedBy.join(" ")).not.toContain("Step 7");
+  });
+
   it("refuses a zero-width range rather than dividing by zero", () => {
     const flat = { bear: new Decimal(100), base: new Decimal(100), bull: new Decimal(100) };
     const result = priceLocationWithinRange({ scenarioValues: flat, currentPrice: new Decimal(100), rangeSuppressedBy: null });

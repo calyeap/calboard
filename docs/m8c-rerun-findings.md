@@ -199,41 +199,73 @@ so even the weaker claim has no evidence under it.
 With 1–3 done, Input B becomes computable and real calibration is possible.
 Input A additionally needs 3, and NVDA additionally needs 4.
 
-## 9. A note on the scenarios, which were not recorded
+## 9. The scenarios, and the one thing none of them has
 
-Calvin's three approved scenario sets were **not** written into the tree, and
-the reason is not the gate above — it is that two of the three cannot be
-recorded without inventing something or breaking something.
+All three approved sets are recorded, in `lib/analyzer/calibration/scenarios.ts`
+— a new module, deliberately **not** the validation fixtures. `fixtures/msft.ts`
+and `fixtures/oklo.ts` have golden tests that reproduce the frozen mocks;
+writing revised drivers into them would silently change what those tests assert
+they reproduce. The fixtures are untouched.
 
-- **NVDA has no scenario values.** The dispatch supplies drivers — a ten-year
-  revenue path, margin, reinvestment intensity, share count — but Input A reads
-  `scenarioValues`, the three per-share figures. Deriving them from the drivers
-  needs `computeScenarioEnterpriseValue` plus an equity bridge (§4.4, unmade), a
-  NOPAT tax rate (undefined) and a chosen discount rate among 8/10/12% (not
-  ruled). No frozen mock carries NVDA scenario values the way
-  `mock-report-msft.html` and `mock-report-oklo.html` do for the other two.
-  Writing three numbers in would be fabricating the exact figure Input A is
-  computed from.
-- **MSFT's revision would break the frozen-mock reproduction.**
-  `lib/analyzer/fixtures/msft.ts` is a *validation* fixture whose golden tests
-  reproduce `mock-report-msft.html`. Calvin's revised bull reinvestment (15% →
-  20%) is a *calibration* input. Overwriting the validation fixture with it
-  would silently change what those tests assert they reproduce.
-- **OKLO's revision is expressible and harmless in isolation** — the existing
-  fixture already carries all three of Calvin's cases verbatim ("Wind-down; cash
-  returned to shareholders.", "8 GW back-loaded reference case.", "8 GW
-  steady-ramp case.") and `shareCount` is already per-scenario, so 205M / 250M /
-  275M is a pure data change. It was left alone only because recording one
-  company's scenarios and not the other two produces no observation either way.
+Fourteen tests lock the numbers to the digit, and three of them exist to stop a
+later session "correcting" something that looks wrong and is not:
 
-The destination for calibration scenarios is therefore a real design question —
-a new calibration-scenario module, separate from the validation fixtures — and
-it is Calvin's to settle. It is recorded here rather than decided.
+- **MSFT's bear reinvestment does not fall with the weaker outcome.** It sits at
+  15%, the same as the base, because the anchor is that AI and infrastructure
+  spend remains necessary. A test asserts `bear === base` so tidying it downward
+  fails loudly.
+- **NVDA's bear carries a negative year.** Year 3 is −12%, and a test asserts
+  exactly one negative entry — it is the only revenue-decline observation in the
+  whole set, and reading it as a sign error would delete it.
+- **OKLO's share counts rise with success** (205M / 250M / 275M), and a test
+  asserts the ordering, because stronger deployment needs more funding.
+
+OKLO's three cases are recorded as **pre-revenue**, not as growth-and-margin
+with zeros in the driver fields. The validation fixture writes zeros for its own
+reasons; repeating that here would state a 0% growth assumption Calvin did not
+make.
+
+Anchors are verbatim where he wrote one and **null where he did not** — NVDA's
+and MSFT's base and bull cases. The production `ScenarioDriverSet` requires a
+non-empty anchor, correctly, so that a real Step 7 entry cannot skip it. This
+module records what was authored, which is a different job, and a sentence
+invented to fill the field would read as his.
+
+**None of the three has scenario values, and that is the finding.** Input A
+reads `scenarioValues` — three per-share figures — and a scenario value is the
+*output* of valuing the drivers, not one of them. Deriving it needs §4.4's
+equity bridge (unmade), §7.1's NOPAT tax rate (undefined) and a chosen discount
+rate among 8/10/12% (§10.6.2 does not choose).
+
+The frozen mocks do carry values for MSFT ($265/$510/$650) and OKLO
+($3.10/$31/$48) — **and those belong to the mocks' own drivers, which these
+revise.** MSFT's bull reinvestment moved 15% → 20%; OKLO's share counts moved
+from a flat 205 to 205/250/275. Carrying the mock values across would pair a
+published number with drivers that no longer produce it, which is worse than an
+honest null because it would look right.
+
+So authoring the scenarios does not unblock Input A. It was worth doing anyway —
+the authored set is now in the tree, under test, and ready the moment the
+constants are ruled — but it changes no count in §6.
+
+One related fix: `priceLocationWithinRange` now separates "nobody authored
+scenarios" from "scenarios exist, their values do not". Those are different
+failures with different fixes, and NVDA was reporting the first when the second
+is true — which would send a reader to build a Step 7 interface when what is
+actually missing is a NOPAT tax rate.
 
 ## 10. What was built
 
 - `scripts/analyzer/check-reverse-dcf.ts` — the staged gate check. Live EDGAR,
-  re-runnable, no policy constant, no cut-point, and a header that states what
-  it must never be extended to do.
+  re-runnable, no policy constant, no cut-point, and a header stating what it
+  must never be extended to do.
+- `lib/analyzer/calibration/scenarios.ts` — Calvin's three authored sets, with
+  absence recorded as absence.
+- `lib/analyzer/calibration/scenarios.test.ts` — 14 tests, including the three
+  "do not correct this" guards above and one asserting the module exports no
+  threshold, band or classifier.
+- `calibrate-position.ts` now reads the authored set in preference to the
+  validation fixtures.
 
-Nothing else changed.
+No policy constant, no cut-point, no frozen artefact, `TAG_MAPPING_VERSION`
+unchanged, renderer still disabled.

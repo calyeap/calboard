@@ -47,6 +47,16 @@ function present<T>(value: T): RawInput<T> {
 export interface PriceLocationInputs {
   /** Step 7's three scenario values, per share. Null where no analyst has authored them. */
   scenarioValues: { bear: Decimal; base: Decimal; bull: Decimal } | null;
+  /**
+   * Why there are no scenario values, where the analyst HAS authored scenarios
+   * but their values could not be produced.
+   *
+   * "Nobody wrote scenarios" and "scenarios exist, their per-share values do
+   * not" are different failures with different fixes, and the default message
+   * states the first. Reporting it for the second sends a reader to build a
+   * Step 7 interface when what is actually missing is a NOPAT tax rate.
+   */
+  scenarioValuesUnavailableReason?: string | null;
   currentPrice: Decimal | null;
   /**
    * §10.6.3 — the position renders only where a range exists. A suppressed
@@ -70,7 +80,10 @@ export function priceLocationWithinRange(input: PriceLocationInputs): RawInput<D
     reasons.push(`range suppressed - ${input.rangeSuppressedBy} (§10.6.3: no range, no position)`);
   }
   if (input.scenarioValues === null) {
-    reasons.push("no Step 7 scenarios - the three scenario values are analyst input and were never acquired");
+    reasons.push(
+      input.scenarioValuesUnavailableReason ??
+        "no Step 7 scenarios - the three scenario values are analyst input and were never acquired"
+    );
   }
   if (input.currentPrice === null) {
     reasons.push("no price");
