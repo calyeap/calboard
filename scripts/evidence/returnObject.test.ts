@@ -13,8 +13,8 @@ const base = {
   execution: { started: "2026-09-09T10:00:00.000Z", completed: "2026-09-09T10:05:00.000Z", runnerRevision: "c".repeat(40) },
   inventory: { required: ["a"], executed: ["a"], notRun: [], unaccountedFor: [], complete: true },
   verdict: { status: "PASS" as const, failingStep: null, results: [] },
-  artefacts: { captureDir: "/e/cap", manifest: "/e/cap/manifest.json", artefactCount: 9 },
-  delivery: { status: "DELIVERED" as const, location: "/e/cap.zip", archiveSha256: "d".repeat(64), error: null },
+  artefacts: { captureDir: "/e/cap", manifest: "/e/cap/manifest.json", captureDirRelative: ".evidence/cap", manifestRelative: ".evidence/cap/manifest.json", artefactCount: 9 },
+  delivery: { status: "DELIVERED" as const, location: "/e/cap.zip", archiveSha256: "d".repeat(64), error: null, retrieval: null, gap: null },
   evidenceComplete: true,
   priorRuns: [],
 };
@@ -66,7 +66,7 @@ describe("buildReturnObject", () => {
   it("keeps execution complete when delivery failed", () => {
     const r = buildReturnObject({
       ...base,
-      delivery: { status: "FAILED", location: null, archiveSha256: null, error: "zip failed" },
+      delivery: { status: "FAILED", location: null, archiveSha256: null, error: "zip failed", retrieval: null, gap: null },
     });
     expect(r.states.executionComplete).toBe(true);
     expect(r.states.evidenceComplete).toBe(true);
@@ -85,7 +85,7 @@ describe("buildReturnObject", () => {
     const r = buildReturnObject({
       ...base,
       served: { baseUrl: "http://127.0.0.1:3000", revision: "old", binding: "MISMATCH", reason: "stale" },
-      delivery: { status: "FAILED", location: null, archiveSha256: null, error: "blocked" },
+      delivery: { status: "FAILED", location: null, archiveSha256: null, error: "blocked", retrieval: null, gap: null },
     });
     expect(r.states.evidenceDelivered).toBe(false);
     expect(r.served.sourceEqualsServed).toBe("no");
@@ -101,5 +101,74 @@ describe("buildReturnObject", () => {
 
   it("reports source == served as yes on a MATCH", () => {
     expect(buildReturnObject(base).served.sourceEqualsServed).toBe("yes");
+  });
+});
+
+describe("exitCodeFor — local-only evidence is not delivered", () => {
+  // A verified archive that never left the machine must not read as success.
+  it("exits 3 when the evidence is only LOCAL_READY", () => {
+    expect(exitCodeFor("PASS", true, "LOCAL_READY")).toBe(3);
+  });
+
+  it("still exits 0 only on a genuine DELIVERED", () => {
+    expect(exitCodeFor("PASS", true, "DELIVERED")).toBe(0);
+  });
+});
+
+describe("buildReturnObject — locations an off-machine owner can act on", () => {
+  const portable = {
+    ...base,
+    artefacts: {
+      captureDir: "C:\Users\Calvin\Documents\calboard\.evidence\cap",
+      manifest: "C:\Users\Calvin\Documents\calboard\.evidence\cap\manifest.json",
+      captureDirRelative: ".evidence/cap",
+      manifestRelative: ".evidence/cap/manifest.json",
+      artefactCount: 9,
+    },
+  };
+
+  // An owner reading this from another machine cannot act on a C:\ path.
+  it("carries repo-relative locations alongside the operator's absolute ones", () => {
+    const r = buildReturnObject(portable);
+    expect(r.artefacts.captureDirRelative).toBe(".evidence/cap");
+    expect(r.artefacts.captureDirRelative).not.toContain("C:");
+    expect(r.artefacts.captureDir).toContain("C:");
+  });
+
+  it("names the retrieval command when the evidence was delivered", () => {
+    const r = buildReturnObject({
+      ...portable,
+      delivery: {
+        status: "DELIVERED",
+        location: "/e/cap.zip",
+        archiveSha256: "d".repeat(64),
+        error: null,
+        retrieval: {
+          route: "github-draft-release",
+          locator: "evidence/CB-G2-EVIDENCE-02",
+          command: "gh release download evidence/CB-G2-EVIDENCE-02",
+          verifiedBytes: 10,
+          verifiedSha256: "d".repeat(64),
+        },
+        gap: null,
+      },
+    });
+    expect(r.delivery.retrieval?.command).toContain("gh release download");
+  });
+
+  it("carries the delivery gap when delivery was not reached", () => {
+    const r = buildReturnObject({
+      ...portable,
+      delivery: {
+        status: "LOCAL_READY",
+        location: "/e/cap.zip",
+        archiveSha256: "d".repeat(64),
+        error: null,
+        retrieval: null,
+        gap: "no native retrieval route inside Gate 2 constraints",
+      },
+    });
+    expect(r.states.evidenceDelivered).toBe(false);
+    expect(r.delivery.gap).toContain("no native retrieval route");
   });
 });

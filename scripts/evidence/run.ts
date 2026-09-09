@@ -28,7 +28,18 @@ import { readRunnerRevision, readSourceIdentity } from "./identity/source";
 import { decideServedBinding, probeServedIdentity } from "./identity/served";
 import { captureDirName, decideRepeat, findPriorRuns, resolveOutcomeId } from "./outcome";
 import { buildCheckInventory, decideEvidenceComplete } from "./completeness";
-import { decideDeliveryGate, deliverArchive, type DeliveryResult } from "./delivery";
+import {
+  decideDeliveryGate,
+  deliverArchive,
+  promoteToDelivered,
+  type DeliveryResult,
+} from "./delivery";
+import {
+  decideRetrievalRoute,
+  deliverViaGitHubDraftRelease,
+  probeRouteCapability,
+} from "./retrieval";
+import { LostWriteError, describeLostWrite } from "./consequential";
 import { buildReturnObject, exitCodeFor } from "./returnObject";
 import type { CheckResult, ProbeDocument } from "./preflight/types";
 
@@ -152,6 +163,8 @@ async function main(): Promise<void> {
   const browser = await chromium.launch();
   const captured = new Map<string, ProbeDocument>();
   const runIds: Record<string, string> = {};
+  /** A consequential write whose response never came back, if one did. */
+  let lostWrite: CheckResult | null = null;
 
   try {
     console.log("\nDriving:");
@@ -167,6 +180,16 @@ async function main(): Promise<void> {
     runIds.OKLO = oklo.runId;
     for (const [k, v] of oklo.captured) captured.set(k, v);
     console.log(`  ok   OKLO run ${oklo.runId}`);
+  } catch (err) {
+    // §5.5. A consequential write whose response was lost is not a runner
+    // error and not a preflight FAIL — it is an UNKNOWN about state that may
+    // or may not have changed. It is recorded, the current state has already
+    // been inspected, and the run continues to a return object rather than
+    // dying in main().catch on exit 1.
+    if (!(err instanceof LostWriteError)) throw err;
+    lostWrite = describeLostWrite(err.write, err.inspected);
+    console.error(`\n  UNKNOWN  ${lostWrite.step}`);
+    console.error(`  ${lostWrite.detail}\n`);
   } finally {
     await browser.close();
   }
@@ -187,6 +210,9 @@ async function main(): Promise<void> {
   // not just that the frozen artefacts matched.
   results.push(frozenGate, reachableGate, dbGate);
   results.push({ step: UNAVAILABLE_STEP, status: "UNKNOWN", detail: UNAVAILABLE_REASON });
+  // Recorded as its own UNKNOWN so the verdict carries it and the archive
+  // shows the state nobody could determine.
+  if (lostWrite !== null) results.push(lostWrite);
 
   const verdict = aggregate(results);
   const unknowns = [{ target: "s1-unavailable", reason: UNAVAILABLE_REASON }];
@@ -248,9 +274,46 @@ async function main(): Promise<void> {
   // EVIDENCE DELIVERED, and the two things that forbid it: evidence that does
   // not describe the code it claims to, and evidence that is not all there.
   const gate = decideDeliveryGate(served.binding, completeness.complete);
-  const delivery: DeliveryResult = gate.allowed
-    ? await deliverArchive(outDir, `${outDir}.zip`)
-    : { status: "FAILED", location: null, archiveSha256: null, error: gate.reason };
+  const zipPath = `${outDir}.zip`;
+  let delivery: DeliveryResult = gate.allowed
+    ? await deliverArchive(outDir, zipPath)
+    : {
+        status: "FAILED",
+        location: null,
+        archiveSha256: null,
+        error: gate.reason,
+        retrieval: null,
+        gap: gate.reason,
+      };
+
+  // Packaging got us LOCAL_READY at best. DELIVERED requires that an owner
+  // elsewhere can actually retrieve it, and the only acceptable proof of that
+  // is fetching the archive back and finding the same bytes.
+  if (delivery.status === "LOCAL_READY") {
+    const capability = await probeRouteCapability();
+    const routeDecision = decideRetrievalRoute(capability);
+    if (routeDecision.route === null || capability.gh === null) {
+      delivery = promoteToDelivered(delivery, null, routeDecision.gap);
+    } else {
+      try {
+        const proof = await deliverViaGitHubDraftRelease(
+          capability.gh,
+          REPO_ROOT,
+          zipPath,
+          outcomeId
+        );
+        delivery = promoteToDelivered(delivery, proof, "");
+      } catch (err) {
+        // The route exists but did not carry the evidence. That is a gap, not
+        // a delivery: the archive is still only local.
+        delivery = promoteToDelivered(
+          delivery,
+          null,
+          `${routeDecision.route} route failed: ${(err as Error).message}`
+        );
+      }
+    }
+  }
 
   const returnObject = buildReturnObject({
     outcomeId,
@@ -262,6 +325,13 @@ async function main(): Promise<void> {
     artefacts: {
       captureDir: outDir,
       manifest: path.join(outDir, "manifest.json"),
+      // Repo-relative, POSIX-separated, so an owner on another machine can act
+      // on them. The absolute pair above stays for the operator standing here.
+      captureDirRelative: path.relative(REPO_ROOT, outDir).split(path.sep).join("/"),
+      manifestRelative: path
+        .relative(REPO_ROOT, path.join(outDir, "manifest.json"))
+        .split(path.sep)
+        .join("/"),
       artefactCount: claimed.length,
     },
     delivery,
@@ -285,8 +355,17 @@ async function main(): Promise<void> {
   }
   console.log(`Delivery:  ${delivery.status}`);
   if (delivery.status === "DELIVERED") {
-    console.log(`  archive: ${delivery.location}`);
-    console.log(`  sha256:  ${delivery.archiveSha256}`);
+    console.log(`  retrieve: ${delivery.retrieval?.command}`);
+    console.log(`  verified: ${delivery.retrieval?.verifiedBytes} bytes fetched back, hash matches`);
+    console.log(`  archive:  ${delivery.location}`);
+    console.log(`  sha256:   ${delivery.archiveSha256}`);
+  } else if (delivery.status === "LOCAL_READY") {
+    // Packaged and verified, but only here. Named as a gap rather than a
+    // failure, because nothing went wrong — the evidence simply has not
+    // reached its owner.
+    console.log(`  NOT DELIVERED — ${delivery.gap}`);
+    console.log(`  archive (local only): ${delivery.location}`);
+    console.log(`  sha256:               ${delivery.archiveSha256}`);
   } else {
     console.log(`  ${delivery.error}`);
     console.log(`  capture directory (intact): ${outDir}`);

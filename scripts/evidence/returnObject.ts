@@ -1,7 +1,7 @@
 // scripts/evidence/returnObject.ts
 import type { CheckStatus } from "./preflight/types";
 import type { Verdict } from "./preflight/verdict";
-import type { DeliveryStatus } from "./delivery";
+import type { DeliveryStatus, RetrievalProof } from "./delivery";
 import type { ServedBinding } from "./identity/served";
 import type { SourceIdentity } from "./identity/source";
 import type { CheckInventory } from "./completeness";
@@ -22,8 +22,18 @@ export interface ExecutionFacts {
 }
 
 export interface ArtefactFacts {
+  /** Absolute, for the operator standing at this machine. */
   captureDir: string;
   manifest: string;
+  /**
+   * Repo-relative, for everyone else.
+   *
+   * Required rather than optional: an owner reading this return object from
+   * another machine cannot act on a `C:\Users\...` path, and making these
+   * optional would let a run omit them and still typecheck.
+   */
+  captureDirRelative: string;
+  manifestRelative: string;
   artefactCount: number;
 }
 
@@ -32,6 +42,10 @@ export interface DeliveryFacts {
   location: string | null;
   archiveSha256: string | null;
   error: string | null;
+  /** Proof an owner elsewhere fetched it back. Null unless DELIVERED. */
+  retrieval: RetrievalProof | null;
+  /** Why delivery was not reached. Null when it was. */
+  gap: string | null;
 }
 
 export interface ReturnArgs {

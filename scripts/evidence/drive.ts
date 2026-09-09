@@ -4,6 +4,7 @@ import { captureAt } from "./capture";
 import { WIDTHS, TICKERS, UNDECIDED_SUFFIX } from "./config";
 import type { ProbeDocument } from "./preflight/types";
 import { loadGateState } from "@/lib/analyzer/gate";
+import { LostWriteError, inspectRunDecisions, inspectRunsForTicker } from "./consequential";
 
 /**
  * The fact ids Step 2 should be showing a card for, on THIS run.
@@ -145,8 +146,19 @@ export async function driveRun(
   try {
     await page.goto(new URL("/analyzer", baseUrl).toString(), { waitUntil: "networkidle" });
     await resolveTicker(page, ticker);
+    // Consequential write: this creates an analyzer run. If the response never
+    // arrives, the row may exist anyway — so the current state is inspected and
+    // reported as UNKNOWN rather than thrown as a generic error, which would
+    // exit on the preflight-FAIL code for a measurement that never happened.
     await page.click('button:has-text("Begin analysis")');
-    await page.waitForURL(/\/analyzer\/[0-9a-f-]{36}\/facts$/, { timeout: 30_000 });
+    try {
+      await page.waitForURL(/\/analyzer\/[0-9a-f-]{36}\/facts$/, { timeout: 30_000 });
+    } catch {
+      throw new LostWriteError(
+        { operation: "Begin analysis", ticker, runId: null },
+        await inspectRunsForTicker(ticker)
+      );
+    }
 
     const match = page.url().match(/\/analyzer\/([0-9a-f-]{36})\/facts/);
     if (match === null) throw new Error(`${ticker}: no runId in ${page.url()}`);
@@ -194,7 +206,18 @@ export async function driveRun(
       // server action (see resolveTicker's doc comment above), and several
       // cards are on screen, so the wait is scoped to this card's own submit
       // button re-rendering "Change decision" (FactCard.tsx:192).
-      await card.locator('button[type="submit"]:has-text("Change decision")').waitFor();
+      //
+      // Consequential write: the decision may have recorded even if this wait
+      // times out, so the run's own gate state is inspected before anyone
+      // resubmits it.
+      try {
+        await card.locator('button[type="submit"]:has-text("Change decision")').waitFor();
+      } catch {
+        throw new LostWriteError(
+          { operation: "record decision", ticker, runId },
+          await inspectRunDecisions(runId, ticker)
+        );
+      }
     }
 
     // Step 2 must actually be complete, or the profile screen is not reachable
