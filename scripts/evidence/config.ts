@@ -9,13 +9,13 @@ export const FROZEN_HASHES: Readonly<Record<string, string>> = {
   "calboard-stock-analyzer-v1-spec.md":
     "2b836fd19d344a5360d439d734b3fc11ea91c20609a170884895c09ab13051fa",
   "calboard-stock-analyzer-v1-design.md":
-    "91f0459a0031212e32e57d9213ac7853bf6d93b4538d83aae32bbdbb503cb0df",
+    "49be40cafc1a07ccb093267acfc1bb86a5e71c34c531b9a911ec821aeed8150b",
   "mock-screen1-entry.html":
     "700db080c61144007a6686b9a98906361db767d1868c348cf71b37c91cfb376e",
   "mock-human-steps.html":
     "2f9e741bb770c7ee2dca5c68315e1a64e5ed9b9c4287e1b5de422f1f55dd6f1c",
   "mock-report-msft.html":
-    "35f382a109ffbeb9b048b8f6d532564e80fc26c00b8c1d6ea8345b7e17fbf870",
+    "4c7547cb23dfe6a6ef6d9eb53cab11180b81319b2fb681715ff11057118fb629",
   "mock-report-oklo.html":
     "fc6de075e6c84f4ba2b720d669985b4f43534f4a7ae77e658c725122d4d9476f",
   "calboard-valuation-methodology.md":

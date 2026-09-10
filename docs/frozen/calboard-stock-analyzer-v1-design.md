@@ -478,8 +478,11 @@ G   Scenario outputs           values · weighted distribution (display only)
                                · price location · rate where base equals price
                                · sensitivity per M14
 H   Fair-value range           see 10.2 below
-I   Interpretation [C]
-I2  Challenger findings        alongside, never reconciled
+I   Interpretation [C]         primary layer per §17.7's I/I2 specification ·
+                               depth behind one interaction each
+I2  Challenger findings        alongside, never reconciled · lead finding
+                               selected per §17.7.1, remainder behind one
+                               interaction
 J   Provisional and unmodelled register
     Investment case            closing restatement · CC-1, approved 5 Sep 2026
     — at a glance              renders only from members already in the Analysis
@@ -828,6 +831,7 @@ These are hard limits, not style preferences.
 4. **The finding block never replaces a state, flag, number or provenance token.** It precedes them. Everything present before this revision is still present after it.
 5. **[C] authors the company-specific line under the same §8.3 hard limits** — no facts it was not given, no base rates absent from supplied data, no reasoning around a suppressing state.
 6. **A finding block for a suppressed section describes the refusal**, not a substitute estimate. "Calboard will not put a number here, and here is why" is the finding.
+7. **Nothing in the primary layer of I or I2 may be a state's only appearance.** States that a reading depends on render above the takeaway, in full, before it — separated from the investment meaning by position rather than by being reduced. §15's never-hidden list is unchanged, and no state, flag, provenance token, price, gate result, override acknowledgement or part of section J moves behind a disclosure.
 
 ### 17.5 Translating states without weakening them
 
@@ -879,6 +883,14 @@ The plain line is real text in the cell, so §16's rule holds: the accessible na
 The §15 rules carry over without exception. One level only; in place, never modal; **a state never expands**, because a state is already visible and disclosure carries evidence, not meaning; Screen 2 exempt; print expands everything. This addition hides nothing on §15's or §17.7's never-hidden lists.
 
 **The default layer stays calm.** The finding block is four short lines, not a textbook. Depth is available, never imposed.
+
+#### 17.7.1 Selecting the challenger point deterministically
+
+Section I summarises one challenger finding. The selection is computed by `[S]` and no model ranks its own objections.
+
+Each finding records the claim or fact it bears on; each claim maps to the section that produced it; §10.2 fixes the section order. **The finding bound to the earliest section is selected**, ties broken by the order the challenger returned them.
+
+This is a proxy for reach, not for severity — a finding against an early input propagates to everything computed after it, but a late-bound finding can still matter more. **The rendered copy therefore states that the finding was selected by report order and not by damage, and does not call it the strongest.** I2 carries the full set, in the same order, never reconciled with the analysis.
 
 ### 17.8 What this layer must not become
 
@@ -1201,6 +1213,12 @@ Spec amendment M8-2 (§14.7, 8 September 2026) added rule 1a — a registrant wi
 ### 20.6 Amendment CB-IA-AMEND-01 — Interpretation and Challenger disclosure
 
 Ruled by Command Center, 10 September 2026: §17.7 gains one disclosure target — the full Interpretation and Challenger content in Sections I and I2, hidden behind exactly one interaction and expanding in place beneath a visible primary summary, under §15's five rules without exception. §17.3, §17.6, §17.16, §10.2, CC-1A/CC-1B, and §15's rules and never-hidden list are untouched; §15's rules are relaxed in no respect. Sections I and I2 still take no finding block (§17.6 unchanged).
+
+---
+
+### 20.7 Amendment CB-IA-DISCLOSURE-02 — the primary layer of I and I2
+
+Ruled by Command Center: new §17.7.1 (the deterministic challenger-point selection rule), §17.4 constraint 7 (no state may appear only in the I/I2 primary layer), and the §10 ordering block's `I` and `I2` rows, in this document; the two stub sections and the `.sec-i` CSS block in `mock-report-msft.html`. §17.3, §17.6, §17.16, §10.2's order, §15's rules and never-hidden list, the spec, the methodology and the state vocabulary are all untouched, and no section is dropped or reordered.
 
 ---
 
