@@ -1,9 +1,22 @@
 # Calboard — Design & UX Entry Point
 
-Read this before any visual or interaction change. It **summarises and indexes** the
-authoritative documents in [Deeper References](#deeper-references); it does not replace
-them. Where this file and a spec disagree on intent, the spec wins and this file
-should be fixed.
+**Scope.** This file indexes design authority for the **Portfolio surfaces** —
+Dashboard (`/`), Holdings (`/holdings`), and the setup wizard (`/accounts/new`).
+Design authority is **surface/feature specific, not universal.** For Stock
+Analyzer work, this file does not govern: use the Technical Specs Index to
+identify the currently approved frozen design artefact, then defer to the
+`docs/frozen/` design contract it designates. For any other surface with no
+approved design contract yet, do not extend this file's Portfolio-era
+guidance to it by default — treat that as open, not silently covered.
+
+Read this before any visual or interaction change **to a Portfolio surface**.
+It **summarises and indexes** the authoritative Portfolio documents in
+[Deeper References](#deeper-references); it does not replace them. Where this
+file and one of those specs disagree on intent, the spec wins and this file
+should be fixed — never "whichever file is newer." If this file, a Portfolio
+spec, or another relevant authority (e.g. the Stock Analyzer contract)
+conflict on something a change depends on, stop and return
+`RECONCILIATION REQUIRED` rather than guessing.
 
 **Labels.** **Durable** — holds across milestones; changing it is a product decision.
 **Current convention** — how the app is built today; reuse it unless there is a
