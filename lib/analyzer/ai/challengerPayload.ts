@@ -1,4 +1,4 @@
-import type { AnalysisResult, FactRecord, GatesResult, QualifyingFlag, SuppressingState } from "../types";
+import type { AnalysisResult, FactRecord, GatesResult, QualifyingFlag, ReportSectionId, SuppressingState } from "../types";
 
 // ---------------------------------------------------------------------------
 // §8.5 — the blind challenger's input, assembled BY CONSTRUCTION.
@@ -46,6 +46,28 @@ export interface ChallengerPayload {
    * the analysis — that would be the §8.5.2 exclusion under another name.
    */
   thesisClaims: string[];
+  /**
+   * §17.7.1 — the section every fact in `facts` was produced by, recorded
+   * here at assembly rather than left for a finding to infer later.
+   *
+   * Not a per-fact lookup, because none is needed: §10.2 defines Section B
+   * as "Fact set with provenance ... all six §3.2 fields" — the complete
+   * fact ledger, not a subset of it — and `facts` above is exactly that
+   * ledger (§8.5.1's own "verified fact set, with all six per-fact fields
+   * intact"). Every fact this payload carries is therefore Section B's
+   * content by construction, whether or not the individual record happens
+   * to be derived (`FactRecord.derivedFrom`) — derivation changes how a
+   * fact was produced, not which section discloses it.
+   *
+   * `thesisClaims` has no equivalent binding: v1 records none (§13.1
+   * excludes Thesis Record from the report entirely, so there is no section
+   * for one to bind to), and `runChallenger` cannot resolve a finding to a
+   * thesis claim in the first place — findings are matched to `facts` by id
+   * only. A future amendment that populates `thesisClaims` would need to
+   * add its own binding at that same point; it does not fall out of this
+   * one.
+   */
+  factSection: ReportSectionId;
   gates: GatesResult;
   activeStates: {
     suppressing: { state: SuppressingState; appliesTo: string }[];
@@ -58,6 +80,7 @@ const ALLOWED_TOP_LEVEL_KEYS = new Set([
   "companyName",
   "facts",
   "thesisClaims",
+  "factSection",
   "gates",
   "activeStates",
 ]);
@@ -129,6 +152,10 @@ export function buildChallengerPayload(result: AnalysisResult): ChallengerPayloa
     companyName: result.companyName,
     facts: result.facts.map((fact) => ({ ...fact })),
     thesisClaims: [],
+    // Not read off `result` — see the field's own doc comment. Every fact
+    // this payload carries is Section B's content by definition, so there is
+    // nothing here for the recording-Proxy test to see as an extra read.
+    factSection: "B",
     gates: result.gates,
     activeStates: {
       suppressing: result.states.suppressing,

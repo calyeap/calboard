@@ -28,6 +28,7 @@ const challenger: ChallengerResult = {
   findings: [
     {
       claimOrFactReference: "Finance-lease ROU additions (finance-lease-rou-additions)",
+      boundSection: "B",
       evidence: "The record is secondary.",
       whatWouldHaveToBeTrue: "It would have to be confirmed against the filing.",
     },

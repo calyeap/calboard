@@ -2811,3 +2811,102 @@ h6 {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===================================================================
+   CB-CHALLENGER-BIND-01 — Sections I and I2 app conformance.
+   Scoped to .cb-analyzer .sec-i (the wrapper AnalyzerReport renders inside
+   #I and #I2's primary layer, mirroring the frozen mock's own .sec-i
+   scoping — see mock-report-msft.html). No existing rule is modified here;
+   .finding/.disclose/.qitem themselves are untouched, this only adds
+   overrides that apply within .sec-i and adds the states/selection classes
+   that had no equivalent anywhere else in the report. */
+
+.cb-analyzer .sec-i .finding dd {
+  font-size: 15px;
+  line-height: 1.5;
+  max-width: 62ch;
+}
+.cb-analyzer .sec-i .finding dl {
+  grid-template-columns: 152px minmax(0, 1fr);
+  gap: 15px 20px;
+}
+.cb-analyzer .sec-i .finding .lede {
+  font-size: 21px;
+  margin-bottom: 22px;
+  max-width: 60ch;
+}
+
+/* States this reading depends on, above the takeaway (§17.4 constraint 7).
+   Reuses .state/.name/.cause as-is (already unscoped, global under
+   .cb-analyzer) and adds the .qual/.what pairing this block needs of its
+   own, since those two are otherwise scoped to Section A's .manifest. */
+.cb-analyzer .sec-i .bearing {
+  margin: 0 0 22px;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--hairline);
+}
+.cb-analyzer .sec-i .bearing h3 {
+  margin: 0 0 10px;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+.cb-analyzer .sec-i .bearing .state {
+  margin-bottom: 9px;
+}
+.cb-analyzer .sec-i .bearing .qual {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.cb-analyzer .sec-i .bearing .qual::before {
+  content: "";
+  flex: 0 0 8px;
+  height: 1px;
+  background: var(--ink);
+  transform: translateY(-3px);
+}
+.cb-analyzer .sec-i .bearing .what {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 4px 0 0 14px;
+  max-width: 66ch;
+}
+
+/* The depth rail beneath a Section I/I2 finding. Siblings, never nested —
+   §15 rule 1 holds; reuses .disclose as-is. */
+.cb-analyzer .sec-i .more {
+  margin-top: 24px;
+  border-top: 1px solid var(--hairline);
+}
+.cb-analyzer .sec-i .more .disclose {
+  margin-top: 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.cb-analyzer .sec-i .more .disclose:last-child {
+  border-bottom: 0;
+}
+
+/* §17.7.1's required copy — "selected by report order, not by damage". */
+.cb-analyzer .sec-i .selrule {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 10px 0 0;
+  max-width: 66ch;
+}
+
+@media (max-width: 720px) {
+  .cb-analyzer .sec-i .finding dl {
+    grid-template-columns: 1fr;
+    gap: 3px 0;
+  }
+  .cb-analyzer .sec-i .finding .lede {
+    font-size: 18px;
+  }
+}

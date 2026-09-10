@@ -163,14 +163,15 @@ export async function runChallenger(payload: ChallengerPayload, call: AnalystCal
       user: buildUserMessage(payload),
       responseSchema: RESPONSE_SCHEMA,
     },
-    (raw) => interpretResponse(raw, catalogue, factsById)
+    (raw) => interpretResponse(raw, catalogue, factsById, payload.factSection)
   );
 }
 
 function interpretResponse(
   raw: unknown,
   catalogue: SlotCatalogue,
-  factsById: Map<string, FactRecord>
+  factsById: Map<string, FactRecord>,
+  factSection: ChallengerPayload["factSection"]
 ): ChallengerResult {
   const findings: ChallengerFinding[] = readResponse(raw).map((finding, i) => {
     const where = `challenger finding ${i + 1}`;
@@ -186,6 +187,11 @@ function interpretResponse(
     }
     return {
       claimOrFactReference: `${fact.name} (${fact.id})`,
+      // §17.7.1 — bound from the payload's own factSection, not from `fact`
+      // or from anything in the model's response. Every finding here bears
+      // on a fact (never a thesis claim; see the field's own doc comment on
+      // ChallengerPayload), so this is unconditional.
+      boundSection: factSection,
       evidence: checked(`${where} evidence`, finding.evidence, catalogue),
       whatWouldHaveToBeTrue: checked(`${where} what would have to be true`, finding.whatWouldHaveToBeTrue, catalogue),
     };

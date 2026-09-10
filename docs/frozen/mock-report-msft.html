@@ -278,6 +278,47 @@ table.t,.grid,.hframe,.stackrow{max-width:none}
   .hframe > div:first-child{order:2;border-right:0;border-top:1px solid var(--hairline)}
   .hframe > div:last-child{order:1}
 }
+
+/* ================= ADDED BY CB-IA-DISCLOSURE-01 =================
+   Scoped to sections I and I2 by the .sec-i class. No existing rule is
+   modified, no colour token is added, and no other section is touched. */
+
+/* The complaint was that body copy is small for the volume. In the primary
+   layer of these two sections only, it goes to body size. Disclosure bodies
+   stay at 12px, so depth still reads as depth. */
+.sec-i .finding dd{font-size:15px;line-height:1.5}
+.sec-i .finding dl{grid-template-columns:152px minmax(0,1fr);gap:15px 20px}
+.sec-i .finding .lede{font-size:21px;margin-bottom:22px;max-width:60ch}
+.sec-i .finding dd{max-width:62ch}
+
+/* States that this section's reading depends on sit above the takeaway
+   instead of inside its sentences. Nothing is hidden; §15 is untouched. */
+.sec-i .bearing{margin:0 0 22px;padding:0 0 18px;border-bottom:1px solid var(--hairline)}
+.sec-i .bearing h3{margin:0 0 10px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-muted);font-weight:600}
+.sec-i .bearing .state{margin-bottom:9px}
+.sec-i .bearing .state .plain{display:block;font-size:13px;line-height:1.45;margin-bottom:6px;
+  font-feature-settings:'tnum' 0}
+.sec-i .bearing .qual{font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  display:flex;gap:6px;align-items:baseline}
+.sec-i .bearing .qual::before{content:"";flex:0 0 8px;height:1px;background:var(--ink);
+  transform:translateY(-3px)}
+.sec-i .bearing .what{font-size:12px;color:var(--ink-muted);margin:4px 0 0 14px;max-width:66ch}
+
+/* The depth rail. Each row is one interaction, expanding in place. Siblings,
+   never nested — §15 rule 1 holds. */
+.sec-i .more{margin-top:24px;border-top:1px solid var(--hairline)}
+.sec-i .more .disclose{margin-top:0;border-bottom:1px solid var(--hairline)}
+.sec-i .more .disclose:last-child{border-bottom:0}
+
+.sec-i .selrule{display:block;font-size:12px;color:var(--ink-muted);margin:10px 0 0;max-width:66ch}
+.sec-i .count{font-size:12px;color:var(--ink-muted);margin:0 0 18px}
+
+@media (max-width:720px){
+  .sec-i .finding dl{grid-template-columns:1fr;gap:3px 0}
+  .sec-i .finding .lede{font-size:18px}
+}
+/* ================= END CB-IA-DISCLOSURE-01 ================= */
 </style>
 </head>
 <body>
@@ -869,19 +910,107 @@ table.t,.grid,.hframe,.stackrow{max-width:none}
 </section>
 
 <!-- ============ I, I2 ============ -->
-<section>
+<section class="sec-i">
   <div class="sechead"><h2>I — Interpretation</h2><span class="k">Plain English · no verdict, target or recommendation</span></div>
   <hr class="rule">
-  <p class="note">Each statement references the values it rests on. Base rates are cited only from supplied data;
-  where none is available the interpretation says so and stops.</p>
+
+  <!-- States first, and separate. Every one of these is already in section A's
+       manifest; repeating the ones this reading depends on keeps them fully
+       visible without threading them through the sentences below. Nothing here
+       is behind a disclosure. -->
+  <div class="bearing">
+    <h3>States this reading depends on</h3>
+    <div class="state">
+      <span class="plain">These scenarios cannot produce a meaningful valuation — more than all of the
+      calculated value sits in the distant terminal period.</span>
+      <span class="name">Degenerate — terminal exceeds total value</span>
+      <span class="cause">4 of 9 reverse-DCF cells · terminal shares 101%, 115%, 120%, 124%</span>
+    </div>
+    <div class="qual">Margin at historical high</div>
+    <p class="what">Trigger A. Current 46.8% is the window maximum; window range 21.4pt.
+    A alone is not evidence of cyclicality — trigger B did not fire.</p>
+  </div>
+
+  <div class="finding">
+    <p class="lede">Today's price asks Microsoft to grow roughly as fast as it already has, from a margin
+    that is the highest it has been in ten years.</p>
+    <dl>
+      <dt>What supports it</dt>
+      <dd>Return on new capital is 20.9%, above every discount rate tested. At that return, growth adds
+      value rather than consuming it, so the required growth is not being funded destructively.</dd>
+
+      <dt>What worries me</dt>
+      <dd>The grid projects forward from a 46.8% operating margin that is the ten-year maximum. At the
+      38.0% median, the same price demands materially more growth than the record it is being compared to.</dd>
+
+      <dt>Biggest uncertainty</dt>
+      <dd>Whether the margin holds at this level. Every figure above inherits that assumption, and no
+      test in this run distinguishes a durable margin from a peak one — trigger A fired and trigger B
+      did not, which is not evidence either way.</dd>
+
+      <dt>Challenger point</dt>
+      <dd>The finance-lease additions that carry reinvestment, return on new capital and the leverage
+      reading are AI-extracted, so the strongest support above rests on the least verified input.
+      <span class="selrule">Selected as the challenger finding bound to the earliest section of the
+      report, not as the most damaging one. Calboard does not rank objections. The full set is in I2.</span></dd>
+    </dl>
+
+    <div class="more">
+      <details class="disclose">
+        <summary><span class="lbl">Full interpretation</span></summary>
+        <div class="body">Each statement references the values it rests on. Base rates are cited only from
+        supplied data; where none is available the interpretation says so and stops. The full reading covers
+        every module in D and E, not only the four points summarised above.</div>
+      </details>
+      <details class="disclose">
+        <summary><span class="lbl">Show calculation</span></summary>
+        <div class="body">The formulas behind 20.9% return on new capital, the 46.8% and 38.0% margin
+        figures, and the 18.5% five-year and 13.7% ten-year implied growth, each with its inputs and the
+        policy constants in force for this run.</div>
+      </details>
+      <details class="disclose">
+        <summary><span class="lbl">Provenance for every figure above</span></summary>
+        <div class="body">Source document string and link, retrieval timestamp, and the derivation path for
+        each inherited provenance label. The three provenance tokens themselves remain visible at their
+        figures in sections B and D.</div>
+      </details>
+    </div>
+  </div>
 </section>
 
-<section>
+<section class="sec-i">
   <div class="sechead"><h2>I2 — Challenger findings</h2><span class="k">A separate call that did not see the analysis</span></div>
   <hr class="rule">
-  <p class="note">Findings are placed alongside the analysis, not reconciled with it. Neither side is rewritten
-  in light of the other. Each finding shows the claim or fact it bears on, its evidence, and what would have
-  to be true for it to matter. One call, one set of findings — no personas, no voting, no scoring.</p>
+
+  <div class="finding">
+    <p class="lede">The finance-lease additions that carry reinvestment, return on new capital and the
+    leverage reading are AI-extracted, so the analysis leans hardest on its least verified input.</p>
+    <dl>
+      <dt>What it bears on</dt>
+      <dd>Reinvestment at 86% of NOPAT, return on new capital at 20.9%, and the leverage ratio — every
+      figure derived from $66.6B of finance-lease additions.</dd>
+
+      <dt>Its evidence</dt>
+      <dd>The additions carry the AI-extracted provenance token in section B. Section D already prints the
+      cash-capex-only figures beside them and labels those as the incomplete measure.</dd>
+
+      <dt>What would make it matter</dt>
+      <dd>The additions being materially misread. If they are removed, six derived figures cascade to
+      INCOMPLETE and the leverage precondition stops returning PASS.</dd>
+    </dl>
+    <p class="selrule">Shown first because it is bound to the earliest section of the report, which is a
+    fixed ordering rule and not a judgment about severity. Findings are placed alongside the analysis and
+    never reconciled with it; neither side is rewritten in light of the other.</p>
+
+    <div class="more">
+      <details class="disclose">
+        <summary><span class="lbl">The other four findings</span></summary>
+        <div class="body">One call, one set of findings — no personas, no voting, no scoring. Each of the
+        remaining four shows the claim or fact it bears on, its evidence, and what would have to be true for
+        it to matter, in the same fixed report order.</div>
+      </details>
+    </div>
+  </div>
 </section>
 
 <!-- ============ J ============ -->

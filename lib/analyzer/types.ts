@@ -626,8 +626,24 @@ export interface PreRevenueModule {
 // §8.5 — the blind challenger (a separate call; see lib/analyzer/ai)
 // ---------------------------------------------------------------------------
 
+// §10.2's fixed section order, restated here only for §17.7.1's own need: an
+// earliest-section comparison requires an ordered list to compare positions
+// in. This is not a general-purpose report-section enum and nothing outside
+// the challenger's own contract should come to depend on it — §10.2's block
+// in the design document remains the one authority on section order; this is
+// a second, independently-listed copy scoped to this file's own concern, not
+// a shared source either document reads from.
+export const REPORT_SECTION_ORDER = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "I2", "J"] as const;
+export type ReportSectionId = (typeof REPORT_SECTION_ORDER)[number];
+
 export interface ChallengerFinding {
   claimOrFactReference: string;
+  // §17.7.1 — the section (per REPORT_SECTION_ORDER) that produced the claim
+  // or fact this finding bears on. Recorded once, when the finding is built
+  // (lib/analyzer/ai/challenger.ts) from the section already attached to the
+  // challenger's own payload (lib/analyzer/ai/challengerPayload.ts) — never
+  // inferred here, or anywhere downstream, from this finding's prose.
+  boundSection: ReportSectionId;
   evidence: string;
   whatWouldHaveToBeTrue: string;
 }
