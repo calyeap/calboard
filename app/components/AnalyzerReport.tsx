@@ -4,6 +4,7 @@ import { formatUsd } from "@/lib/formatUsd";
 import { QuickRead } from "./QuickRead";
 import { ValuationStrip } from "./ValuationStrip";
 import type { AiLayerReport } from "@/lib/analyzer/reportAnalysis";
+import { selectChallengerPoint } from "@/lib/analyzer/ai/challengerSelection";
 import type {
   AnalysisResult,
   ComputedValue,
@@ -239,6 +240,38 @@ function Disclosure({ label, children }: { label: string; children: ReactNode })
   );
 }
 
+// §17.4 constraint 7 / §17.7's bearing block — "states that a reading depends
+// on render above the takeaway, in full, before it". The full manifest
+// (same fields Section A itself renders), not a filtered subset: filtering
+// would risk dropping one that IS relevant, which is exactly the failure
+// this constraint exists to prevent, and a state is never this section's
+// only appearance regardless, since it already renders in Section A.
+function StatesBearing({ states }: { states: AnalysisResult["states"] }) {
+  return (
+    <div className="bearing">
+      <h3>States this reading depends on</h3>
+      {states.suppressing.length === 0 && states.qualifying.length === 0 ? (
+        <p className="what">Nothing suppressed or qualified is active for this analysis.</p>
+      ) : (
+        <>
+          {states.suppressing.map((s, i) => (
+            <div className="state" key={`s-${i}`}>
+              <span className="name">{s.state}</span>
+              <span className="cause">{s.appliesTo}</span>
+            </div>
+          ))}
+          {states.qualifying.map((q, i) => (
+            <Fragment key={`q-${i}`}>
+              <div className="qual">{q.flag}</div>
+              <p className="what">{q.appliesTo}</p>
+            </Fragment>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
 function StateBlock({ figure }: { figure: SuppressedValue }) {
   return (
     <div className="state">
@@ -443,6 +476,11 @@ function AiLayerNote({ aiLayer }: { aiLayer: AiLayerReport | undefined }) {
 
 export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; aiLayer?: AiLayerReport }) {
   const { gates, states, diagnostics, priceImplied, scenarios, scenarioOutputs, fairValueRange, preRevenue } = result;
+
+  // §17.7.1 — computed once, [S], shared by Section I's "Challenger point"
+  // line and Section I2's headline so the two never disagree about which
+  // finding was selected.
+  const challengerSelection = result.challenger === null ? null : selectChallengerPoint(result.challenger.findings);
 
   // Section H's right column restates the r = 8%, current-margin cell —
   // the same cell Section E's own base case reads from.
@@ -1216,20 +1254,61 @@ export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; ai
             <span className="k">Plain English · no verdict, target or recommendation</span>
           </div>
           <hr />
-          {result.interpretation.statements.length === 0 ? (
+          {result.interpretation.pageOne === null ? (
             <p className="note">Not yet available — the interpretation call has not run for this analysis.</p>
           ) : (
-            // One block per §8.2 responsibility, labelled with the
-            // responsibility it discharges. Section I is that table, not a
-            // run of unattributed paragraphs: a reader can see which of the
-            // five questions each sentence is answering, and which were
-            // answered by naming a state instead.
-            result.interpretation.statements.map((s, i) => (
-              <div className="qitem" key={i}>
-                <span className="k">{s.responsibility}</span>
-                <p className="t">{s.statement}</p>
+            <div className="sec-i">
+              <StatesBearing states={states} />
+              <div className="finding">
+                <p className="lede">{result.interpretation.pageOne.mainFinding.statement}</p>
+                <dl>
+                  <dt>What supports it</dt>
+                  <dd>{result.interpretation.pageOne.whatSupportsTheCase.statement}</dd>
+                  <dt>What worries me</dt>
+                  <dd>{result.interpretation.pageOne.whatWorriesCalboard.statement}</dd>
+                  <dt>Biggest uncertainty</dt>
+                  <dd>{result.interpretation.pageOne.biggestUncertainty.statement}</dd>
+                  <dt>Challenger point</dt>
+                  <dd>
+                    {result.challenger === null ? (
+                      "Findings from the independent challenger call appear in Section I2, unreconciled with the analysis above, once that call completes."
+                    ) : challengerSelection === null ? (
+                      "The independent challenger call completed with no findings recorded — see Section I2."
+                    ) : (
+                      <>
+                        {challengerSelection.selected.evidence}{" "}
+                        <span className="selrule">
+                          Selected because it is bound to the earliest report section (§17.7.1) — a fixed ordering
+                          rule, not a ranking by severity. Calboard does not rank objections. The full set is in
+                          Section I2.
+                        </span>
+                      </>
+                    )}
+                  </dd>
+                </dl>
+                <div className="more">
+                  <Disclosure label="Full interpretation">
+                    {/* One block per §8.2 responsibility, labelled with the
+                        responsibility it discharges — every module in D and
+                        E, not only the four points summarised above. */}
+                    {result.interpretation.statements.map((s, i) => (
+                      <div className="qitem" key={i}>
+                        <span className="k">{s.responsibility}</span>
+                        <p className="t">{s.statement}</p>
+                      </div>
+                    ))}
+                  </Disclosure>
+                  <Disclosure label="Show calculation">
+                    The figures the four sentences above rest on are computed in Sections D and E, under the policy
+                    constants shown there — nothing above this disclosure is a new calculation (§10.0.2 rule 3).
+                  </Disclosure>
+                  <Disclosure label="Provenance for every figure above">
+                    Source document, retrieval timestamp and derivation path for every referenced figure remain
+                    visible at their own place in Sections B and D; nothing here duplicates or restates them.
+                  </Disclosure>
+                </div>
               </div>
-            ))
+            </div>
           )}
           <AiLayerNote aiLayer={aiLayer} />
         </section>
@@ -1243,7 +1322,7 @@ export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; ai
           {result.challenger === null ? (
             <p className="note">Not yet available — the independent challenger call has not completed for this analysis.</p>
           ) : (
-            <>
+            <div className="sec-i">
               {/* §8.5.4 — "The merge is assembly, not synthesis — findings are
                   placed alongside the analysis, not reconciled with it, and
                   neither side is rewritten in light of the other." The reader
@@ -1254,21 +1333,46 @@ export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; ai
                 are <b>not reconciled</b> with it — nothing here has been answered, and nothing above has been revised
                 in light of it.
               </p>
-              {result.challenger.findings.length === 0 ? (
+              {challengerSelection === null ? (
                 <p className="note">
                   The independent call completed and recorded no finding against this fact set. That is an answer, not
                   an omission.
                 </p>
               ) : (
-                result.challenger.findings.map((f, i) => (
-                  <div className="qitem" key={i}>
-                    <span className="k">{f.claimOrFactReference}</span>
-                    <p className="t">{f.evidence}</p>
-                    <p className="sub">What would have to be true: {f.whatWouldHaveToBeTrue}</p>
-                  </div>
-                ))
+                <div className="finding">
+                  <span className="k">Selected challenger point</span>
+                  <p className="lede">{challengerSelection.selected.evidence}</p>
+                  <dl>
+                    <dt>What it bears on</dt>
+                    <dd>{challengerSelection.selected.claimOrFactReference}</dd>
+                    <dt>What would make it matter</dt>
+                    <dd>{challengerSelection.selected.whatWouldHaveToBeTrue}</dd>
+                  </dl>
+                  <p className="selrule">
+                    Selected because it is bound to the earliest report section (§17.7.1) — a fixed ordering rule,
+                    never a ranking by severity. Calboard does not rank objections. Findings are placed alongside
+                    the analysis and never reconciled with it.
+                  </p>
+                  {challengerSelection.remainder.length > 0 && (
+                    <div className="more">
+                      <Disclosure
+                        label={`The other ${challengerSelection.remainder.length} finding${
+                          challengerSelection.remainder.length === 1 ? "" : "s"
+                        }`}
+                      >
+                        {challengerSelection.remainder.map((f, i) => (
+                          <div className="qitem" key={i}>
+                            <span className="k">{f.claimOrFactReference}</span>
+                            <p className="t">{f.evidence}</p>
+                            <p className="sub">What would have to be true: {f.whatWouldHaveToBeTrue}</p>
+                          </div>
+                        ))}
+                      </Disclosure>
+                    </div>
+                  )}
+                </div>
               )}
-            </>
+            </div>
           )}
         </section>
 
