@@ -9,9 +9,9 @@ export const FROZEN_HASHES: Readonly<Record<string, string>> = {
   "calboard-stock-analyzer-v1-spec.md":
     "2b836fd19d344a5360d439d734b3fc11ea91c20609a170884895c09ab13051fa",
   "calboard-stock-analyzer-v1-design.md":
-    "7cc5513b1cf241e140f714655829b302fbe3e40271d010886369a6fe7aa139c2",
+    "91f0459a0031212e32e57d9213ac7853bf6d93b4538d83aae32bbdbb503cb0df",
   "mock-screen1-entry.html":
-    "217eb87fab3eb9deb33e51180ca83ebf09df26525fefd9455e5fa05202df5bdc",
+    "700db080c61144007a6686b9a98906361db767d1868c348cf71b37c91cfb376e",
   "mock-human-steps.html":
     "2f9e741bb770c7ee2dca5c68315e1a64e5ed9b9c4287e1b5de422f1f55dd6f1c",
   "mock-report-msft.html":

@@ -872,8 +872,11 @@ The plain line is real text in the cell, so §16's rule holds: the accessible na
 
 - *Show calculation* — the formula, its inputs, and the policy constants in force for that figure
 - *What is this?* — the concept explanation, where a term is unavoidable
+- the full Interpretation and Challenger content beneath a visible primary summary in Sections I and I2 — for I2 the surfaced item is labelled *Selected challenger point*, never "strongest," since §8.3 limit 6 forbids [C] ranking its own findings and nothing computes severity
 
-The §15 rules carry over without exception. One level only; in place, never modal; **a state never expands**, because a state is already visible and disclosure carries evidence, not meaning; Screen 2 exempt; print expands everything.
+§17.6 is unchanged by this addition: I and I2 still take no finding block, the visible primary summary above this disclosure is a restructuring of their own existing prose rather than a §17.3 finding block, and it follows none of §17.3's order.
+
+The §15 rules carry over without exception. One level only; in place, never modal; **a state never expands**, because a state is already visible and disclosure carries evidence, not meaning; Screen 2 exempt; print expands everything. This addition hides nothing on §15's or §17.7's never-hidden lists.
 
 **The default layer stays calm.** The finding block is four short lines, not a textbook. Depth is available, never imposed.
 
@@ -1192,6 +1195,12 @@ Not on the numbered list, but required for the numbered changes to be coherent. 
 ### 20.5 Amendment M8-2-D — Screen 1's fifth outcome
 
 Spec amendment M8-2 (§14.7, 8 September 2026) added rule 1a — a registrant with no annual filing history is refused at Step 1 — and left its entry-screen treatment to DESIGN, on the same F4 precedent that left UNSUPPORTED INSTRUMENT's treatment outstanding (spec §14.6 F4, §14.7). This amendment supplies it: rendered in `mock-screen1-entry.html` as STATE 6, recorded above as R13.
+
+---
+
+### 20.6 Amendment CB-IA-AMEND-01 — Interpretation and Challenger disclosure
+
+Ruled by Command Center, 10 September 2026: §17.7 gains one disclosure target — the full Interpretation and Challenger content in Sections I and I2, hidden behind exactly one interaction and expanding in place beneath a visible primary summary, under §15's five rules without exception. §17.3, §17.6, §17.16, §10.2, CC-1A/CC-1B, and §15's rules and never-hidden list are untouched; §15's rules are relaxed in no respect. Sections I and I2 still take no finding block (§17.6 unchanged).
 
 ---
 
