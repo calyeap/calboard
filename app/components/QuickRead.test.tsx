@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup, screen } from "@testing-library/react";
+import Decimal from "decimal.js";
 import { QuickRead } from "./QuickRead";
 import { assembleAnalysisResult } from "@/lib/analyzer/assemble";
 import { MSFT_FIXTURE } from "@/lib/analyzer/fixtures/msft";
@@ -23,6 +24,37 @@ const ITEM_LABELS = [
   "Strongest challenger point",
   "Data and model quality",
 ];
+
+// CB-AUDIT-FIX-01B — the states bound to outputs the schema types as a bare
+// Decimal point the reader at the section holding that output.
+describe("QuickRead — data and model quality points bound states at their own section", () => {
+  function incompleteLine(container: HTMLElement): HTMLElement {
+    return Array.from(container.querySelectorAll("li")).find((li) => /return\s+INCOMPLETE/.test(li.textContent ?? "")) as HTMLElement;
+  }
+
+  it("an unmodelled ±1% rate sensitivity points at Section E", () => {
+    // MSFT's first INCOMPLETE is the rate sensitivity: no fixture supplies cells.
+    const { container } = render(<QuickRead result={assembleAnalysisResult(MSFT_FIXTURE)} />);
+    expect(incompleteLine(container).textContent).toMatch(/see Section E/);
+  });
+
+  it("unauthored scenario drivers point at Section F — not at D, though their cause names 'operating margin'", () => {
+    const unauthored = { revenueGrowthOrPath: null, operatingMargin: null, reinvestmentCapitalIntensity: null };
+    const result = assembleAnalysisResult({
+      ...MSFT_FIXTURE,
+      // Both supplied, so the scenario drivers are the run's first INCOMPLETE.
+      rateSensitivityCells: { plusOnePoint: new Decimal("0.05"), minusOnePoint: new Decimal("-0.05") },
+      revalueBaseCaseAtRate: (rate: Decimal) => MSFT_FIXTURE.price.value.mul(new Decimal("0.1").dividedBy(rate)),
+      scenarios: {
+        bear: { ...MSFT_FIXTURE.scenarios.bear, ...unauthored },
+        base: MSFT_FIXTURE.scenarios.base,
+        bull: MSFT_FIXTURE.scenarios.bull,
+      },
+    });
+    const { container } = render(<QuickRead result={result} />);
+    expect(incompleteLine(container).textContent).toMatch(/see Section F/);
+  });
+});
 
 describe("QuickRead — structure", () => {
   it("renders as a single in-flow <section>, not an <aside> sidebar", () => {

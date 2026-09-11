@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup, screen, within } from "@testing-library/react";
+import Decimal from "decimal.js";
 import { AnalyzerReport } from "./AnalyzerReport";
 import { assembleAnalysisResult } from "@/lib/analyzer/assemble";
 import { MSFT_FIXTURE } from "@/lib/analyzer/fixtures/msft";
@@ -270,6 +271,98 @@ describe("AnalyzerReport — §17.12 disclosure component restored in the report
     const result = assembleAnalysisResult(MSFT_FIXTURE);
     render(<AnalyzerReport result={result} />);
     expect(screen.getByText("Why one flag fired and the other did not")).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CB-AUDIT-FIX-01B — sites where a figure was printed for something never
+// computed, or a false reason was printed for its absence.
+// ---------------------------------------------------------------------------
+
+function rowOf(section: HTMLElement, label: string | RegExp): HTMLElement {
+  return within(section).getByText(label).closest("tr") as HTMLElement;
+}
+
+// The value cell alone — a row's label can itself carry digits ("±1% rate
+// sensitivity").
+function valueOf(section: HTMLElement, label: string | RegExp): HTMLElement {
+  return rowOf(section, label).querySelectorAll("td")[1] as HTMLElement;
+}
+
+describe("AnalyzerReport — G, the rate at which the base case equals the price", () => {
+  it("MSFT (no revaluation supplied): renders INCOMPLETE with the missing input named — never 'no solution in range', never a rate", () => {
+    const { container } = render(<AnalyzerReport result={assembleAnalysisResult(MSFT_FIXTURE)} />);
+    const row = rowOf(container.querySelector("section#G") as HTMLElement, "Discount rate at which the base case equals the price");
+    expect(within(row).getByText("INCOMPLETE")).not.toBeNull();
+    expect(row.textContent).toMatch(/revaluation of the base case/);
+    expect(row.textContent).not.toMatch(/no solution in range/i);
+    expect(row.textContent).not.toMatch(/\d+\.\d%/);
+  });
+
+  it("OKLO fixture (a solver ran, no root in the bracket): renders NO SOLUTION IN RANGE — distinguishable from not computed", () => {
+    const { container } = render(<AnalyzerReport result={assembleAnalysisResult(OKLO_FIXTURE)} />);
+    const row = rowOf(container.querySelector("section#G") as HTMLElement, "Discount rate at which the base case equals the price");
+    expect(within(row).getByText("NO SOLUTION IN RANGE")).not.toBeNull();
+    expect(within(row).queryByText("INCOMPLETE")).toBeNull();
+  });
+});
+
+describe("AnalyzerReport — E, ±1% rate sensitivity when it is not modelled (H4 guard)", () => {
+  // Replaces the guard that asserted the fallback's value was "0" — which
+  // pinned the defect it was meant to guard. What matters is what the reader
+  // sees: no figure at all, and the state in its place.
+  it("renders no figure — only the state — when cells are supplied but enterprise value is INCOMPLETE", () => {
+    const result = assembleAnalysisResult({
+      ...MSFT_FIXTURE,
+      enterpriseValue: { ...MSFT_FIXTURE.enterpriseValue, nonOperatingEquityInvestmentsAtBook: null },
+      rateSensitivityCells: { plusOnePoint: new Decimal("0.05"), minusOnePoint: new Decimal("-0.05") },
+    });
+    const { container } = render(<AnalyzerReport result={result} />);
+    const cell = valueOf(container.querySelector("section#E") as HTMLElement, "±1% rate sensitivity");
+    expect(within(cell).getByText("INCOMPLETE")).not.toBeNull();
+    expect(cell.textContent).toMatch(/enterprise value/);
+    expect(cell.textContent).not.toMatch(/\d/);
+  });
+
+  it("renders no figure — only the state — on every fixture, since none supplies rate-sensitivity cells", () => {
+    for (const fixture of [MSFT_FIXTURE, OKLO_FIXTURE]) {
+      const { container } = render(<AnalyzerReport result={assembleAnalysisResult(fixture)} />);
+      const cell = valueOf(container.querySelector("section#E") as HTMLElement, "±1% rate sensitivity");
+      expect(within(cell).getByText("INCOMPLETE")).not.toBeNull();
+      expect(cell.textContent).not.toMatch(/\d/);
+      expect(cell.textContent).not.toMatch(/NaN/);
+      cleanup();
+    }
+  });
+});
+
+describe("AnalyzerReport — F, scenario drivers nobody authored", () => {
+  it("renders the state in place of growth, margin and reinvestment — never 0.0% — and keeps the written anchor", () => {
+    const unauthored = { revenueGrowthOrPath: null, operatingMargin: null, reinvestmentCapitalIntensity: null };
+    const result = assembleAnalysisResult({
+      ...OKLO_FIXTURE,
+      scenarios: {
+        bear: { ...OKLO_FIXTURE.scenarios.bear, ...unauthored },
+        base: { ...OKLO_FIXTURE.scenarios.base, ...unauthored },
+        bull: { ...OKLO_FIXTURE.scenarios.bull, ...unauthored },
+      },
+    });
+    const { container } = render(<AnalyzerReport result={result} />);
+    const sectionF = container.querySelector("section#F") as HTMLElement;
+    for (const label of ["Bear", "Base", "Bull"]) {
+      const row = rowOf(sectionF, label);
+      expect(within(row).getByText("INCOMPLETE")).not.toBeNull();
+      expect(row.textContent).not.toMatch(/%/);
+      expect(row.textContent).not.toMatch(/NaN/);
+    }
+    expect(within(sectionF).getByText("8 GW back-loaded reference case.")).not.toBeNull();
+  });
+
+  it("still renders authored drivers as figures", () => {
+    const { container } = render(<AnalyzerReport result={assembleAnalysisResult(MSFT_FIXTURE)} />);
+    const sectionF = container.querySelector("section#F") as HTMLElement;
+    expect(within(sectionF).queryByText("INCOMPLETE")).toBeNull();
+    expect(sectionF.textContent).toMatch(/\d+\.\d%/);
   });
 });
 

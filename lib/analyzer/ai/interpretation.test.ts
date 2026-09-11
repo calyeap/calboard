@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { assembleAnalysisResult } from "../assemble";
 import { MSFT_FIXTURE } from "../fixtures/msft";
+import { OKLO_FIXTURE } from "../fixtures/oklo";
 import type { AnalystCall, AnalystCallRequest } from "./analystCall";
 import { runInterpretation, INTERPRETATION_RESPONSIBILITIES } from "./interpretation";
 import { INTERPRETATION_RESPONSIBILITY_KEYS } from "../types";
@@ -46,6 +47,30 @@ function statementsOf(texts: string[]): unknown {
     },
   };
 }
+
+describe("runInterpretation — scenario drivers nobody authored (CB-AUDIT-FIX-01B)", () => {
+  it("tells the model the drivers were not authored — never a 0.0% or NaN standing in for them", async () => {
+    const unauthored = { revenueGrowthOrPath: null, operatingMargin: null, reinvestmentCapitalIntensity: null };
+    const result = assembleAnalysisResult({
+      ...OKLO_FIXTURE,
+      scenarios: {
+        bear: { ...OKLO_FIXTURE.scenarios.bear, ...unauthored },
+        base: { ...OKLO_FIXTURE.scenarios.base, ...unauthored },
+        bull: { ...OKLO_FIXTURE.scenarios.bull, ...unauthored },
+      },
+    });
+    const seen: AnalystCallRequest[] = [];
+    // Only the request matters here; whatever the call returns is not under test.
+    await runInterpretation(result, fakeCall(statementsOf([]), seen)).catch(() => undefined);
+
+    const scenarioLines = seen[0].user.split("\n").filter((l) => /^\s+(bear|base|bull):/.test(l));
+    expect(scenarioLines).toHaveLength(3);
+    for (const line of scenarioLines) {
+      expect(line).toMatch(/INCOMPLETE/);
+      expect(line).not.toMatch(/NaN|0\.0%/);
+    }
+  });
+});
 
 describe("runInterpretation", () => {
   it("substitutes every figure from the Analysis Result rather than from the model", async () => {

@@ -53,9 +53,44 @@ function bundleFrom(fixture: typeof MSFT_FIXTURE): AnalystInputBundle {
   };
 }
 
+/**
+ * OKLO, less the two things its validation set carries but nobody authored.
+ *
+ * The validation set gives OKLO's three scenarios a written anchor each and
+ * NO growth, margin or reinvestment drivers — it carries 0 for all nine, a
+ * placeholder the frozen mock (which has no Section F for OKLO) never shows.
+ * And it gives no revaluation of the base case at other discount rates — it
+ * carries a constant $31 whatever the rate, which the solver then searched
+ * and reported as having no solution. A live report printed the first as
+ * 0.0% growth, margin and reinvestment (CB-AUDIT-01 H4c) and would state the
+ * second as a finding about the company. Supplied here as absent instead, so
+ * both report INCOMPLETE. The fixture itself is untouched: it reproduces the
+ * mock, and its placeholders are part of what it reproduces against.
+ */
+function okloBundle(): AnalystInputBundle {
+  const bundle = bundleFrom(OKLO_FIXTURE);
+  const unauthored = { revenueGrowthOrPath: null, operatingMargin: null, reinvestmentCapitalIntensity: null };
+  const s = bundle.inputs.scenarios;
+  return {
+    inputs: {
+      ...bundle.inputs,
+      scenarios: {
+        bear: { ...s.bear, ...unauthored },
+        base: { ...s.base, ...unauthored },
+        bull: { ...s.bull, ...unauthored },
+      },
+      revalueBaseCaseAtRate: null,
+    },
+    note:
+      bundle.note +
+      " For OKLO the validation set holds no growth, margin or reinvestment drivers and no revaluation " +
+      "of the base case at other discount rates, so those report incomplete rather than carrying placeholders.",
+  };
+}
+
 const BUNDLES: Record<string, AnalystInputBundle> = {
   MSFT: bundleFrom(MSFT_FIXTURE),
-  OKLO: bundleFrom(OKLO_FIXTURE),
+  OKLO: okloBundle(),
 };
 
 /**

@@ -10,6 +10,7 @@ import {
   type PageOneProse,
 } from "../types";
 import { buildSlotCatalogue } from "./slots";
+import { boundState, NOT_COMPUTED_BINDING } from "../notComputed";
 import { renderText, slotIdsIn, traceText, UntraceableFigureError, type SlotCatalogue } from "./traceability";
 import { scanProhibitedCopy, ProhibitedCopyError } from "./prohibitions";
 import { callWithOneRegeneration, MalformedAnalystResponseError, type AnalystCall } from "./analystCall";
@@ -145,10 +146,15 @@ function scenarioBlock(result: AnalysisResult): string {
   return (["bear", "base", "bull"] as const)
     .map((k) => {
       const s = result.scenarios[k];
+      // A driver nobody authored is NaN in the result, with INCOMPLETE bound to
+      // the scenario (notComputed.ts). The model is told that, never shown a
+      // number standing in for it.
+      const bound = boundState(result.states, NOT_COMPUTED_BINDING.scenarioDrivers(k));
+      const driver = (v: Decimal) => (bound !== null && v.isNaN() ? `${bound.state} (not authored)` : pct(v));
       const growth = Array.isArray(s.revenueGrowthOrPath)
         ? "an explicit year-by-year path"
-        : pct(s.revenueGrowthOrPath);
-      return `  ${k}: growth ${growth}, operating margin ${pct(s.operatingMargin)}, reinvestment ${pct(
+        : driver(s.revenueGrowthOrPath);
+      return `  ${k}: growth ${growth}, operating margin ${driver(s.operatingMargin)}, reinvestment ${driver(
         s.reinvestmentCapitalIntensity
       )} — anchor: ${s.writtenAnchor}`;
     })

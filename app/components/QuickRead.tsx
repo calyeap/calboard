@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Decimal from "decimal.js";
 import type { AnalysisResult, Profile, SuppressingState } from "@/lib/analyzer/types";
 import { ValuationStrip } from "./ValuationStrip";
+import { isBoundTo, NOT_COMPUTED_BINDING } from "@/lib/analyzer/notComputed";
 
 // IA-audit restoration (2026-09-05) — Quick Read matches §17.16 exactly:
 // eight items, always visible, one component (no "Learn more" drawer —
@@ -28,6 +29,14 @@ const PROFILE_LABELS: Record<Profile, string> = {
 // `appliesTo` text, so a consolidated Quick Read line can still point the
 // reader at the full detail — never required, only a convenience.
 function sectionRefFor(appliesTo: string): string | null {
+  // The outputs lib/analyzer/notComputed.ts binds a state to, by the name it
+  // binds them under — checked first, because their causes name inputs
+  // ("operating margin") the looser matches below would misplace.
+  if (isBoundTo(appliesTo, NOT_COMPUTED_BINDING.rateSensitivity)) return "E";
+  if (isBoundTo(appliesTo, NOT_COMPUTED_BINDING.rateAtWhichBaseEqualsPrice)) return "G";
+  if ((["bear", "base", "bull"] as const).some((s) => isBoundTo(appliesTo, NOT_COMPUTED_BINDING.scenarioDrivers(s)))) {
+    return "F";
+  }
   const a = appliesTo.toLowerCase();
   if (a.includes("reverse-dcf")) return "E";
   if (a.includes("fcf yield")) return "D";

@@ -141,6 +141,28 @@ describe("buildSlotCatalogue", () => {
     expect(slot?.formatted).not.toMatch(/\d/);
   });
 
+  // CB-AUDIT-FIX-01B. Neither fixture computes a ±1% rate sensitivity or a
+  // rate at which the base case equals the price; [C] gets the state, never
+  // a figure (the old catalogue handed it "0.0%" for the first).
+  it("offers the ±1% rate sensitivity and the base-equals-price rate as their states, carrying no number", () => {
+    for (const result of [msft, oklo]) {
+      const catalogue = buildSlotCatalogue(result);
+      for (const id of [
+        "diagnostics.rateSensitivity.plusOnePoint",
+        "diagnostics.rateSensitivity.minusOnePoint",
+        "scenarioOutputs.rateAtWhichBaseEqualsPrice",
+      ]) {
+        const slot = catalogue.get(id);
+        expect(slot?.suppressed).toBe(true);
+        expect(slot?.formatted).not.toMatch(/\d/);
+        expect(slot?.formatted).not.toMatch(/NaN/);
+      }
+      expect(catalogue.get("diagnostics.rateSensitivity.plusOnePoint")?.formatted).toBe("INCOMPLETE");
+    }
+    expect(buildSlotCatalogue(msft).get("scenarioOutputs.rateAtWhichBaseEqualsPrice")?.formatted).toBe("INCOMPLETE");
+    expect(buildSlotCatalogue(oklo).get("scenarioOutputs.rateAtWhichBaseEqualsPrice")?.formatted).toBe("NO SOLUTION IN RANGE");
+  });
+
   it("gives every slot a non-empty formatted value and a plain-English label", () => {
     for (const catalogue of [buildSlotCatalogue(msft), buildSlotCatalogue(oklo)]) {
       expect(catalogue.size).toBeGreaterThan(0);

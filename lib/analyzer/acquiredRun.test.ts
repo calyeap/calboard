@@ -12,6 +12,7 @@ import {
 } from "./spotCheck";
 import { constrainedAndPassedFactIds } from "./crosschecks/run";
 import { evaluateCompleteness } from "./requiredInputs";
+import { boundState, NOT_COMPUTED_BINDING } from "./notComputed";
 
 // ---------------------------------------------------------------------------
 // DONE-WHEN 1 and 2, end to end: a real run acquires its own fact set from SEC
@@ -210,6 +211,27 @@ describe("a real OKLO run — pre-revenue, thinner filings", () => {
 
     const result = assembleAnalysisResult(run.fixture);
     expect(result.ticker).toBe("OKLO");
+  });
+
+  // CB-AUDIT-FIX-01B / CB-AUDIT-01 H4c and H2. The validation set has no
+  // growth, margin or reinvestment drivers for OKLO (it carries 0 as a
+  // placeholder for all nine) and no revaluation of the base case at other
+  // rates (it carries a constant $31). A live run carries neither.
+  it("carries no placeholder scenario drivers and no placeholder revaluation — both report INCOMPLETE", async () => {
+    const run = await oklo();
+    for (const s of ["bear", "base", "bull"] as const) {
+      const d = run.fixture.scenarios[s];
+      expect(d.revenueGrowthOrPath).toBeNull();
+      expect(d.operatingMargin).toBeNull();
+      expect(d.reinvestmentCapitalIntensity).toBeNull();
+      expect(d.writtenAnchor.length).toBeGreaterThan(0);
+    }
+    expect(run.fixture.revalueBaseCaseAtRate).toBeNull();
+
+    const result = assembleAnalysisResult(run.fixture);
+    expect(boundState(result.states, NOT_COMPUTED_BINDING.scenarioDrivers("base"))?.state).toBe("INCOMPLETE");
+    expect(boundState(result.states, NOT_COMPUTED_BINDING.rateAtWhichBaseEqualsPrice)?.state).toBe("INCOMPLETE");
+    expect(run.disclosures.join(" ")).toMatch(/OKLO/);
   });
 
   it("reports more absent inputs than Microsoft, and names each", async () => {
