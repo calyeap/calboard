@@ -15,12 +15,13 @@ import { computeSteadyStateEvPvgo } from "./modules/steadyStateEvPvgo";
 import { computeReverseDcfGrid, type ReverseDcfInput } from "./modules/reverseDcf";
 import { computeTerminalDiagnostics } from "./modules/terminalDiagnostics";
 import { computeImpliedExitMultiple } from "./modules/impliedExitMultiple";
-import { computeRateSensitivity } from "./modules/rateSensitivity";
+import { computeRateSensitivity, rateSensitivityNotModelled } from "./modules/rateSensitivity";
 import { computeFcfYieldGrowth, type FcfYieldGrowthInput } from "./modules/fcfYieldGrowth";
 import { computeRunRate, type RunRateInput } from "./modules/runRate";
 import { computeShapeMismatch } from "./modules/shapeMismatch";
 import { buildSensitivityResult } from "./modules/sensitivity";
-import { computeScenarioEnterpriseValue, computeScenarioOutputs } from "./modules/scenarioOutputs";
+import { computeScenarioEnterpriseValue, computeScenarioOutputs, rateSearchBracket } from "./modules/scenarioOutputs";
+import { notComputed, NOT_COMPUTED_BINDING } from "./notComputed";
 import {
   computeFundingStackYearByYear,
   computeBothFundingRamps,
@@ -47,6 +48,7 @@ import type {
   Profile,
   ProfileClassificationInputs,
   QualifyingFlag,
+  ScenarioDriverSet,
   ScenarioSet,
   SourcedValue,
   SuccessDefinitionRow,
@@ -139,9 +141,12 @@ export interface CompanyFixture {
   // M9 — explicitly labelled by the metric it actually divides (§7.2 M9).
   impliedExitMultipleMetric: { value: SourcedValue<Decimal> | null; metricName: string };
 
-  scenarios: ScenarioSet;
+  scenarios: ScenarioInputSet;
   scenarioValues: { bear: Decimal; base: Decimal; bull: Decimal };
-  revalueBaseCaseAtRate: (rate: Decimal) => Decimal;
+  // null where the fixture has no real revaluation-at-rate solver — see
+  // computeScenarioOutputs's own doc comment (CB-AUDIT-01 H2). Never a
+  // placeholder formula standing in for one.
+  revalueBaseCaseAtRate: ((rate: Decimal) => Decimal) | null;
 
   configuredConstants: UndefinedPolicyConstants;
 
@@ -160,6 +165,26 @@ export interface CompanyFixture {
   // Populated only for the pre-revenue profile.
   preRevenue: PreRevenueFixture | null;
 }
+
+/**
+ * Step 7's three scenarios as they arrive — where a driver may be null because
+ * nobody authored it (CB-AUDIT-01 H4c: the OKLO validation set carries 0 for
+ * all nine, which Section F printed as 0.0% growth, margin and reinvestment).
+ * A null driver reaches the result as NaN, with INCOMPLETE bound to that
+ * scenario (notComputed.ts) — the schema's ScenarioSet has no way to hold the
+ * absence itself.
+ */
+type NullableDrivers = "revenueGrowthOrPath" | "operatingMargin" | "reinvestmentCapitalIntensity";
+export type ScenarioDriverInputs = Omit<ScenarioDriverSet, NullableDrivers> & {
+  [K in NullableDrivers]: ScenarioDriverSet[K] | null;
+};
+export type ScenarioInputSet = Record<keyof ScenarioSet, ScenarioDriverInputs>;
+
+const DRIVER_LABELS: Record<NullableDrivers, string> = {
+  revenueGrowthOrPath: "revenue growth",
+  operatingMargin: "operating margin",
+  reinvestmentCapitalIntensity: "reinvestment",
+};
 
 export interface PreRevenueFixture {
   cashPerShare: Decimal;
@@ -306,13 +331,27 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
       : { terminalShareOfValue: new Decimal(0), terminalFcfConsistencyApplied: true as const };
 
   // --- M10 — rate sensitivity ------------------------------------------------
-  const rateSensitivity = fixture.rateSensitivityCells
-    ? computeRateSensitivity(
-        currentEnterpriseValue?.value ?? new Decimal(0),
-        currentEnterpriseValue?.value.mul(new Decimal(1).plus(fixture.rateSensitivityCells.plusOnePoint)) ?? new Decimal(0),
-        currentEnterpriseValue?.value.mul(new Decimal(1).plus(fixture.rateSensitivityCells.minusOnePoint)) ?? new Decimal(0)
-      )
-    : { plusOnePoint: new Decimal(0), minusOnePoint: new Decimal(0), closeToDeterministicFunctionOfTerminalShare: true as const };
+  //
+  // CB-AUDIT-01 H4. currentEnterpriseValue absent used to fall through to
+  // `?? new Decimal(0)` here, substituting a zero enterprise value into a
+  // real computation (0/0, a NaN sensitivity dressed up as a figure). Both
+  // inputs are required before computing at all; without either, the module's
+  // not-modelled state stands (no figure), and the reason is bound to the
+  // output below so the report can say which input was missing.
+  const rateSensitivityMissing =
+    fixture.rateSensitivityCells === null
+      ? "missing REQUIRED input: the base case revalued at a discount rate one point higher and one point lower — none was supplied for this run"
+      : currentEnterpriseValue === null
+        ? "missing REQUIRED input: enterprise value, which is INCOMPLETE on this run"
+        : null;
+  const rateSensitivity =
+    fixture.rateSensitivityCells !== null && currentEnterpriseValue !== null
+      ? computeRateSensitivity(
+          currentEnterpriseValue.value,
+          currentEnterpriseValue.value.mul(new Decimal(1).plus(fixture.rateSensitivityCells.plusOnePoint)),
+          currentEnterpriseValue.value.mul(new Decimal(1).plus(fixture.rateSensitivityCells.minusOnePoint))
+        )
+      : rateSensitivityNotModelled();
 
   // --- M11 — FCF yield + growth ----------------------------------------------
   const fcfYieldGrowth = computeFcfYieldGrowth(fixture.fcfYieldGrowth);
@@ -340,6 +379,29 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
     currentPrice: fixture.price.value,
     revalueBaseCaseAtRate: fixture.revalueBaseCaseAtRate,
   });
+
+  // --- §10 F — the analyst's scenarios, as the result carries them -----------
+  //
+  // A driver nobody authored reaches the schema's ScenarioSet as NaN — it has
+  // no way to hold the absence — and the scenario gets INCOMPLETE bound to it
+  // below, naming which drivers are missing.
+  const missingDriversByScenario: Partial<Record<keyof ScenarioSet, string[]>> = {};
+  const scenarioAsCarried = (key: keyof ScenarioSet): ScenarioDriverSet => {
+    const s = fixture.scenarios[key];
+    const missing = (Object.keys(DRIVER_LABELS) as NullableDrivers[]).filter((d) => s[d] === null);
+    if (missing.length > 0) missingDriversByScenario[key] = missing.map((d) => DRIVER_LABELS[d]);
+    return {
+      ...s,
+      revenueGrowthOrPath: s.revenueGrowthOrPath ?? new Decimal(NaN),
+      operatingMargin: s.operatingMargin ?? new Decimal(NaN),
+      reinvestmentCapitalIntensity: s.reinvestmentCapitalIntensity ?? new Decimal(NaN),
+    };
+  };
+  const scenarios: ScenarioSet = {
+    bear: scenarioAsCarried("bear"),
+    base: scenarioAsCarried("base"),
+    bull: scenarioAsCarried("bull"),
+  };
 
   // --- states summary, BEFORE the range that has to read it ----------------
   //
@@ -397,6 +459,52 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
       });
     }
   }
+  // --- outputs the schema types as a bare Decimal (notComputed.ts) --------
+  //
+  // Each was printed as a figure, or given a false reason for its absence,
+  // when nothing computed it (CB-AUDIT-01 H2/H4). None is an input of the
+  // fair-value range, so none removes it.
+  if (rateSensitivityMissing !== null) {
+    suppressing.push(notComputed(NOT_COMPUTED_BINDING.rateSensitivity, "INCOMPLETE", rateSensitivityMissing));
+  }
+  // G. Two different outcomes both arrive as a null rate, and they are two
+  // different statements: no revaluation function was supplied, so nothing
+  // ran — or one was, the solver searched, and the bracket held no root.
+  if (fixture.revalueBaseCaseAtRate === null) {
+    suppressing.push(
+      notComputed(
+        NOT_COMPUTED_BINDING.rateAtWhichBaseEqualsPrice,
+        "INCOMPLETE",
+        "missing REQUIRED input: a revaluation of the base case at other discount rates — none was supplied for this run, so no rate was solved for"
+      )
+    );
+  } else if (scenarioOutputs.rateAtWhichBaseEqualsPrice === null) {
+    // Design §6's cause line for this state is "the bracket and the value at
+    // each end". The bracket only: `states` is one of the members the blind
+    // challenger receives (§8.5.1), so a base-case value written into a cause
+    // here would reach the one call §8.5.2 keeps valuation outputs away from.
+    const b = rateSearchBracket(fixture.revalueBaseCaseAtRate);
+    const asPct = (r: Decimal) => `${r.mul(100).toFixed(0)}%`;
+    suppressing.push(
+      notComputed(
+        NOT_COMPUTED_BINDING.rateAtWhichBaseEqualsPrice,
+        "NO SOLUTION IN RANGE",
+        `searched ${asPct(b.lo)} to ${asPct(b.hi)}: no rate in that bracket brings the base case to the price`
+      )
+    );
+  }
+  for (const key of ["bear", "base", "bull"] as const) {
+    const missing = missingDriversByScenario[key];
+    if (missing === undefined) continue;
+    suppressing.push(
+      notComputed(
+        NOT_COMPUTED_BINDING.scenarioDrivers(key),
+        "INCOMPLETE",
+        `missing REQUIRED input(s): ${missing.join(", ")} — not authored for this scenario`
+      )
+    );
+  }
+
   if (triggerA.fired) qualifying.push({ flag: "MARGIN AT HISTORICAL HIGH", appliesTo: "operating margin" });
   if (reinvestmentRonic.capitalLight) qualifying.push({ flag: "CAPITAL-LIGHT", appliesTo: "reinvestment/RONIC" });
 
@@ -543,7 +651,7 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
       qualifying,
     },
     diagnostics,
-    scenarios: fixture.scenarios,
+    scenarios,
     scenarioOutputs,
     priceImplied: {
       steadyStateEv: steadyStateEvPvgo.steadyStateEv,

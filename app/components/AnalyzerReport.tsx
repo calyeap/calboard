@@ -5,6 +5,7 @@ import { QuickRead } from "./QuickRead";
 import { ValuationStrip } from "./ValuationStrip";
 import type { AiLayerReport } from "@/lib/analyzer/reportAnalysis";
 import { selectChallengerPoint } from "@/lib/analyzer/ai/challengerSelection";
+import { boundState, NOT_COMPUTED_BINDING, type BoundState } from "@/lib/analyzer/notComputed";
 import type {
   AnalysisResult,
   ComputedValue,
@@ -281,6 +282,13 @@ function StateBlock({ figure }: { figure: SuppressedValue }) {
   );
 }
 
+// The state bound to an output the schema types as a bare Decimal
+// (lib/analyzer/notComputed.ts), in the same slot a suppressed Figure uses.
+// Where one is bound, it IS the output — the field behind it holds no figure.
+function BoundStateBlock({ bound }: { bound: BoundState }) {
+  return <StateBlock figure={{ suppressed: true, state: bound.state, cause: bound.cause }} />;
+}
+
 function Flags({ flags }: { flags: ComputedValue<unknown>["qualification"]["analyticFlags"] }) {
   if (flags.length === 0) return null;
   return (
@@ -481,6 +489,9 @@ export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; ai
   // line and Section I2's headline so the two never disagree about which
   // finding was selected.
   const challengerSelection = result.challenger === null ? null : selectChallengerPoint(result.challenger.findings);
+
+  const rateSensitivityState = boundState(states, NOT_COMPUTED_BINDING.rateSensitivity);
+  const rateAtWhichBaseEqualsPriceState = boundState(states, NOT_COMPUTED_BINDING.rateAtWhichBaseEqualsPrice);
 
   // Section H's right column restates the r = 8%, current-margin cell —
   // the same cell Section E's own base case reads from.
@@ -989,10 +1000,16 @@ export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; ai
               <tr>
                 <td>±1% rate sensitivity</td>
                 <td>
-                  <span className="v">
-                    +{pct(diagnostics.rateSensitivity.plusOnePoint)} / {pct(diagnostics.rateSensitivity.minusOnePoint)}
-                  </span>
-                  <div className="sub">close to a deterministic function of terminal share, not an independent signal</div>
+                  {rateSensitivityState !== null ? (
+                    <BoundStateBlock bound={rateSensitivityState} />
+                  ) : (
+                    <>
+                      <span className="v">
+                        +{pct(diagnostics.rateSensitivity.plusOnePoint)} / {pct(diagnostics.rateSensitivity.minusOnePoint)}
+                      </span>
+                      <div className="sub">close to a deterministic function of terminal share, not an independent signal</div>
+                    </>
+                  )}
                 </td>
               </tr>
             </tbody>
@@ -1018,22 +1035,39 @@ export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; ai
             <tbody>
               {(["bear", "base", "bull"] as const).map((s) => {
                 const d = scenarios[s];
-                const growth = Array.isArray(d.revenueGrowthOrPath) ? "path" : pct(d.revenueGrowthOrPath);
+                // A driver nobody authored arrives as NaN with INCOMPLETE bound
+                // to the scenario (CB-AUDIT-01 H4c) — the state takes its cell.
+                const bound = boundState(states, NOT_COMPUTED_BINDING.scenarioDrivers(s));
+                const driverCell = (value: Decimal | Decimal[], format: (v: Decimal) => string) =>
+                  bound !== null && !Array.isArray(value) && value.isNaN() ? (
+                    <BoundStateBlock bound={bound} />
+                  ) : (
+                    <span className="v">{Array.isArray(value) ? "path" : format(value)}</span>
+                  );
+                const noneAuthored =
+                  bound !== null &&
+                  [d.revenueGrowthOrPath, d.operatingMargin, d.reinvestmentCapitalIntensity].every(
+                    (v) => !Array.isArray(v) && v.isNaN()
+                  );
                 return (
                   <tr key={s}>
                     <td>
                       {SCENARIO_LABELS[s]}
                       <div className="sub">{d.writtenAnchor}</div>
                     </td>
-                    <td>
-                      <span className="v">{growth}</span>
-                    </td>
-                    <td>
-                      <span className="v">{pct(d.operatingMargin)}</span>
-                    </td>
-                    <td>
-                      <span className="v">{pct(d.reinvestmentCapitalIntensity)}</span>
-                    </td>
+                    {noneAuthored ? (
+                      // One state across the three columns rather than the same
+                      // state three times over.
+                      <td colSpan={3}>
+                        <BoundStateBlock bound={bound} />
+                      </td>
+                    ) : (
+                      <>
+                        <td>{driverCell(d.revenueGrowthOrPath, pct)}</td>
+                        <td>{driverCell(d.operatingMargin, pct)}</td>
+                        <td>{driverCell(d.reinvestmentCapitalIntensity, pct)}</td>
+                      </>
+                    )}
                   </tr>
                 );
               })}
@@ -1076,7 +1110,14 @@ export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; ai
               <tr>
                 <td>Discount rate at which the base case equals the price</td>
                 <td>
-                  <span className="v">{scenarioOutputs.rateAtWhichBaseEqualsPrice !== null ? pct(scenarioOutputs.rateAtWhichBaseEqualsPrice) : "no solution in range"}</span>
+                  {/* A null rate is either of two outcomes — nothing ran, or
+                      the search found no root — and only the bound state says
+                      which (CB-AUDIT-01 H2). */}
+                  {rateAtWhichBaseEqualsPriceState !== null ? (
+                    <BoundStateBlock bound={rateAtWhichBaseEqualsPriceState} />
+                  ) : scenarioOutputs.rateAtWhichBaseEqualsPrice !== null ? (
+                    <span className="v">{pct(scenarioOutputs.rateAtWhichBaseEqualsPrice)}</span>
+                  ) : null}
                 </td>
               </tr>
               <tr>

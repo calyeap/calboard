@@ -3,6 +3,7 @@ import { formatFactValue, formatUsd } from "../factDisplay";
 import { factUnit } from "../acquisition/factUnit";
 import type { AnalysisResult, FactRecord, Figure, SuppressingState } from "../types";
 import type { FigureSlot, SlotCatalogue } from "./traceability";
+import { boundState, NOT_COMPUTED_BINDING, type BoundState } from "../notComputed";
 
 // ---------------------------------------------------------------------------
 // The catalogue of figures [C] may reference — built from the Analysis Result,
@@ -92,6 +93,20 @@ class CatalogueBuilder {
       return;
     }
     this.add(id, label, format(figure.value));
+  }
+
+  /**
+   * An output the schema types as a bare Decimal, which cannot carry its own
+   * state (notComputed.ts). Where assembly bound one, the slot is the state —
+   * exactly as a suppressed Figure's is — and the field behind it, which
+   * holds no figure, is never formatted.
+   */
+  bound(id: string, label: string, bound: BoundState | null, v: Decimal | null, format: Formatter): void {
+    if (bound !== null) {
+      this.add(id, label, bound.state, true, bound.state);
+      return;
+    }
+    this.value(id, label, v, format);
   }
 
   build(): SlotCatalogue {
@@ -273,21 +288,30 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
     diagnostics.impliedReturnOnNewCapital.value,
     (v) => pct(v)
   );
-  b.value(
-    "diagnostics.terminal.terminalShareOfValue",
-    "share of value sitting in the terminal period",
-    diagnostics.terminal.terminalShareOfValue,
-    (v) => pct(v)
-  );
-  b.value(
+  // CB-AUDIT-01 H4: no fixture in this codebase supplies a real
+  // terminalValuePv (see CompanyFixture.terminalValuePv's doc comment) — so
+  // `diagnostics.terminal` is always assemble.ts's own "not computed"
+  // placeholder today, never a genuine M8 result. Because the schema gives
+  // this field no way to say that (`terminalShareOfValue: Decimal` and
+  // `terminalFcfConsistencyApplied: true` are typed as though every
+  // instance were real), there is no signal on AnalysisResult this
+  // catalogue can check before deciding whether to hand [C] a real number
+  // — so no slot is offered for it at all, rather than risk handing [C] a
+  // fabricated one. Reinstating this slot needs a schema change giving
+  // `terminal` a real/not-computed distinction (e.g. Figure<TerminalDiagnostics>),
+  // which is out of scope here.
+  const rateSensitivityState = boundState(result.states, NOT_COMPUTED_BINDING.rateSensitivity);
+  b.bound(
     "diagnostics.rateSensitivity.plusOnePoint",
     "value change from a one-point higher discount rate",
+    rateSensitivityState,
     diagnostics.rateSensitivity.plusOnePoint,
     (v) => pct(v)
   );
-  b.value(
+  b.bound(
     "diagnostics.rateSensitivity.minusOnePoint",
     "value change from a one-point lower discount rate",
+    rateSensitivityState,
     diagnostics.rateSensitivity.minusOnePoint,
     (v) => pct(v)
   );
@@ -315,9 +339,10 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
     scenarioOutputs.priceLocationWithinRange,
     (v) => pct(v, 0)
   );
-  b.value(
+  b.bound(
     "scenarioOutputs.rateAtWhichBaseEqualsPrice",
     "discount rate at which the base case equals today's price",
+    boundState(result.states, NOT_COMPUTED_BINDING.rateAtWhichBaseEqualsPrice),
     scenarioOutputs.rateAtWhichBaseEqualsPrice,
     (v) => pct(v)
   );

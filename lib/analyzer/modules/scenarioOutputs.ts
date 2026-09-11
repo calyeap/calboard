@@ -77,7 +77,9 @@ const RATE_BISECTION_ITERATIONS = 60;
 // a lower value, true for any well-behaved DCF) equals the target price.
 // Returns null, never a state, if no such rate exists in a plausible range
 // (§10 G names no suppressing state for this figure — it is display-only
-// context, not a gated output).
+// context, not a gated output). The report still needs to say WHY there is
+// no rate, and null alone cannot — it is also what a run with no revaluation
+// function gets — so assembly binds the reason (notComputed.ts).
 export function solveRateForTargetValue(revalueAtRate: (rate: Decimal) => Decimal, targetValue: Decimal): Decimal | null {
   const valueAtLo = revalueAtRate(RATE_SEARCH_LO);
   const valueAtHi = revalueAtRate(RATE_SEARCH_HI);
@@ -102,6 +104,26 @@ export function solveRateForTargetValue(revalueAtRate: (rate: Decimal) => Decima
   return lo.plus(hi).dividedBy(2);
 }
 
+/**
+ * The bracket solveRateForTargetValue searches, and the value at each end —
+ * design §6's cause line for NO SOLUTION IN RANGE ("the bracket and the value
+ * at each end"). Evaluated here, beside the search, so the cause states the
+ * same bracket the solver actually used.
+ */
+export function rateSearchBracket(revalueAtRate: (rate: Decimal) => Decimal): {
+  lo: Decimal;
+  hi: Decimal;
+  valueAtLo: Decimal;
+  valueAtHi: Decimal;
+} {
+  return {
+    lo: RATE_SEARCH_LO,
+    hi: RATE_SEARCH_HI,
+    valueAtLo: revalueAtRate(RATE_SEARCH_LO),
+    valueAtHi: revalueAtRate(RATE_SEARCH_HI),
+  };
+}
+
 export interface ScenarioOutputsInput {
   bearValue: Decimal;
   baseValue: Decimal;
@@ -110,7 +132,14 @@ export interface ScenarioOutputsInput {
   currentPrice: Decimal;
   // Recomputes the BASE case's value at a hypothetical discount rate —
   // used only to solve for the rate at which the base case equals price.
-  revalueBaseCaseAtRate: (rate: Decimal) => Decimal;
+  //
+  // null where the fixture has no real solver for this (CB-AUDIT-01 H2: a
+  // fixture-illustrative formula unrelated to the company's actual scenario
+  // inputs was solved and rendered as if it were a real answer — no fixture
+  // in this codebase computes a genuine revaluation-at-rate function yet,
+  // and building one is out of scope here). null means "not computed",
+  // never a placeholder standing in for a real function.
+  revalueBaseCaseAtRate: ((rate: Decimal) => Decimal) | null;
 }
 
 export function computeScenarioOutputs(input: ScenarioOutputsInput): ScenarioOutputs {
@@ -126,7 +155,8 @@ export function computeScenarioOutputs(input: ScenarioOutputsInput): ScenarioOut
   const rangeSpan = bullValue.minus(bearValue);
   const priceLocationWithinRange = rangeSpan.isZero() ? new Decimal(0) : currentPrice.minus(bearValue).dividedBy(rangeSpan);
 
-  const rateAtWhichBaseEqualsPrice = solveRateForTargetValue(input.revalueBaseCaseAtRate, currentPrice);
+  const rateAtWhichBaseEqualsPrice =
+    input.revalueBaseCaseAtRate === null ? null : solveRateForTargetValue(input.revalueBaseCaseAtRate, currentPrice);
 
   return {
     values: { bear: bearValue, base: baseValue, bull: bullValue },

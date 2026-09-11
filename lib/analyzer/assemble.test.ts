@@ -5,6 +5,7 @@ import { MSFT_FIXTURE } from "./fixtures/msft";
 import { OKLO_FIXTURE } from "./fixtures/oklo";
 import { computeUnitExitBreakEvenPrice } from "./modules/preRevenue";
 import { windowMedian, windowRange, worstSingleYearDecline } from "./marginMath";
+import { boundState, NOT_COMPUTED_BINDING } from "./notComputed";
 
 function closeTo(actual: Decimal, expected: number, tolerance = 0.002) {
   expect(actual.minus(expected).abs().toNumber()).toBeLessThan(tolerance);
@@ -21,6 +22,123 @@ function closeTo(actual: Decimal, expected: number, tolerance = 0.002) {
 // from the mocks vs. synthetically reconstructed to reproduce them, and
 // where reproduction was not attempted (funding-stack dollar amounts).
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// CB-AUDIT-FIX-01B — outputs the schema types as a bare Decimal, and what
+// assembly records when one was not computed. Each binds a §9.3 state to the
+// output in `states.suppressing` (notComputed.ts) and carries no figure.
+// ---------------------------------------------------------------------------
+
+describe("assembleAnalysisResult — the rate at which the base case equals the price (G)", () => {
+  it("binds INCOMPLETE, naming the missing revaluation, when no revaluation function was supplied — never 'no solution'", () => {
+    expect(MSFT_FIXTURE.revalueBaseCaseAtRate).toBeNull();
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+
+    expect(result.scenarioOutputs.rateAtWhichBaseEqualsPrice).toBeNull();
+    const bound = boundState(result.states, NOT_COMPUTED_BINDING.rateAtWhichBaseEqualsPrice);
+    expect(bound?.state).toBe("INCOMPLETE");
+    expect(bound?.cause).toMatch(/revaluation of the base case/);
+  });
+
+  it("binds NO SOLUTION IN RANGE, with the bracket searched, when a solver ran and found no root — distinguishable from not computed", () => {
+    // The fixture's revaluation is a constant $31 against a $14.50 price, so
+    // the bracket genuinely contains no root.
+    const result = assembleAnalysisResult(OKLO_FIXTURE);
+
+    expect(result.scenarioOutputs.rateAtWhichBaseEqualsPrice).toBeNull();
+    const bound = boundState(result.states, NOT_COMPUTED_BINDING.rateAtWhichBaseEqualsPrice);
+    expect(bound?.state).toBe("NO SOLUTION IN RANGE");
+    expect(bound?.cause).toContain("1% to 50%");
+  });
+
+  it("writes no valuation figure into a bound cause — states reach the blind challenger (§8.5.1/§8.5.2)", () => {
+    for (const fixture of [MSFT_FIXTURE, OKLO_FIXTURE]) {
+      const result = assembleAnalysisResult(fixture);
+      for (const binding of [NOT_COMPUTED_BINDING.rateAtWhichBaseEqualsPrice, NOT_COMPUTED_BINDING.rateSensitivity]) {
+        expect(boundState(result.states, binding)?.cause).not.toMatch(/\$/);
+      }
+    }
+  });
+
+  it("binds nothing when the rate was solved", () => {
+    const result = assembleAnalysisResult({
+      ...MSFT_FIXTURE,
+      revalueBaseCaseAtRate: (rate: Decimal) => MSFT_FIXTURE.price.value.mul(new Decimal("0.1").dividedBy(rate)),
+    });
+    expect(result.scenarioOutputs.rateAtWhichBaseEqualsPrice).not.toBeNull();
+    expect(boundState(result.states, NOT_COMPUTED_BINDING.rateAtWhichBaseEqualsPrice)).toBeNull();
+  });
+});
+
+describe("assembleAnalysisResult — ±1% rate sensitivity (M10) when it is not modelled", () => {
+  it("binds INCOMPLETE naming the missing revaluation when no rate-sensitivity cells were supplied, and carries no number — not a zero", () => {
+    expect(MSFT_FIXTURE.rateSensitivityCells).toBeNull();
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+
+    const bound = boundState(result.states, NOT_COMPUTED_BINDING.rateSensitivity);
+    expect(bound?.state).toBe("INCOMPLETE");
+    expect(bound?.cause).toMatch(/one point higher and one point lower/);
+    expect(result.diagnostics.rateSensitivity.plusOnePoint.isFinite()).toBe(false);
+    expect(result.diagnostics.rateSensitivity.minusOnePoint.isFinite()).toBe(false);
+  });
+
+  it("binds INCOMPLETE naming enterprise value when cells are supplied but enterprise value is INCOMPLETE — zero is never substituted for it", () => {
+    const result = assembleAnalysisResult({
+      ...MSFT_FIXTURE,
+      enterpriseValue: { ...MSFT_FIXTURE.enterpriseValue, nonOperatingEquityInvestmentsAtBook: null },
+      rateSensitivityCells: { plusOnePoint: new Decimal("0.05"), minusOnePoint: new Decimal("-0.05") },
+    });
+
+    expect(result.diagnostics.enterpriseValue.suppressed).toBe(true);
+    const bound = boundState(result.states, NOT_COMPUTED_BINDING.rateSensitivity);
+    expect(bound?.state).toBe("INCOMPLETE");
+    expect(bound?.cause).toMatch(/enterprise value/);
+    expect(result.diagnostics.rateSensitivity.plusOnePoint.isFinite()).toBe(false);
+  });
+
+  it("binds nothing when cells and enterprise value are both present", () => {
+    const result = assembleAnalysisResult({
+      ...MSFT_FIXTURE,
+      rateSensitivityCells: { plusOnePoint: new Decimal("0.05"), minusOnePoint: new Decimal("-0.05") },
+    });
+    expect(boundState(result.states, NOT_COMPUTED_BINDING.rateSensitivity)).toBeNull();
+    closeTo(result.diagnostics.rateSensitivity.plusOnePoint, 0.05, 1e-9);
+  });
+});
+
+describe("assembleAnalysisResult — scenario drivers (F) nobody authored", () => {
+  const unauthored = { revenueGrowthOrPath: null, operatingMargin: null, reinvestmentCapitalIntensity: null };
+  const withoutDrivers = {
+    ...OKLO_FIXTURE,
+    scenarios: {
+      bear: { ...OKLO_FIXTURE.scenarios.bear, ...unauthored },
+      base: { ...OKLO_FIXTURE.scenarios.base, ...unauthored },
+      bull: { ...OKLO_FIXTURE.scenarios.bull, ...unauthored },
+    },
+  };
+
+  it("binds INCOMPLETE to each scenario whose drivers were not supplied, naming them, and carries no number for any", () => {
+    const result = assembleAnalysisResult(withoutDrivers);
+    for (const s of ["bear", "base", "bull"] as const) {
+      const bound = boundState(result.states, NOT_COMPUTED_BINDING.scenarioDrivers(s));
+      expect(bound?.state).toBe("INCOMPLETE");
+      expect(bound?.cause).toMatch(/revenue growth, operating margin, reinvestment/);
+      const d = result.scenarios[s];
+      expect((d.revenueGrowthOrPath as Decimal).isFinite()).toBe(false);
+      expect(d.operatingMargin.isFinite()).toBe(false);
+      expect(d.reinvestmentCapitalIntensity.isFinite()).toBe(false);
+      // The analyst's own written anchor still stands.
+      expect(d.writtenAnchor).toBe(OKLO_FIXTURE.scenarios[s].writtenAnchor);
+    }
+  });
+
+  it("binds nothing to a scenario whose drivers were all supplied", () => {
+    const result = assembleAnalysisResult(MSFT_FIXTURE);
+    for (const s of ["bear", "base", "bull"] as const) {
+      expect(boundState(result.states, NOT_COMPUTED_BINDING.scenarioDrivers(s))).toBeNull();
+    }
+  });
+});
 
 describe("assembleAnalysisResult — MSFT fixture", () => {
   const result = assembleAnalysisResult(MSFT_FIXTURE);
