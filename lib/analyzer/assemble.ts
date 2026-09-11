@@ -141,7 +141,10 @@ export interface CompanyFixture {
 
   scenarios: ScenarioSet;
   scenarioValues: { bear: Decimal; base: Decimal; bull: Decimal };
-  revalueBaseCaseAtRate: (rate: Decimal) => Decimal;
+  // null where the fixture has no real revaluation-at-rate solver — see
+  // computeScenarioOutputs's own doc comment (CB-AUDIT-01 H2). Never a
+  // placeholder formula standing in for one.
+  revalueBaseCaseAtRate: ((rate: Decimal) => Decimal) | null;
 
   configuredConstants: UndefinedPolicyConstants;
 
@@ -306,11 +309,18 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
       : { terminalShareOfValue: new Decimal(0), terminalFcfConsistencyApplied: true as const };
 
   // --- M10 — rate sensitivity ------------------------------------------------
-  const rateSensitivity = fixture.rateSensitivityCells
+  //
+  // CB-AUDIT-01 H4. currentEnterpriseValue absent used to fall through to
+  // `?? new Decimal(0)` here, substituting a zero enterprise value into a
+  // real computation (0/0, a NaN sensitivity dressed up as a figure) instead
+  // of the module's own existing "not modelled" state below. Requiring EV
+  // to be present, alongside the cells, before computing at all removes the
+  // substitution — never a zero standing in for a real value.
+  const rateSensitivity = fixture.rateSensitivityCells && currentEnterpriseValue
     ? computeRateSensitivity(
-        currentEnterpriseValue?.value ?? new Decimal(0),
-        currentEnterpriseValue?.value.mul(new Decimal(1).plus(fixture.rateSensitivityCells.plusOnePoint)) ?? new Decimal(0),
-        currentEnterpriseValue?.value.mul(new Decimal(1).plus(fixture.rateSensitivityCells.minusOnePoint)) ?? new Decimal(0)
+        currentEnterpriseValue.value,
+        currentEnterpriseValue.value.mul(new Decimal(1).plus(fixture.rateSensitivityCells.plusOnePoint)),
+        currentEnterpriseValue.value.mul(new Decimal(1).plus(fixture.rateSensitivityCells.minusOnePoint))
       )
     : { plusOnePoint: new Decimal(0), minusOnePoint: new Decimal(0), closeToDeterministicFunctionOfTerminalShare: true as const };
 

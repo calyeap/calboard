@@ -86,7 +86,7 @@ describe("QuickRead — valuation strip (defect E1)", () => {
     const strip = section.querySelector(".atglance");
     expect(strip).not.toBeNull();
     expect(strip?.textContent).toContain("Failure");
-    expect(strip?.textContent).toContain("$3.10");
+    expect(strip?.textContent).toContain("$1.00");
     expect(strip?.textContent).toContain("Success as described");
     expect(strip?.textContent).toContain("$31.00 - $48.00");
     expect(strip?.textContent).toContain("Current price");

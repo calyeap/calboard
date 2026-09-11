@@ -46,7 +46,22 @@ function pendingSpotCheck(value: Decimal): SourcedValue<Decimal> {
 }
 
 const price = new Decimal("14.50"); // mock shows "$XX.XX" — no real figure given; a placeholder within the two 8GW cases' range
-const cashPerShare = new Decimal("3.10");
+
+// The EV bridge's own acquired cash and shares-outstanding figures — reused
+// below by `enterpriseValue`/`leverage` exactly as before. cashPerShare
+// (CB-AUDIT-01 H3) used to be an independently invented 3.10, standing in
+// for the mock's own unfilled "$XX.XX" placeholder, presented via its own
+// "cash-per-share" FactRecord as if it had been read directly off a 10-Q —
+// while these SAME already-acquired facts, on the very same report, implied
+// a different figure. Where the acquired fact exists, it is used.
+const sharesOutstanding = new Decimal(200);
+const cashAndMarketableDebtSecurities = new Decimal(200);
+const cashPerShare = cashAndMarketableDebtSecurities.dividedBy(sharesOutstanding);
+// No acquired figure exists anywhere in this fixture for quarterly burn
+// (operatingCashFlow and cashCapex are both null below) — so, unlike
+// cashPerShare, there is no acquired fact to derive it from. It remains the
+// pre-revenue module's own analyst-supplied input (never itself claimed to
+// be an acquired FACT — see the removed "quarterly-burn" FactRecord below).
 const quarterlyBurn = new Decimal("45"); // $XXm placeholder in the mock — illustrative, UNVERIFIED per its own provenance flag
 
 const preRevenue: PreRevenueFixture = {
@@ -115,28 +130,14 @@ export const OKLO_FIXTURE: CompanyFixture = {
       tagMappingVersion: null,
       derivedFrom: null,
     },
-    {
-      id: "quarterly-burn",
-      name: "Quarterly burn",
-      type: "FACT",
-      value: quarterlyBurn,
-      source: "latest 10-Q cash flow statement",
-      sourceUrl: null,
-      sourceClass: "PRIMARY",
-      extractionType: "DETERMINISTIC/STRUCTURED",
-      // Queued and not yet decided (§3.2). UNVERIFIED is no longer a value of
-      // this field — since M7 it names only the §5.1 propagation state, which
-      // is a different claim and travels on ProvenanceQualifier.
-      verificationState: "SPOT-CHECK PENDING",
-      asOfDate: "Q2 FY2026",
-      retrievalTimestamp: "2026-09-04T16:00:00-04:00",
-      supersedesFactId: null,
-      // Neither pre-revenue figure comes through a tag mapping — one is a 10-Q
-      // balance adjusted for burn, the other a cash-flow line — so both are
-      // queued for spot-check (§3.8.1).
-      tagMappingVersion: null,
-      derivedFrom: null,
-    },
+    // No "quarterly-burn" FactRecord (CB-AUDIT-01 H3): no acquired figure for
+    // quarterly burn exists anywhere in this fixture (operatingCashFlow and
+    // cashCapex below are both null), so there is nothing to source it from.
+    // A REQUIRED fact with no value is not represented here — see
+    // FactRecord.value's own doc comment — rather than fabricating one and
+    // presenting it as though it had been read off a 10-Q. quarterlyBurn
+    // remains the pre-revenue module's own analyst-supplied input; it is
+    // simply never claimed as an acquired fact.
   // No `as FactRecord[]` assertion here. It used to carry one, and the
   // assertion silently suppressed the missing-property error when
   // tagMappingVersion was added to FactRecord — leaving the field `undefined`
@@ -157,7 +158,7 @@ export const OKLO_FIXTURE: CompanyFixture = {
     // minimal debt against a cash-heavy balance sheet.
     totalDebt: new Decimal(5),
     financeLeaseLiabilities: new Decimal(0),
-    cashAndMarketableDebtSecurities: new Decimal(200),
+    cashAndMarketableDebtSecurities,
     enterpriseValue: new Decimal(600),
     operatingLeaseLiabilities: null,
     // The success-case leverage test FAILS in every case (mock) and the
@@ -183,12 +184,12 @@ export const OKLO_FIXTURE: CompanyFixture = {
   },
 
   enterpriseValue: {
-    sharesOutstanding: sourced(new Decimal(200)),
+    sharesOutstanding: sourced(sharesOutstanding),
     treasuryMethodDilution: sourced(new Decimal(5)),
     price: sourced(price),
     totalDebt: sourced(new Decimal(5)),
     financeLeaseLiabilities: sourced(new Decimal(0)),
-    cashAndMarketableDebtSecurities: sourced(new Decimal(200)),
+    cashAndMarketableDebtSecurities: sourced(cashAndMarketableDebtSecurities),
     nonOperatingEquityInvestmentsAtBook: sourced(new Decimal(0)),
     nonOperatingInvestmentsErrorDirection: null,
   },

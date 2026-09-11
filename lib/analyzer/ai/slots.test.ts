@@ -14,6 +14,23 @@ import { buildSlotCatalogue, buildFactSlotCatalogue } from "./slots";
 const msft = assembleAnalysisResult(MSFT_FIXTURE);
 const oklo = assembleAnalysisResult(OKLO_FIXTURE);
 
+describe("buildSlotCatalogue — H4, no uncomputed terminal share reaches [C]", () => {
+  // CB-AUDIT-01 H4: assemble.ts's terminal-diagnostics fallback (fired on
+  // every current run, since no fixture supplies a real terminalValuePv)
+  // built a full TerminalDiagnostics literal — terminalShareOfValue: 0,
+  // terminalFcfConsistencyApplied: true — that looked exactly like a real
+  // computed M8 result. That fabricated 0 then reached [C]'s slot catalogue
+  // as if it were a genuine "share of value sitting in the terminal period".
+  // Neither MSFT nor OKLO has ever computed a real terminal share, so [C]
+  // must never be handed one for either.
+  it("never exposes diagnostics.terminal.terminalShareOfValue to [C], for either fixture, while no real terminal PV is supplied", () => {
+    expect(MSFT_FIXTURE.terminalValuePv).toBeNull();
+    expect(OKLO_FIXTURE.terminalValuePv).toBeNull();
+    expect(buildSlotCatalogue(msft).has("diagnostics.terminal.terminalShareOfValue")).toBe(false);
+    expect(buildSlotCatalogue(oklo).has("diagnostics.terminal.terminalShareOfValue")).toBe(false);
+  });
+});
+
 describe("buildSlotCatalogue", () => {
   it("holds the run's price", () => {
     const catalogue = buildSlotCatalogue(msft);

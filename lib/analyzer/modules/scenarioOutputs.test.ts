@@ -90,6 +90,27 @@ describe("solveRateForTargetValue", () => {
   });
 });
 
+describe("computeScenarioOutputs — H2, no fabricated revaluation solver", () => {
+  // CB-AUDIT-01 H2: msft.ts:278 defined revalueBaseCaseAtRate as an
+  // illustrative placeholder (price x 0.1 / rate) that solveRateForTargetValue
+  // then solved and Section G rendered as a real "discount rate at which the
+  // base case equals the price". No real revaluation-at-rate solver exists in
+  // this codebase yet (building one is out of scope here), so a fixture that
+  // has none must say so — null, not an invented formula — and the module
+  // must stop computing an answer from nothing rather than trying to call it.
+  it("returns rateAtWhichBaseEqualsPrice: null, without invoking any revaluation function, when the fixture supplies no real solver", () => {
+    const result = computeScenarioOutputs({
+      bearValue: new Decimal(50),
+      baseValue: new Decimal(100),
+      bullValue: new Decimal(150),
+      weights: { bear: new Decimal("0.25"), base: new Decimal("0.5"), bull: new Decimal("0.25") },
+      currentPrice: new Decimal(100),
+      revalueBaseCaseAtRate: null,
+    });
+    expect(result.rateAtWhichBaseEqualsPrice).toBeNull();
+  });
+});
+
 describe("computeScenarioOutputs", () => {
   it("computes the probability-weighted distribution", () => {
     const result = computeScenarioOutputs({

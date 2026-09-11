@@ -22,6 +22,36 @@ function closeTo(actual: Decimal, expected: number, tolerance = 0.002) {
 // where reproduction was not attempted (funding-stack dollar amounts).
 // ---------------------------------------------------------------------------
 
+// CB-AUDIT-01 H4 guard: assemble.ts's rate-sensitivity wiring substituted
+// Decimal(0) for currentEnterpriseValue whenever it was absent, even when
+// real rateSensitivityCells were supplied — 0/0 division silently produced
+// NaN rather than a real ±1% sensitivity, and would print as a fabricated-
+// looking figure either way. A missing enterprise value must fall back to
+// the module's own existing "not modelled" state, never a zero standing in
+// for a real value.
+describe("assembleAnalysisResult — zero cannot be substituted for an absent enterprise value (H4 guard)", () => {
+  it("does not compute rate sensitivity from a Decimal(0) stand-in for enterprise value when cells are supplied but enterpriseValue is INCOMPLETE", () => {
+    const fixtureWithUnresolvedEv = {
+      ...MSFT_FIXTURE,
+      enterpriseValue: {
+        ...MSFT_FIXTURE.enterpriseValue,
+        // §4.4's non-operating-investments judgment left null -> INCOMPLETE
+        // enterprise value (companyInputs.ts's own documented convention),
+        // exactly the real-world condition under which this substitution fired.
+        nonOperatingEquityInvestmentsAtBook: null,
+      },
+      rateSensitivityCells: { plusOnePoint: new Decimal("0.05"), minusOnePoint: new Decimal("-0.05") },
+    };
+    const result = assembleAnalysisResult(fixtureWithUnresolvedEv);
+
+    expect(result.diagnostics.enterpriseValue.suppressed).toBe(true);
+    expect(result.diagnostics.rateSensitivity.plusOnePoint.isNaN()).toBe(false);
+    expect(result.diagnostics.rateSensitivity.minusOnePoint.isNaN()).toBe(false);
+    expect(result.diagnostics.rateSensitivity.plusOnePoint.toString()).toBe("0");
+    expect(result.diagnostics.rateSensitivity.minusOnePoint.toString()).toBe("0");
+  });
+});
+
 describe("assembleAnalysisResult — MSFT fixture", () => {
   const result = assembleAnalysisResult(MSFT_FIXTURE);
 
@@ -169,6 +199,29 @@ describe("assembleAnalysisResult — OKLO fixture", () => {
     expect(result.gates.leverage.result).toBe("PASS");
   });
 
+  // CB-AUDIT-01 H3: the fixture used to carry cashPerShare 3.10 as an
+  // "illustrative" placeholder for the mock's own unfilled "$XX.XX", while
+  // ALSO shipping a "cash-per-share" FactRecord claiming that same 3.10 came
+  // directly from a 10-Q. Meanwhile the fixture's own already-acquired
+  // enterprise-value inputs (cash $200M / 200M shares outstanding) imply
+  // $1.00/share — a live, acquired fact contradicting the placeholder on the
+  // very same report. cashPerShare must now come from those acquired facts,
+  // not an invented number, and the fabricated "quarterly-burn" fact (no
+  // acquired burn figure exists anywhere in this fixture) must not present
+  // itself as one.
+  it("cashPerShare is derived from the acquired cash and shares-outstanding facts, not an invented placeholder", () => {
+    const impliedCashPerShare = OKLO_FIXTURE.enterpriseValue.cashAndMarketableDebtSecurities!.value.dividedBy(
+      OKLO_FIXTURE.enterpriseValue.sharesOutstanding!.value
+    );
+    expect(result.preRevenue).not.toBeNull();
+    expect(result.preRevenue!.cashPerShare.toString()).toBe(impliedCashPerShare.toString());
+    expect(result.preRevenue!.cashPerShare.toString()).not.toBe("3.1");
+  });
+
+  it("carries no fabricated quarterly-burn FactRecord presenting an unacquired figure as a sourced 10-Q fact", () => {
+    expect(OKLO_FIXTURE.facts.find((f) => f.id === "quarterly-burn")).toBeUndefined();
+  });
+
   it("profile is confirmed pre-revenue/unprofitable, matching the mock", () => {
     expect(result.profile.confirmedOrOverridden).toBe("PRE_REVENUE_UNPROFITABLE");
   });
@@ -236,8 +289,11 @@ describe("assembleAnalysisResult — OKLO fixture", () => {
   it("fair-value range takes the pre-revenue-distribution shape, never compressed to bear/bull bounds", () => {
     expect(result.fairValueRange.kind).toBe("pre-revenue-distribution");
     if (result.fairValueRange.kind === "pre-revenue-distribution") {
-      expect(result.fairValueRange.failure.toString()).toBe("3.1");
-      expect(result.fairValueRange.cashFloor.toString()).toBe("3.1");
+      // $1.00 = the fixture's own acquired cash ($200M) / shares outstanding
+      // (200M) — see the CB-AUDIT-01 H3 test above; no longer the invented
+      // 3.10 placeholder.
+      expect(result.fairValueRange.failure.toString()).toBe("1");
+      expect(result.fairValueRange.cashFloor.toString()).toBe("1");
     }
   });
 

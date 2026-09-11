@@ -270,12 +270,14 @@ export const MSFT_FIXTURE: CompanyFixture = {
     },
   },
   scenarioValues: { bear: new Decimal(265), base: new Decimal(510), bull: new Decimal(650) },
-  // PER-SHARE, matching `price`'s own units — solveRateForTargetValue
-  // compares this against currentPrice ($510.12), not against an aggregate
-  // market cap. Anchored so the base case exactly equals price at r=10%
-  // (illustrative; not one of the mock's own disclosed numbers, which
-  // shows only "X.X%" as a placeholder for this figure).
-  revalueBaseCaseAtRate: (rate: Decimal) => price.mul(new Decimal("0.1").dividedBy(rate)),
+  // No real revaluation-at-rate solver exists for this fixture (CB-AUDIT-01
+  // H2). This used to be an illustrative placeholder formula, anchored so
+  // the base case exactly equalled price at r=10% — not one of the mock's
+  // own disclosed numbers, which shows only "X.X%" for this figure — that
+  // solveRateForTargetValue then solved and Section G rendered as if it
+  // were a real answer. null means "not computed"; building a real solver
+  // is out of scope here.
+  revalueBaseCaseAtRate: null,
 
   // §9.6 rule 2. Both design mocks state the profile as CONFIRMED on their
   // own face, and these fixtures predate acquisition so no §3.8.2 cross-check

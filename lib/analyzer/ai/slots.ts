@@ -273,12 +273,18 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
     diagnostics.impliedReturnOnNewCapital.value,
     (v) => pct(v)
   );
-  b.value(
-    "diagnostics.terminal.terminalShareOfValue",
-    "share of value sitting in the terminal period",
-    diagnostics.terminal.terminalShareOfValue,
-    (v) => pct(v)
-  );
+  // CB-AUDIT-01 H4: no fixture in this codebase supplies a real
+  // terminalValuePv (see CompanyFixture.terminalValuePv's doc comment) — so
+  // `diagnostics.terminal` is always assemble.ts's own "not computed"
+  // placeholder today, never a genuine M8 result. Because the schema gives
+  // this field no way to say that (`terminalShareOfValue: Decimal` and
+  // `terminalFcfConsistencyApplied: true` are typed as though every
+  // instance were real), there is no signal on AnalysisResult this
+  // catalogue can check before deciding whether to hand [C] a real number
+  // — so no slot is offered for it at all, rather than risk handing [C] a
+  // fabricated one. Reinstating this slot needs a schema change giving
+  // `terminal` a real/not-computed distinction (e.g. Figure<TerminalDiagnostics>),
+  // which is out of scope here.
   b.value(
     "diagnostics.rateSensitivity.plusOnePoint",
     "value change from a one-point higher discount rate",

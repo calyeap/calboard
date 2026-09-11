@@ -98,10 +98,10 @@ describe("AnalyzerReport — OKLO", () => {
     expect(screen.queryByText(/PRE_REVENUE_UNPROFITABLE/)).toBeNull();
   });
 
-  it("renders the pre-revenue-distribution fair-value shape (cash floor $3.10), never bear/bull bounds", () => {
+  it("renders the pre-revenue-distribution fair-value shape (cash floor $1.00, the fixture's acquired cash/shares), never bear/bull bounds", () => {
     render(<AnalyzerReport result={result} />);
     expect(screen.getByText("Distribution summary")).not.toBeNull();
-    expect(screen.getAllByText("$3.10").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("$1.00").length).toBeGreaterThan(0);
     expect(screen.queryByText("Fair-value range")).toBeNull();
   });
 
@@ -118,14 +118,14 @@ describe("AnalyzerReport — OKLO", () => {
     // not a defect (same principle the MSFT DEGENERATE test above uses).
     const sectionD = container.querySelector("section#D") as HTMLElement;
     expect(within(sectionD).getAllByText("THIS SUCCESS IS WORTH LESS THAN FAILURE")).toHaveLength(2);
-    // Scoped to each definition's own table row — "25%" alone also
+    // Scoped to each definition's own table row — "30%" alone also
     // legitimately appears elsewhere (Section G's price-location figure,
     // and now Section H's restored right column also names each
     // probability-bearing definition, defect B2).
     const def3Row = within(sectionD).getByText(/Definition 3/).closest("tr");
     const def4Row = within(sectionD).getByText(/Definition 4/).closest("tr");
-    expect(def3Row?.textContent).toContain("40%");
-    expect(def4Row?.textContent).toContain("25%");
+    expect(def3Row?.textContent).toContain("45%");
+    expect(def4Row?.textContent).toContain("30%");
   });
 
   it("renders the M16 pre-revenue material as Section D subsections, not a new top-level section", () => {
@@ -381,7 +381,7 @@ describe("AnalyzerReport — closing recap 'Investment case — at a glance' is 
     const { container } = render(<AnalyzerReport result={result} />);
     const section = container.querySelector("section#atglance") as HTMLElement;
     expect(within(section).getByText("Failure — cash floor")).not.toBeNull();
-    expect(within(section).getByText("$3.10")).not.toBeNull();
+    expect(within(section).getByText("$1.00")).not.toBeNull();
     expect(section.querySelector(".striploc")).toBeNull();
   });
 });
