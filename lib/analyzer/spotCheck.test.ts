@@ -108,9 +108,9 @@ describe("the queue over the real fixtures", () => {
     expect(exempt).toEqual(["finance-lease-liabilities", "operating-lease-liabilities"]);
   });
 
-  it("queues OKLO's one real pre-revenue fact — no quarterly-burn FactRecord, since no acquired figure for it exists (CB-AUDIT-01 H3)", () => {
+  it("queues both OKLO pre-revenue facts", () => {
     const queued = queuedFacts(OKLO_FIXTURE.facts).map((f) => f.id);
-    expect(queued).toEqual(["cash-per-share"]);
+    expect(queued).toEqual(["cash-per-share", "quarterly-burn"]);
     expect(exemptFacts(OKLO_FIXTURE.facts)).toHaveLength(0);
   });
 
