@@ -16,6 +16,7 @@ jobs:
     if: >-
       github.event_name == 'issues' &&
       github.event.action == 'opened' &&
+      github.event.issue.user.login == github.repository_owner &&
       startsWith(github.event.issue.title, '[AI BUILD]')
     runs-on: ubuntu-latest
     steps:
@@ -35,7 +36,6 @@ jobs:
           ISSUE_URL: ${{ github.event.issue.html_url }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           TEXT=$(cat <<EOF
           A bounded AI BUILD task was opened in GitHub.
@@ -60,6 +60,8 @@ jobs:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.action == 'converted_to_draft' &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
       startsWith(github.event.pull_request.title, '[AI BUILD]')
     runs-on: ubuntu-latest
     steps:
@@ -103,6 +105,8 @@ jobs:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.action == 'ready_for_review' &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
       startsWith(github.event.pull_request.title, '[AI BUILD]')
     runs-on: ubuntu-latest
     steps:
