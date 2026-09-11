@@ -2,6 +2,14 @@
 
 **Status:** Frozen and reconciled against `calboard-holdings-final.html`. Extends the page-level direction frozen in PR #10; does not modify it.
 
+Scope. This document is authoritative for the Portfolio surfaces — Dashboard (/), Holdings (/holdings) and the setup wizard (/accounts/new). Its control and layout rules are Portfolio-scoped and do not govern the Stock Analyzer. For Analyzer control, layout, UX and information-architecture questions, use the Technical Specs Index to identify the currently approved frozen design artefact and defer to the docs/frozen/ contract it designates. Design authority here is surface-specific; there is no "newer file wins" rule.
+
+The core token layer is shared and binding across both products. Nine tokens — --ground, --ink, --muted, --hairline, --line-strong, --field, --gain, --loss, --stale — carry identical light and dark values in this document and in the Analyzer's frozen mocks, and that agreement is a contract rather than a coincidence. Changing any of the nine requires reconciling both surfaces in the same decision, and an Analyzer change means an amendment and a re-freeze of the affected frozen artefact. Everything else in this document is Portfolio-only: the allocation palettes --a1–--a6 and --c1–--c4, --pri-fill, --pri-text, --pri-hover, --pri-off, --seg-fill, --seg-text and --cell-line are not used by the Analyzer, which defines its own surface tokens (--paper, --surface, --tint, --rule, --ink-muted) that this document does not govern.
+
+Enforcement is asymmetric, and knowing that matters. The Analyzer's mocks are hash-registered in scripts/evidence/config.ts, so a token change there is caught by the frozen-artefact gate. This document carries no registered hash, so a Portfolio-side token change is caught by nothing. The binding rule above is the only thing standing in its way.
+
+If this document and another relevant authority conflict on something a change depends on, stop and return RECONCILIATION REQUIRED rather than picking one.
+
 **PRECEDENCE — read this before implementing anything.**
 
 1. `calboard-holdings-final.html` — authoritative rendered `/holdings` reference.
