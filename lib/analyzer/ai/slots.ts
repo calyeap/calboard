@@ -1,9 +1,10 @@
 import Decimal from "decimal.js";
 import { formatFactValue, formatUsd } from "../factDisplay";
 import { factUnit } from "../acquisition/factUnit";
-import type { AnalysisResult, FactRecord, Figure, SuppressingState } from "../types";
+import type { AnalysisResult, FactRecord, Figure, ProvenanceTokens, SuppressingState } from "../types";
 import type { FigureSlot, SlotCatalogue } from "./traceability";
 import { boundState, NOT_COMPUTED_BINDING, type BoundState } from "../notComputed";
+import { provenanceQualifierParts } from "../provenance";
 
 // ---------------------------------------------------------------------------
 // The catalogue of figures [C] may reference — built from the Analysis Result,
@@ -107,13 +108,32 @@ class CatalogueBuilder {
    * state (notComputed.ts). Where assembly bound one, the slot is the state —
    * exactly as a suppressed Figure's is — and the field behind it, which
    * holds no figure, is never formatted.
+   *
+   * `provenance`, where given, is the value's own §3.3-propagated tokens —
+   * an H3 cash/burn/runway output does not carry its qualification on a
+   * Figure the way most of this catalogue's other entries do (it is a bare
+   * Decimal on the result object; see this method's own doc comment above),
+   * so a non-default qualifier travels only if the caller hands it over here.
+   * Left absent (never a silent default), a real value renders exactly as it
+   * did before — the omission never upgrades a token this catalogue was not
+   * told about into a clean one.
    */
-  bound(id: string, label: string, bound: BoundState | null, v: Decimal | null, format: Formatter): void {
+  bound(
+    id: string,
+    label: string,
+    bound: BoundState | null,
+    v: Decimal | null,
+    format: Formatter,
+    provenance?: ProvenanceTokens | null
+  ): void {
     if (bound !== null) {
       this.add(id, label, bound.state, true, bound.state);
       return;
     }
-    this.value(id, label, v, format);
+    if (v === null) return;
+    const formatted = format(v);
+    const parts = provenance == null ? [] : provenanceQualifierParts(provenance);
+    this.add(id, label, parts.length === 0 ? formatted : `${formatted} (${parts.join(" · ")})`);
   }
 
   build(): SlotCatalogue {
@@ -394,15 +414,36 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
     const cashPerShareState = boundState(result.states, NOT_COMPUTED_BINDING.cashPerShare);
     const quarterlyBurnState = boundState(result.states, NOT_COMPUTED_BINDING.quarterlyBurn);
     const runwayState = boundState(result.states, NOT_COMPUTED_BINDING.runway);
-    b.bound("preRevenue.cashPerShare", "cash per share", cashPerShareState, preRevenue.cashPerShare, money);
+    b.bound(
+      "preRevenue.cashPerShare",
+      "cash per share",
+      cashPerShareState,
+      preRevenue.cashPerShare,
+      money,
+      preRevenue.cashPerShareProvenance
+    );
     if (cashPerShareState === null && preRevenue.cashPerShareAsOfDate !== null) {
       b.add("preRevenue.cashPerShareAsOfDate", "cash per share, as of date", preRevenue.cashPerShareAsOfDate);
     }
-    b.bound("preRevenue.quarterlyBurn", "quarterly cash burn", quarterlyBurnState, preRevenue.quarterlyBurn, bigMoney);
+    b.bound(
+      "preRevenue.quarterlyBurn",
+      "quarterly cash burn",
+      quarterlyBurnState,
+      preRevenue.quarterlyBurn,
+      bigMoney,
+      preRevenue.quarterlyBurnProvenance
+    );
     if (quarterlyBurnState === null && preRevenue.quarterlyBurnAsOfDate !== null) {
       b.add("preRevenue.quarterlyBurnAsOfDate", "quarterly cash burn, as of date", preRevenue.quarterlyBurnAsOfDate);
     }
-    b.bound("preRevenue.runway", "quarters of runway", runwayState, preRevenue.runway, (v) => v.toFixed(0));
+    b.bound(
+      "preRevenue.runway",
+      "quarters of runway",
+      runwayState,
+      preRevenue.runway,
+      (v) => v.toFixed(0),
+      preRevenue.runwayProvenance
+    );
     b.value("preRevenue.dilutionRequired", "dilution required on the back-loaded ramp", preRevenue.dilutionRequired, (v) =>
       bigMoney(v)
     );
@@ -425,7 +466,14 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
       if (row.vSuccessAsOfDate !== null) {
         b.add(`${key}.vSuccessAsOfDate`, `valuation date for V_success under "${row.definition}"`, row.vSuccessAsOfDate);
       }
-      b.bound(`${key}.vFail`, `value per share if "${row.definition}" does not happen`, cashPerShareState, row.vFail, money);
+      b.bound(
+        `${key}.vFail`,
+        `value per share if "${row.definition}" does not happen`,
+        cashPerShareState,
+        row.vFail,
+        money,
+        row.vFailProvenance
+      );
       if (cashPerShareState === null && row.vFailAsOfDate !== null) {
         b.add(`${key}.vFailAsOfDate`, `valuation date for V_fail under "${row.definition}"`, row.vFailAsOfDate);
       }
