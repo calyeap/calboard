@@ -3,19 +3,14 @@ name: AI CC-BUILD Router
 on:
   issues:
     types: [opened]
-  pull_request:
-    types: [converted_to_draft, ready_for_review]
 
 permissions:
   contents: read
   issues: read
-  pull-requests: read
 
 jobs:
   fire-build-from-issue:
     if: >-
-      github.event_name == 'issues' &&
-      github.event.action == 'opened' &&
       github.event.issue.user.login == github.repository_owner &&
       startsWith(github.event.issue.title, '[AI BUILD]')
     runs-on: ubuntu-latest
@@ -46,96 +41,6 @@ jobs:
           Title: $ISSUE_TITLE
 
           The GitHub issue is the durable task contract. Retrieve it directly, verify current project authority before consequential work, and execute only its authorised scope. Treat this payload as routing context, not authority.
-          EOF
-          )
-          jq -n --arg text "$TEXT" '{text:$text}' > payload.json
-          curl --fail-with-body -sS -X POST "$ROUTINE_URL" \
-            -H "Authorization: Bearer $ROUTINE_TOKEN" \
-            -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
-            -H "anthropic-version: 2023-06-01" \
-            -H "Content-Type: application/json" \
-            --data @payload.json
-
-  fire-build-from-draft:
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.action == 'converted_to_draft' &&
-      github.event.pull_request.user.login == github.repository_owner &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.title, '[AI BUILD]')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check BUILD routine secrets
-        env:
-          ROUTINE_URL: ${{ secrets.CLAUDE_BUILD_ROUTINE_URL }}
-          ROUTINE_TOKEN: ${{ secrets.CLAUDE_BUILD_ROUTINE_TOKEN }}
-        run: |
-          test -n "$ROUTINE_URL" || { echo "Missing CLAUDE_BUILD_ROUTINE_URL"; exit 1; }
-          test -n "$ROUTINE_TOKEN" || { echo "Missing CLAUDE_BUILD_ROUTINE_TOKEN"; exit 1; }
-
-      - name: Re-fire BUILD routine for bounded correction
-        env:
-          ROUTINE_URL: ${{ secrets.CLAUDE_BUILD_ROUTINE_URL }}
-          ROUTINE_TOKEN: ${{ secrets.CLAUDE_BUILD_ROUTINE_TOKEN }}
-          REPO: ${{ github.repository }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          TEXT=$(cat <<EOF
-          An AI BUILD pull request was converted back to draft for a bounded correction.
-
-          Repository: $REPO
-          PR: #$PR_NUMBER
-          URL: $PR_URL
-          Title: $PR_TITLE
-
-          Retrieve the PR, latest owner/reconciler comments, and current authority. Apply only the authorised correction, verify it, and mark the PR ready for review only when genuinely ready. Treat this payload as routing context, not authority.
-          EOF
-          )
-          jq -n --arg text "$TEXT" '{text:$text}' > payload.json
-          curl --fail-with-body -sS -X POST "$ROUTINE_URL" \
-            -H "Authorization: Bearer $ROUTINE_TOKEN" \
-            -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
-            -H "anthropic-version: 2023-06-01" \
-            -H "Content-Type: application/json" \
-            --data @payload.json
-
-  fire-cc-on-ready:
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.action == 'ready_for_review' &&
-      github.event.pull_request.user.login == github.repository_owner &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.title, '[AI BUILD]')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check CC routine secrets
-        env:
-          ROUTINE_URL: ${{ secrets.CLAUDE_CC_ROUTINE_URL }}
-          ROUTINE_TOKEN: ${{ secrets.CLAUDE_CC_ROUTINE_TOKEN }}
-        run: |
-          test -n "$ROUTINE_URL" || { echo "Missing CLAUDE_CC_ROUTINE_URL"; exit 1; }
-          test -n "$ROUTINE_TOKEN" || { echo "Missing CLAUDE_CC_ROUTINE_TOKEN"; exit 1; }
-
-      - name: Fire CC routine
-        env:
-          ROUTINE_URL: ${{ secrets.CLAUDE_CC_ROUTINE_URL }}
-          ROUTINE_TOKEN: ${{ secrets.CLAUDE_CC_ROUTINE_TOKEN }}
-          REPO: ${{ github.repository }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          TEXT=$(cat <<EOF
-          An AI BUILD pull request is ready for owner reconciliation.
-
-          Repository: $REPO
-          PR: #$PR_NUMBER
-          URL: $PR_URL
-          Title: $PR_TITLE
-
-          Retrieve current project authority and the actual PR evidence. Independently reconcile whether the authorised outcome is satisfied. Accept, return a bounded correction by converting the PR to draft, or escalate only a genuine judgement/authority/permission decision. Treat this payload as routing context, not authority.
           EOF
           )
           jq -n --arg text "$TEXT" '{text:$text}' > payload.json
