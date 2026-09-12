@@ -254,14 +254,23 @@ describe("AnalyzerReport — OKLO, acquired cash basis not established (H3)", ()
 
 // H3 conformance correction — cash/burn provenance is inherited at the
 // point of use in Section D, never rendered as a bare number that hides a
-// non-default (SECONDARY / AI-extracted / not-confirmed) source.
+// non-default (SECONDARY / AI-extracted / spot-check-not-required) source.
+//
+// NOT CONFIRMED is deliberately absent from this fixture. That value is a
+// human's Cannot-verify DECISION, not a qualifier beside an otherwise-clean
+// figure — a NOT CONFIRMED input suppresses its dependent H3 output entirely
+// (§5.2 INCOMPLETE; see gate.ts's deriveH3CashBasis), so a numeric burn next
+// to a NOT CONFIRMED mark is not a state a corrected pipeline ever produces.
+// This fixture previously asserted exactly that combination — reproducing
+// and fixing it here, per the H3 conformance correction, rather than making
+// the renderer satisfy an incorrect fixture.
 describe("AnalyzerReport — OKLO, non-default provenance behind the acquired cash basis (H3)", () => {
   const nonDefaultProvenanceResult = assembleAnalysisResult({
     ...OKLO_FIXTURE,
     preRevenue: {
       ...OKLO_FIXTURE.preRevenue!,
       cashPerShareProvenance: { sourceClass: "SECONDARY", extractionType: "AI-EXTRACTED", verificationState: "SPOT-CHECK PENDING" },
-      quarterlyBurnProvenance: { sourceClass: "PRIMARY", extractionType: "DETERMINISTIC/STRUCTURED", verificationState: "NOT CONFIRMED" },
+      quarterlyBurnProvenance: { sourceClass: "PRIMARY", extractionType: "DETERMINISTIC/STRUCTURED", verificationState: "SPOT-CHECK NOT REQUIRED" },
     },
   });
 
@@ -274,7 +283,7 @@ describe("AnalyzerReport — OKLO, non-default provenance behind the acquired ca
     expect(within(cashRow).getByText("Spot-check pending")).not.toBeNull();
 
     const burnRow = within(sectionD).getByText("Quarterly burn / runway").closest("tr")!;
-    expect(within(burnRow).getByText("Not confirmed")).not.toBeNull();
+    expect(within(burnRow).getByText("Spot-check not required")).not.toBeNull();
 
     // Every V_fail cell in the probability table inherits the same cash
     // provenance — the weakest-input rule, carried to every point of use.
@@ -282,6 +291,39 @@ describe("AnalyzerReport — OKLO, non-default provenance behind the acquired ca
       expect(row.vFailProvenance).toEqual(nonDefaultProvenanceResult.preRevenue!.cashPerShareProvenance);
     }
     expect(within(sectionD).getAllByText("Secondary").length).toBeGreaterThan(1);
+  });
+});
+
+// H3 conformance correction — the combined "Quarterly burn / runway" cell
+// must qualify each half from its OWN dependencies, independently. Before
+// this correction, the cell only rendered provenance marks when BOTH burn
+// and runway were available — so a valid, non-default burn beside a
+// suppressed runway (here, cash is missing, which runway also depends on)
+// rendered its number with no qualifier at all, silently.
+describe("AnalyzerReport — OKLO, burn available while runway is suppressed (H3)", () => {
+  const burnOnlyResult = assembleAnalysisResult({
+    ...OKLO_FIXTURE,
+    preRevenue: {
+      ...OKLO_FIXTURE.preRevenue!,
+      cashPerShare: null,
+      cashPerShareAsOfDate: null,
+      cashPerShareCause: "missing REQUIRED input: acquired cash balance, shares outstanding used by the acquired run",
+      cashPerShareProvenance: null,
+      quarterlyBurnProvenance: { sourceClass: "SECONDARY", extractionType: "AI-EXTRACTED", verificationState: "CONFIRMED" },
+      runway: null,
+      runwayCause: "missing REQUIRED input: acquired cash balance",
+      runwayProvenance: null,
+    },
+  });
+
+  it("still shows the burn figure with its own non-default marks, even though runway (which also needs cash) is suppressed in the same cell", () => {
+    const { container } = render(<AnalyzerReport result={burnOnlyResult} />);
+    const sectionD = container.querySelector("section#D") as HTMLElement;
+    const burnRow = within(sectionD).getByText("Quarterly burn / runway").closest("tr")!;
+    expect(within(burnRow).getByText("Secondary")).not.toBeNull();
+    expect(within(burnRow).getByText("AI-extracted")).not.toBeNull();
+    expect(within(burnRow).getByText("INCOMPLETE")).not.toBeNull();
+    expect(burnRow.textContent).toMatch(/\$/);
   });
 });
 

@@ -211,6 +211,11 @@ export interface PreRevenueFixture {
   quarterlyBurnProvenance: ProvenanceTokens | null;
   runway: Decimal | null;
   runwayCause: string | null;
+  // Runway's own weakest-input provenance — the acquired cash balance AND
+  // the acquired quarterly burn (§7.2 M16's actual dependency), never the
+  // shares-outstanding token cashPerShareProvenance carries (H3 conformance
+  // correction). null exactly where runway itself is unavailable.
+  runwayProvenance: ProvenanceTokens | null;
   unitEconomics: UnitExitEconomicsInput;
   fundingStackShared: Omit<FundingStackYearParams, "capacityAddedByYear">;
   backLoadedCapacityByYear: Decimal[];
@@ -675,7 +680,11 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
                 vSuccessAsOfDate: d.vSuccessAsOfDate,
                 vFail,
                 vFailAsOfDate,
-                vFailProvenance: p.cashPerShare !== null ? (p.cashPerShareProvenance ?? CLEAN_PROVENANCE) : null,
+                // Never defaulted to CLEAN_PROVENANCE where the fixture
+                // itself carries no acquired-fact provenance to report (H3
+                // conformance correction) — an absent provenance token must
+                // not be silently reported as a clean, human-confirmed one.
+                vFailProvenance: p.cashPerShare !== null ? p.cashPerShareProvenance : null,
                 rSuccess: d.rSuccess,
                 rFail: d.rFail,
                 rateCapped: d.rateCapped,
@@ -692,11 +701,14 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
           return {
             cashPerShare: vFail,
             cashPerShareAsOfDate: vFailAsOfDate,
-            cashPerShareProvenance: p.cashPerShare !== null ? (p.cashPerShareProvenance ?? CLEAN_PROVENANCE) : null,
+            // Never defaulted to CLEAN_PROVENANCE — same reasoning as
+            // vFailProvenance above (H3 conformance correction).
+            cashPerShareProvenance: p.cashPerShare !== null ? p.cashPerShareProvenance : null,
             quarterlyBurn: p.quarterlyBurn ?? new Decimal(NaN),
             quarterlyBurnAsOfDate: p.quarterlyBurn !== null ? p.quarterlyBurnAsOfDate : null,
-            quarterlyBurnProvenance: p.quarterlyBurn !== null ? (p.quarterlyBurnProvenance ?? CLEAN_PROVENANCE) : null,
+            quarterlyBurnProvenance: p.quarterlyBurn !== null ? p.quarterlyBurnProvenance : null,
             runway: p.runway ?? new Decimal(NaN),
+            runwayProvenance: p.runway !== null ? p.runwayProvenance : null,
             unitEconomicsBreakeven,
             fundingStackByYear,
             dilutionRequired: ramps.back_loaded.dilutionRequired ?? new Decimal(0),

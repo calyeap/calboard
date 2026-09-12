@@ -6,6 +6,7 @@ import type { AnalysisResult } from "./types";
 import { isSpotCheckComplete, queuedFacts, undecidedFacts, applyDecisions } from "./spotCheck";
 import { getRun, getFactDecisions, getJudgments, type AnalyzerRun } from "./runStore";
 import { buildAcquiredRun, type AcquiredRunInputs } from "./acquiredRun";
+import { deriveH3CashBasis } from "./acquisition/companyInputs";
 import { constrainedAndPassedFactIds } from "./crosschecks/run";
 import type { DerivedExemptionEvidence } from "./spotCheck";
 import { TICKERS_WITH_ANALYST_INPUTS } from "./acquisition/analystInputs";
@@ -300,6 +301,37 @@ export async function loadGateState(runId: string): Promise<GateState> {
     derivedExemption
   );
 
+  // H3's acquired cash basis (cashPerShare / quarterlyBurn / runway) is
+  // computed above, inside `acquired`/`fixture`, from the RAW acquisition-time
+  // facts — before this run's decisions exist. `applyDecisions` just above
+  // only rewrites `facts`' own verificationState; left alone, a Cannot-verify
+  // decision on cash-balance/shares-outstanding/quarterly-burn would leave the
+  // H3 value and its acquisition-time provenance tokens intact, contrary to
+  // §3.8/§5.2 (H3 conformance correction). Re-deriving it here, from the SAME
+  // `facts` this run's decisions just produced, is not a second decision
+  // mechanism — `deriveH3CashBasis` is the one function both this call and
+  // `buildCompanyInputs` use; only the fact array behind it changes.
+  const preRevenue =
+    fixture.preRevenue === null
+      ? null
+      : (() => {
+          const h3 = deriveH3CashBasis(facts);
+          return {
+            ...fixture.preRevenue,
+            cashPerShare: h3.cashBasis.cashPerShare,
+            cashPerShareAsOfDate: h3.cashBasis.cashPerShareAsOfDate,
+            cashPerShareCause: h3.cashBasis.cashPerShareCause,
+            cashPerShareProvenance: h3.cashPerShareProvenance,
+            quarterlyBurn: h3.cashBasis.quarterlyBurn,
+            quarterlyBurnAsOfDate: h3.cashBasis.quarterlyBurnAsOfDate,
+            quarterlyBurnCause: h3.cashBasis.quarterlyBurnCause,
+            quarterlyBurnProvenance: h3.quarterlyBurnProvenance,
+            runway: h3.cashBasis.runway,
+            runwayCause: h3.cashBasis.runwayCause,
+            runwayProvenance: h3.runwayProvenance,
+          };
+        })();
+
   return {
     run,
     // §9.6's two run-level inputs are set HERE, for the reason the comment
@@ -311,6 +343,7 @@ export async function loadGateState(runId: string): Promise<GateState> {
     fixture: {
       ...fixture,
       facts,
+      preRevenue,
       trustInputs: {
         profileHumanConfirmed: run.profileHumanConfirmed,
         crossCheckFailedFactIds: [...crossCheckFailedFactIds],

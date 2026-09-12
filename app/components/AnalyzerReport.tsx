@@ -6,7 +6,6 @@ import { ValuationStrip } from "./ValuationStrip";
 import type { AiLayerReport } from "@/lib/analyzer/reportAnalysis";
 import { selectChallengerPoint } from "@/lib/analyzer/ai/challengerSelection";
 import { boundState, NOT_COMPUTED_BINDING, type BoundState } from "@/lib/analyzer/notComputed";
-import { combineProvenance } from "@/lib/analyzer/provenance";
 import type {
   AnalysisResult,
   ComputedValue,
@@ -860,32 +859,30 @@ export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; ai
                   <tr>
                     <td>Quarterly burn / runway</td>
                     <td>
-                      {quarterlyBurnState !== null || runwayState !== null ? (
-                        <>
-                          {quarterlyBurnState !== null ? (
-                            <BoundStateBlock bound={quarterlyBurnState} />
-                          ) : (
-                            <span className="v">${num(preRevenue.quarterlyBurn, 0)}</span>
-                          )}
-                          {" / "}
-                          {runwayState !== null ? (
-                            <BoundStateBlock bound={runwayState} />
-                          ) : (
-                            <span className="v">{num(preRevenue.runway, 0)} quarters</span>
-                          )}
-                        </>
+                      {/* Each half of this combined cell qualifies from its
+                          OWN dependencies, independently (H3 conformance
+                          correction): burn from the acquired burn fact alone;
+                          runway from the acquired cash balance AND burn —
+                          never from cashPerShare's shares-outstanding token,
+                          and never gated on the OTHER half also being
+                          available. A valid burn beside a suppressed runway
+                          (or vice versa) must still show its own marks. */}
+                      {quarterlyBurnState !== null ? (
+                        <BoundStateBlock bound={quarterlyBurnState} />
                       ) : (
-                        <span className="v">
-                          ${num(preRevenue.quarterlyBurn, 0)} / {num(preRevenue.runway, 0)} quarters
-                        </span>
+                        <>
+                          <span className="v">${num(preRevenue.quarterlyBurn, 0)}</span>
+                          <ProvenanceMarks tokens={preRevenue.quarterlyBurnProvenance ?? DEFAULT_PROVENANCE} />
+                        </>
                       )}
-                      {quarterlyBurnState === null && runwayState === null && (
-                        <ProvenanceMarks
-                          tokens={combineProvenance(
-                            preRevenue.quarterlyBurnProvenance ?? DEFAULT_PROVENANCE,
-                            preRevenue.cashPerShareProvenance ?? DEFAULT_PROVENANCE
-                          )}
-                        />
+                      {" / "}
+                      {runwayState !== null ? (
+                        <BoundStateBlock bound={runwayState} />
+                      ) : (
+                        <>
+                          <span className="v">{num(preRevenue.runway, 0)} quarters</span>
+                          <ProvenanceMarks tokens={preRevenue.runwayProvenance ?? DEFAULT_PROVENANCE} />
+                        </>
                       )}
                       {preRevenue.quarterlyBurnAsOfDate && <div className="sub">as of {preRevenue.quarterlyBurnAsOfDate}</div>}
                     </td>

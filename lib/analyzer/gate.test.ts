@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import { getPool } from "../db";
 import { createRun, recordFactDecision } from "./runStore";
+import { boundState, NOT_COMPUTED_BINDING } from "./notComputed";
 
 // The spy is installed around the REAL assembleAnalysisResult, not a stub, so
 // the passing path still computes a genuine result. What is being proved is
@@ -111,6 +112,70 @@ describe("the §2 ordering rule, enforced at the route boundary", () => {
 
     await expect(computeAnalysisForRun(runId)).resolves.toBeDefined();
     expect(assembleSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // H3 conformance correction (CB-H3-CONFORMANCE-02). Reproduces the exact
+  // counterexample the outcome names: a Cannot-verify decision on
+  // cash-balance/shares-outstanding/quarterly-burn used to leave H3's
+  // computed value and its acquisition-time (pre-decision) provenance
+  // tokens intact, because buildCompanyInputs computes the acquired cash
+  // basis once, before any decision exists, and gate.ts's applyDecisions
+  // only rewrote `fixture.facts` — never the already-built preRevenue block.
+  // With deriveH3CashBasis re-run over this run's OWN post-decision facts,
+  // every rejected fact must suppress its dependent H3 output to INCOMPLETE
+  // — never a computed number beside a stale CONFIRMED-looking mark.
+  //
+  // These three facts are tag-mapped (§3.8.1) and so are not themselves
+  // QUEUED for OKLO — but §3.8.1 is explicit that an exempt fact is "not
+  // spot-checked; it is not hidden", and this run's own decision store
+  // still accepts a decision recorded against them directly (an analyst
+  // annotating a shown-but-not-required fact). Recording one is exactly the
+  // "Cannot verify" scenario the outcome's counterexample describes.
+  it("suppresses H3's cash/burn/runway to INCOMPLETE — never a stale computed number — once cash, shares and burn are all Cannot verify", async () => {
+    const runId = await createRun("OKLO", "Oklo Inc.");
+    for (const factId of await queuedIdsForRun(runId)) {
+      await recordFactDecision(runId, factId, "CONFIRMED", null);
+    }
+    for (const factId of ["cash-balance", "shares-outstanding", "quarterly-burn"]) {
+      await recordFactDecision(runId, factId, "NOT CONFIRMED", "NOT LOCATED");
+    }
+
+    const result = await computeAnalysisForRun(runId);
+    const pr = result.preRevenue!;
+    expect(pr.cashPerShare.isNaN()).toBe(true);
+    expect(pr.quarterlyBurn.isNaN()).toBe(true);
+    expect(pr.runway.isNaN()).toBe(true);
+    expect(boundState(result.states, NOT_COMPUTED_BINDING.cashPerShare)?.state).toBe("INCOMPLETE");
+    expect(boundState(result.states, NOT_COMPUTED_BINDING.quarterlyBurn)?.state).toBe("INCOMPLETE");
+    expect(boundState(result.states, NOT_COMPUTED_BINDING.runway)?.state).toBe("INCOMPLETE");
+    // Every V_fail cell is unavailable too — never the rejected value.
+    expect(pr.cashPerShareProvenance).toBeNull();
+    for (const row of pr.successDefinitions) {
+      expect(row.vFail.isNaN()).toBe(true);
+      expect(row.vFailProvenance).toBeNull();
+    }
+  });
+
+  // Rejecting only the shares-outstanding fact must not take burn/runway
+  // down with it (independent dependency scoping, H3 conformance
+  // correction) — cash per share is INCOMPLETE, but burn (which does not
+  // depend on shares at all) and runway (which depends on cash balance and
+  // burn, not shares) both still compute.
+  it("suppresses only cash per share — not burn or runway — when shares outstanding alone is Cannot verify", async () => {
+    const runId = await createRun("OKLO", "Oklo Inc.");
+    for (const factId of await queuedIdsForRun(runId)) {
+      await recordFactDecision(runId, factId, "CONFIRMED", null);
+    }
+    await recordFactDecision(runId, "shares-outstanding", "NOT CONFIRMED", "NOT LOCATED");
+
+    const result = await computeAnalysisForRun(runId);
+    const pr = result.preRevenue!;
+    expect(pr.cashPerShare.isNaN()).toBe(true);
+    expect(boundState(result.states, NOT_COMPUTED_BINDING.cashPerShare)?.state).toBe("INCOMPLETE");
+    expect(pr.quarterlyBurn.isNaN()).toBe(false);
+    expect(pr.runway.isNaN()).toBe(false);
+    expect(boundState(result.states, NOT_COMPUTED_BINDING.quarterlyBurn)).toBeNull();
+    expect(boundState(result.states, NOT_COMPUTED_BINDING.runway)).toBeNull();
   });
 
   // A deep link or API call carrying an id that was never issued must not

@@ -654,6 +654,11 @@ export interface PreRevenueModule {
   // imply the cash balance itself is current. NaN + NOT_COMPUTED_BINDING.runway
   // where either input is absent.
   runway: Decimal;
+  // Runway's own weakest-input provenance — the acquired cash balance AND
+  // the acquired quarterly burn (§7.2 M16's actual dependency), never the
+  // shares-outstanding token cashPerShareProvenance carries (H3 conformance
+  // correction). null exactly where runway is itself unavailable.
+  runwayProvenance: ProvenanceTokens | null;
   // Runs before the scale solve; a value-destroying unit returns
   // NOT ACHIEVABLE AT ANY SCALE, never a very large number.
   unitEconomicsBreakeven: Figure<Decimal>;
