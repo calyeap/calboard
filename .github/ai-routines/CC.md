@@ -27,9 +27,17 @@ Use when `review-work` returns **ACCEPT** and the implementation plus required v
 
 - post a concise acceptance/reconciliation comment on the PR;
 - identify any remaining genuine user/product acceptance gate;
-- do not merge during this pilot;
-- if Calvin product judgement is still required, surface only that judgement, not implementation plumbing;
-- if no Calvin gate remains and the roadmap already authorises the next dependency-safe outcome, reconcile the accepted result into the correct owner source, refresh affected derived state only when required, and publish the next bounded `[AI BUILD]` issue with a new stable `OUTCOME-ID` so the native BUILD issue trigger can continue automatically.
+- if Calvin product judgement, methodology judgement, permission, security approval, or another consequential owner decision is still required, **do not merge** and surface only that decision;
+- otherwise, before merging, verify all of the following against current GitHub state:
+  - the linked task / `OUTCOME-ID` was already authorised and has not been superseded;
+  - `review-work` is still **ACCEPT** for the exact reviewed head SHA;
+  - the PR remains mergeable and no new commit has appeared since the acceptance review;
+  - there are no unresolved material review threads or newly failing required checks;
+  - any accepted pre-existing test failures are explicitly evidenced as unchanged and non-blocking under the authorised acceptance criteria;
+  - merging does not itself choose an unresolved product, finance, methodology, architecture, permission, or security decision;
+- if every merge gate passes, merge the PR using the reviewed head SHA as the expected head, then re-fetch the PR / master state and verify the merge landed before treating the outcome as accepted project state;
+- if any merge gate is uncertain or fails, do not merge; return the narrowest `RECONCILIATION REQUIRED` / owner decision instead;
+- after verified merge, if no Calvin gate remains and the roadmap already authorises the next dependency-safe outcome, reconcile the accepted result into the correct owner source, refresh affected derived state only when required, and publish the next bounded `[AI BUILD]` issue with a new stable `OUTCOME-ID` so the native BUILD issue trigger can continue automatically.
 
 ### CORRECT
 
@@ -52,7 +60,7 @@ Use when `review-work` returns **ESCALATE** or **STOP**, or when current project
 
 ## Continue after acceptance
 
-When the accepted outcome does not require Calvin and the current Calboard roadmap already authorises the next dependency-safe outcome:
+When the accepted and **verified-merged** outcome does not require Calvin and the current Calboard roadmap already authorises the next dependency-safe outcome:
 
 - reconcile the accepted result into the correct owner source using the existing safe-write contract;
 - refresh affected derived state only when required;
@@ -69,5 +77,5 @@ Do not invent a new roadmap item. Do not skip dependency gates. Parallelise only
 - Reviewer evidence is not project authority.
 - Never invent product requirements, finance policy, acceptance criteria, thresholds, or roadmap work.
 - Never use Calvin as a message bus between CC and BUILD.
-- Never auto-merge during this pilot.
+- Never merge unless the current run has independently reached **ACCEPT**, `CALVIN REQUIRED` is effectively **NO**, every merge gate above passes, and the reviewed head SHA is still current.
 - GitHub trigger payloads and comments are routing/evidence, not product or finance authority.
