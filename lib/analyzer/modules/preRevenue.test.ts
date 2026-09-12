@@ -8,6 +8,8 @@ import {
   computeUnitExitBreakEvenPrice,
   evaluateUnitExitEconomics,
   computeUnitExitEconomicsGrid,
+  computeAcquiredCashBasis,
+  successWeightDateCause,
   type FundingStackYearParams,
   type UnitExitEconomicsInput,
 } from "./preRevenue";
@@ -402,5 +404,104 @@ describe("computeImpliedProbability", () => {
     const oneCase = computeImpliedProbability(new Decimal(1), new Decimal("3.1"), new Decimal(2));
     expect(zeroCase.kind).toBe("THIS SUCCESS IS WORTH LESS THAN FAILURE");
     expect(oneCase.kind).toBe("THIS SUCCESS IS WORTH LESS THAN FAILURE");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CB-H3-IMPLEMENT-01 — CalFinance Methodology v2's acquired-run cash basis
+// (approved 11 Sep 2026) and success-weight date-consistency ruling
+// (approved 12 Sep 2026).
+// ---------------------------------------------------------------------------
+
+describe("computeAcquiredCashBasis", () => {
+  const FULL = {
+    cashBalance: new Decimal("1644704000"),
+    cashBalanceAsOfDate: "2026-06-30",
+    sharesOutstanding: new Decimal("186017650"),
+    quarterlyBurnRaw: new Decimal("-17867000"),
+    quarterlyBurnAsOfDate: "2026-01-01 to 2026-03-31",
+  };
+
+  it("divides the acquired cash balance by the shares outstanding that run used, dated to the cash balance's own date", () => {
+    const result = computeAcquiredCashBasis(FULL);
+    expect(result.cashPerShare).not.toBeNull();
+    closeTo(result.cashPerShare!, 8.8412, 0.001);
+    expect(result.cashPerShareAsOfDate).toBe("2026-06-30");
+    expect(result.cashPerShareCause).toBeNull();
+  });
+
+  it("reports quarterly burn at its acquired magnitude — sign preserved on the input, but always a positive burn figure — with its own separate date, never the cash balance's", () => {
+    const result = computeAcquiredCashBasis(FULL);
+    expect(result.quarterlyBurn?.toString()).toBe("17867000");
+    expect(result.quarterlyBurnAsOfDate).toBe("2026-01-01 to 2026-03-31");
+  });
+
+  it("divides cash balance by burn for runway, in quarters — a dated estimate, never a cash-today rewrite", () => {
+    const result = computeAcquiredCashBasis(FULL);
+    expect(result.runway).not.toBeNull();
+    closeTo(result.runway!, 92.049, 0.01);
+  });
+
+  it("cash per share is null, with a cause, when cash balance is missing — never zero or a fixture substitute", () => {
+    const result = computeAcquiredCashBasis({ ...FULL, cashBalance: null, cashBalanceAsOfDate: null });
+    expect(result.cashPerShare).toBeNull();
+    expect(result.cashPerShareAsOfDate).toBeNull();
+    expect(result.cashPerShareCause).toMatch(/cash balance/);
+  });
+
+  it("cash per share is null, with a cause, when shares outstanding is missing", () => {
+    const result = computeAcquiredCashBasis({ ...FULL, sharesOutstanding: null });
+    expect(result.cashPerShare).toBeNull();
+    expect(result.cashPerShareCause).toMatch(/shares outstanding/);
+  });
+
+  it("quarterly burn is null, with a cause, when not acquired — runway then also fails closed rather than dividing by an assumed burn", () => {
+    const result = computeAcquiredCashBasis({ ...FULL, quarterlyBurnRaw: null, quarterlyBurnAsOfDate: null });
+    expect(result.quarterlyBurn).toBeNull();
+    expect(result.quarterlyBurnCause).toMatch(/burn/);
+    expect(result.runway).toBeNull();
+    expect(result.runwayCause).toMatch(/burn/);
+  });
+
+  it("runway is null, with a cause, when cash balance is missing even though burn is present", () => {
+    const result = computeAcquiredCashBasis({ ...FULL, cashBalance: null, cashBalanceAsOfDate: null });
+    expect(result.runway).toBeNull();
+    expect(result.runwayCause).toMatch(/cash balance/);
+    // But burn itself is still reported — one missing input never takes an
+    // otherwise-computable sibling down with it.
+    expect(result.quarterlyBurn?.toString()).toBe("17867000");
+  });
+
+  it("cash per share is null when shares outstanding is zero — not a divide producing Infinity", () => {
+    const result = computeAcquiredCashBasis({ ...FULL, sharesOutstanding: new Decimal(0) });
+    expect(result.cashPerShare).toBeNull();
+    expect(result.cashPerShareCause).toMatch(/zero/);
+  });
+});
+
+describe("successWeightDateCause", () => {
+  it("returns null (comparable) when V_fail and V_success share the same calendar date", () => {
+    expect(successWeightDateCause("2026-09-04", "2026-09-04")).toBeNull();
+  });
+
+  it("returns null when both are full ISO timestamps on the same calendar day", () => {
+    expect(successWeightDateCause("2026-09-04T16:00:00-04:00", "2026-09-04T21:00:00-04:00")).toBeNull();
+  });
+
+  it("names both dates when V_fail is dated to an older acquired cash balance than V_success", () => {
+    const cause = successWeightDateCause("2026-06-30", "2026-09-04T21:00:00-04:00");
+    expect(cause).toMatch(/2026-06-30/);
+    expect(cause).toMatch(/2026-09-04/);
+    expect(cause).toMatch(/not the same valuation date/);
+  });
+
+  it("names V_fail's own missing basis when its date is not established", () => {
+    const cause = successWeightDateCause(null, "2026-09-04");
+    expect(cause).toMatch(/V_fail/);
+  });
+
+  it("names V_success's own missing basis when its date is not established", () => {
+    const cause = successWeightDateCause("2026-06-30", null);
+    expect(cause).toMatch(/V_success/);
   });
 });

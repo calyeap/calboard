@@ -218,3 +218,44 @@ describe("QuickRead — OKLO", () => {
     expect(/target price/i.test(text)).toBe(false);
   });
 });
+
+// CB-H3-IMPLEMENT-01 — when the acquired cash-per-share basis is not
+// established, the fair-value range is suppressed even though preRevenue
+// is still populated. Quick Read must not fall through to the
+// mature-company reading (reverse-DCF grid, RONIC) for a pre-revenue
+// company.
+describe("QuickRead — OKLO, acquired cash basis not established (H3)", () => {
+  const missingBasisResult = assembleAnalysisResult({
+    ...OKLO_FIXTURE,
+    preRevenue: {
+      ...OKLO_FIXTURE.preRevenue!,
+      cashPerShare: null,
+      cashPerShareAsOfDate: null,
+      cashPerShareCause: "missing REQUIRED input: acquired cash balance, shares outstanding used by the acquired run",
+      quarterlyBurn: null,
+      quarterlyBurnAsOfDate: null,
+      quarterlyBurnCause: "missing REQUIRED input: acquired quarterly operating cash flow (burn)",
+      runway: null,
+      runwayCause: "missing REQUIRED input: acquired cash balance, acquired quarterly burn",
+    },
+  });
+
+  it("renders all eight items, states the suppressed range, and never falls through to the reverse-DCF/RONIC reading", () => {
+    const { container } = render(<QuickRead result={missingBasisResult} />);
+    expect(container.querySelectorAll(".qitem")).toHaveLength(8);
+    for (const label of ITEM_LABELS) {
+      expect(screen.getByText(label)).not.toBeNull();
+    }
+    expect(screen.getAllByText("INCOMPLETE").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/reverse-DCF grid/)).toBeNull();
+    expect(screen.queryByText(/annual growth over ten years/)).toBeNull();
+  });
+
+  it("does not introduce any BUY/SELL/target/score language", () => {
+    const { container } = render(<QuickRead result={missingBasisResult} />);
+    const text = container.textContent ?? "";
+    expect(/\bbuy\b/i.test(text)).toBe(false);
+    expect(/\bsell\b/i.test(text)).toBe(false);
+    expect(/target price/i.test(text)).toBe(false);
+  });
+});

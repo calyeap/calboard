@@ -534,3 +534,131 @@ export function computeImpliedProbability(vSuccess: Decimal, vFail: Decimal, pri
   const probability = Decimal.max(0, rawProbability);
   return { kind: "probability", probability: roundProbability(probability) };
 }
+
+// ---------------------------------------------------------------------------
+// CalFinance Methodology v2 — the acquired-run cash basis (approved 11 Sep
+// 2026) and the success-weight date-consistency ruling (approved 12 Sep
+// 2026). CB-H3-ARCH-01's bounded architecture grant.
+// ---------------------------------------------------------------------------
+
+export interface AcquiredCashBasisInput {
+  /** null where the acquired run did not obtain this fact. */
+  cashBalance: Decimal | null;
+  cashBalanceAsOfDate: string | null;
+  /** Shares outstanding used by this acquired run — §3.5's cover-page count. */
+  sharesOutstanding: Decimal | null;
+  /**
+   * The acquired quarterly operating-cash-flow figure, sign preserved (Oklo's
+   * is negative — burn; see tagMap.ts's own note on this element). null where
+   * not acquired.
+   */
+  quarterlyBurnRaw: Decimal | null;
+  quarterlyBurnAsOfDate: string | null;
+}
+
+export interface AcquiredCashBasisResult {
+  /** Latest acquired cash balance / shares outstanding, as of the balance's own date. */
+  cashPerShare: Decimal | null;
+  cashPerShareAsOfDate: string | null;
+  /** Set only where cashPerShare is null — why. */
+  cashPerShareCause: string | null;
+  /** Magnitude of the acquired quarterly operating cash flow. */
+  quarterlyBurn: Decimal | null;
+  quarterlyBurnAsOfDate: string | null;
+  quarterlyBurnCause: string | null;
+  /** cashBalance / quarterlyBurn, in quarters — a dated estimate, never a "cash today" adjustment. */
+  runway: Decimal | null;
+  runwayCause: string | null;
+}
+
+/**
+ * The approved acquired-run cash basis (methodology v2, "Pre-revenue
+ * acquired-run cash basis"). Cash per share is the latest acquired cash
+ * balance over the shares outstanding that acquired run used, reported as of
+ * the cash balance's own date — this function never adjusts it to today.
+ * Burn is reported at its acquired magnitude, with its own separately dated
+ * observation. Runway divides the two; it is a clearly dated estimate off
+ * the latest available burn, not a claim that the cash balance is current.
+ *
+ * Each of the three outputs fails closed independently: a missing REQUIRED
+ * component leaves that output (and only that output) null, with its own
+ * cause — never a zero, and never one missing input silently taking down an
+ * otherwise-computable sibling.
+ */
+export function computeAcquiredCashBasis(input: AcquiredCashBasisInput): AcquiredCashBasisResult {
+  const missing = (...names: string[]) => `missing REQUIRED input: ${names.join(", ")}`;
+
+  let cashPerShare: Decimal | null = null;
+  let cashPerShareCause: string | null = null;
+  if (input.cashBalance === null || input.sharesOutstanding === null) {
+    const names: string[] = [];
+    if (input.cashBalance === null) names.push("acquired cash balance");
+    if (input.sharesOutstanding === null) names.push("shares outstanding used by the acquired run");
+    cashPerShareCause = missing(...names);
+  } else if (input.sharesOutstanding.isZero()) {
+    cashPerShareCause = "shares outstanding is zero — cash per share is not computable";
+  } else {
+    cashPerShare = input.cashBalance.dividedBy(input.sharesOutstanding);
+  }
+  const cashPerShareAsOfDate = cashPerShare !== null ? input.cashBalanceAsOfDate : null;
+
+  let quarterlyBurn: Decimal | null = null;
+  let quarterlyBurnCause: string | null = null;
+  if (input.quarterlyBurnRaw === null) {
+    quarterlyBurnCause = missing("acquired quarterly operating cash flow (burn)");
+  } else {
+    quarterlyBurn = input.quarterlyBurnRaw.abs();
+  }
+  const quarterlyBurnAsOfDate = quarterlyBurn !== null ? input.quarterlyBurnAsOfDate : null;
+
+  let runway: Decimal | null = null;
+  let runwayCause: string | null = null;
+  if (input.cashBalance === null || quarterlyBurn === null) {
+    const names: string[] = [];
+    if (input.cashBalance === null) names.push("acquired cash balance");
+    if (quarterlyBurn === null) names.push("acquired quarterly burn");
+    runwayCause = missing(...names);
+  } else if (quarterlyBurn.isZero()) {
+    runwayCause = "quarterly burn is zero — runway is not computable";
+  } else {
+    runway = input.cashBalance.dividedBy(quarterlyBurn);
+  }
+
+  return {
+    cashPerShare,
+    cashPerShareAsOfDate,
+    cashPerShareCause,
+    quarterlyBurn,
+    quarterlyBurnAsOfDate,
+    quarterlyBurnCause,
+    runway,
+    runwayCause,
+  };
+}
+
+/**
+ * CalFinance Methodology v2, "Pre-revenue success-weight date consistency"
+ * (approved 12 Sep 2026): the conditional price-implied break-even success
+ * weight may be computed only when V_fail and V_success are expressed on the
+ * SAME valuation date. Compares calendar dates only (the portion before a
+ * "T", for an ISO timestamp, or the whole string for a plain date) — no
+ * alignment tolerance is applied or invented; the two must name the same day.
+ *
+ * Returns null where the two endpoints are comparable (interpolation may
+ * proceed); otherwise the cause naming why not.
+ */
+export function successWeightDateCause(vFailAsOfDate: string | null, vSuccessAsOfDate: string | null): string | null {
+  if (vFailAsOfDate === null) {
+    return "V_fail's valuation date is not established — the acquired cash-per-share basis is missing";
+  }
+  if (vSuccessAsOfDate === null) {
+    return "V_success's valuation date is not established";
+  }
+  const calendarDate = (iso: string) => (iso.includes("T") ? iso.slice(0, iso.indexOf("T")) : iso);
+  const failDate = calendarDate(vFailAsOfDate);
+  const successDate = calendarDate(vSuccessAsOfDate);
+  if (failDate !== successDate) {
+    return `V_fail is dated ${failDate} and V_success is dated ${successDate} — not the same valuation date`;
+  }
+  return null;
+}

@@ -46,13 +46,26 @@ function pendingSpotCheck(value: Decimal): SourcedValue<Decimal> {
 }
 
 const price = new Decimal("14.50"); // mock shows "$XX.XX" — no real figure given; a placeholder within the two 8GW cases' range
+const priceTimestamp = "2026-09-04T16:00:00-04:00";
 const cashPerShare = new Decimal("3.10");
 const quarterlyBurn = new Decimal("45"); // $XXm placeholder in the mock — illustrative, UNVERIFIED per its own provenance flag
 
 const preRevenue: PreRevenueFixture = {
   cashPerShare,
+  // This M5 validation fixture's own FactRecord above (id "cash-per-share")
+  // already documents this figure as "adjusted for burn to today" — so,
+  // uniquely for this illustrative fixture (never for a real acquired run),
+  // V_fail and V_success share the run's own price timestamp as their
+  // valuation date, deliberately, by the fixture's own construction. No
+  // alignment threshold is computed here — this is a fixture asserting
+  // its own dates are aligned, not a general rule.
+  cashPerShareAsOfDate: priceTimestamp,
+  cashPerShareCause: null,
   quarterlyBurn,
+  quarterlyBurnAsOfDate: priceTimestamp,
+  quarterlyBurnCause: null,
   runway: new Decimal(8), // quarters — illustrative; mock shows "XX quarters" placeholder
+  runwayCause: null,
   unitEconomics: {
     annualOutputPerUnit: new Decimal("8760"), // MWh/yr per unit at 100% capacity factor, 1 MW nameplate
     operatingCostPerUnit: new Decimal("50000"),
@@ -77,11 +90,14 @@ const preRevenue: PreRevenueFixture = {
   // reproduced from this schedule.
   backLoadedCapacityByYear: [0, 0, 0, 1, 1, 1, 2, 3].map((n) => new Decimal(n)),
   steadyCapacityByYear: [0, 1, 1, 1, 1, 1, 1, 2].map((n) => new Decimal(n)),
+  // vFail is not listed per definition — it is always the acquired-run
+  // cash-per-share basis above (CalFinance Methodology v2), which assembly
+  // applies uniformly to every row.
   successDefinitions: [
-    { definition: "Definition 1 — early deployment, base tariff", vSuccess: new Decimal(0), vFail: cashPerShare, rSuccess: new Decimal("0.30"), rFail: new Decimal("0.10"), rateCapped: true },
-    { definition: "Definition 2 — early deployment, contracted tariff", vSuccess: new Decimal(1), vFail: cashPerShare, rSuccess: new Decimal("0.284"), rFail: new Decimal("0.10"), rateCapped: false },
-    { definition: "Definition 3 — 8 GW, utility multiple, back-loaded ramp", vSuccess: new Decimal(31), vFail: cashPerShare, rSuccess: new Decimal("0.30"), rFail: new Decimal("0.10"), rateCapped: true },
-    { definition: "Definition 4 — 8 GW, utility multiple, steady ramp", vSuccess: new Decimal(48), vFail: cashPerShare, rSuccess: new Decimal("0.226"), rFail: new Decimal("0.10"), rateCapped: false },
+    { definition: "Definition 1 — early deployment, base tariff", vSuccess: new Decimal(0), rSuccess: new Decimal("0.30"), rFail: new Decimal("0.10"), rateCapped: true },
+    { definition: "Definition 2 — early deployment, contracted tariff", vSuccess: new Decimal(1), rSuccess: new Decimal("0.284"), rFail: new Decimal("0.10"), rateCapped: false },
+    { definition: "Definition 3 — 8 GW, utility multiple, back-loaded ramp", vSuccess: new Decimal(31), rSuccess: new Decimal("0.30"), rFail: new Decimal("0.10"), rateCapped: true },
+    { definition: "Definition 4 — 8 GW, utility multiple, steady ramp", vSuccess: new Decimal(48), rSuccess: new Decimal("0.226"), rFail: new Decimal("0.10"), rateCapped: false },
   ],
 };
 
@@ -90,7 +106,7 @@ export const OKLO_FIXTURE: CompanyFixture = {
   runId: "fixture-oklo-milestone5",
   ticker: "OKLO",
   companyName: "Oklo Inc.",
-  price: { value: price, timestamp: "2026-09-04T16:00:00-04:00" },
+  price: { value: price, timestamp: priceTimestamp },
 
   facts: [
     {

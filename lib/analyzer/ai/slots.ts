@@ -384,9 +384,18 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
 
   // --- §7.2 M16 — the pre-revenue module -----------------------------------
   if (preRevenue !== null) {
-    b.value("preRevenue.cashPerShare", "cash per share", preRevenue.cashPerShare, money);
-    b.value("preRevenue.quarterlyBurn", "quarterly cash burn", preRevenue.quarterlyBurn, bigMoney);
-    b.value("preRevenue.runway", "quarters of runway", preRevenue.runway, (v) => v.toFixed(0));
+    const cashPerShareState = boundState(result.states, NOT_COMPUTED_BINDING.cashPerShare);
+    const quarterlyBurnState = boundState(result.states, NOT_COMPUTED_BINDING.quarterlyBurn);
+    const runwayState = boundState(result.states, NOT_COMPUTED_BINDING.runway);
+    b.bound("preRevenue.cashPerShare", "cash per share", cashPerShareState, preRevenue.cashPerShare, money);
+    if (cashPerShareState === null && preRevenue.cashPerShareAsOfDate !== null) {
+      b.add("preRevenue.cashPerShareAsOfDate", "cash per share, as of date", preRevenue.cashPerShareAsOfDate);
+    }
+    b.bound("preRevenue.quarterlyBurn", "quarterly cash burn", quarterlyBurnState, preRevenue.quarterlyBurn, bigMoney);
+    if (quarterlyBurnState === null && preRevenue.quarterlyBurnAsOfDate !== null) {
+      b.add("preRevenue.quarterlyBurnAsOfDate", "quarterly cash burn, as of date", preRevenue.quarterlyBurnAsOfDate);
+    }
+    b.bound("preRevenue.runway", "quarters of runway", runwayState, preRevenue.runway, (v) => v.toFixed(0));
     b.value("preRevenue.dilutionRequired", "dilution required on the back-loaded ramp", preRevenue.dilutionRequired, (v) =>
       bigMoney(v)
     );
@@ -406,7 +415,13 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
       // named success definition, so naming them must be possible.
       b.add(`${key}.definition`, `the name of success definition ${i + 1}`, row.definition);
       b.value(`${key}.vSuccess`, `value per share if "${row.definition}" happens`, row.vSuccess, money);
-      b.value(`${key}.vFail`, `value per share if "${row.definition}" does not happen`, row.vFail, money);
+      if (row.vSuccessAsOfDate !== null) {
+        b.add(`${key}.vSuccessAsOfDate`, `valuation date for V_success under "${row.definition}"`, row.vSuccessAsOfDate);
+      }
+      b.bound(`${key}.vFail`, `value per share if "${row.definition}" does not happen`, cashPerShareState, row.vFail, money);
+      if (cashPerShareState === null && row.vFailAsOfDate !== null) {
+        b.add(`${key}.vFailAsOfDate`, `valuation date for V_fail under "${row.definition}"`, row.vFailAsOfDate);
+      }
       // §10.5, and CalFinance Methodology v2's own wording: this is a
       // CONDITIONAL PRICE-IMPLIED BREAK-EVEN SUCCESS WEIGHT. It is never an
       // implied probability of success, and the label a model reads is the
@@ -419,12 +434,16 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
           (v) => pct(v, 0)
         );
       } else {
+        // "NOT COMPUTED / SUPPRESSED" is §7.2 M16's own weight-table state,
+        // not a §9.3 SuppressingState (FigureSlot.state's type) — the slot
+        // still carries it as its formatted value (never a number), just
+        // without the optional state tag the other two kinds get.
         b.add(
           `${key}.breakEvenSuccessWeight`,
           `conditional price-implied break-even success weight for "${row.definition}"`,
           row.state.kind,
           true,
-          row.state.kind
+          row.state.kind === "NOT COMPUTED / SUPPRESSED" ? undefined : row.state.kind
         );
       }
     });

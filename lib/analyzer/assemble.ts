@@ -27,6 +27,7 @@ import {
   computeBothFundingRamps,
   computeImpliedProbability,
   computeUnitExitBreakEvenPrice,
+  successWeightDateCause,
   type FundingStackYearParams,
   type UnitExitEconomicsInput,
 } from "./modules/preRevenue";
@@ -187,9 +188,19 @@ const DRIVER_LABELS: Record<NullableDrivers, string> = {
 };
 
 export interface PreRevenueFixture {
-  cashPerShare: Decimal;
-  quarterlyBurn: Decimal;
-  runway: Decimal;
+  // CalFinance Methodology v2's acquired-run cash basis. null only where the
+  // component facts behind it were not acquired/authored for this run — see
+  // the matching *Cause field, which assembly turns into the bound
+  // notComputed.ts state (never a zero or fixture substitute). vFail below is
+  // always this same basis — it is not a per-definition input.
+  cashPerShare: Decimal | null;
+  cashPerShareAsOfDate: string | null;
+  cashPerShareCause: string | null;
+  quarterlyBurn: Decimal | null;
+  quarterlyBurnAsOfDate: string | null;
+  quarterlyBurnCause: string | null;
+  runway: Decimal | null;
+  runwayCause: string | null;
   unitEconomics: UnitExitEconomicsInput;
   fundingStackShared: Omit<FundingStackYearParams, "capacityAddedByYear">;
   backLoadedCapacityByYear: Decimal[];
@@ -197,7 +208,6 @@ export interface PreRevenueFixture {
   successDefinitions: {
     definition: string;
     vSuccess: Decimal;
-    vFail: Decimal;
     rSuccess: Decimal;
     rFail: Decimal;
     rateCapped: boolean;
@@ -504,6 +514,28 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
       )
     );
   }
+  // --- §7.2 M16 / CalFinance Methodology v2 — the acquired-run cash basis --
+  //
+  // cashPerShare is a REQUIRED input of the fair-value range (it IS the
+  // range's `failure`/`cashFloor`), so its absence removes the range itself
+  // (§9.6 rule 1's second clause) — the explicit `scope` override
+  // suppression.ts documents for exactly this case. quarterlyBurn and
+  // runway are not range inputs; their absence stays scoped to themselves.
+  if (fixture.preRevenue !== null) {
+    const pr = fixture.preRevenue;
+    if (pr.cashPerShare === null) {
+      suppressing.push({
+        ...notComputed(NOT_COMPUTED_BINDING.cashPerShare, "INCOMPLETE", pr.cashPerShareCause ?? "not established"),
+        scope: "the fair-value range",
+      });
+    }
+    if (pr.quarterlyBurn === null) {
+      suppressing.push(notComputed(NOT_COMPUTED_BINDING.quarterlyBurn, "INCOMPLETE", pr.quarterlyBurnCause ?? "not established"));
+    }
+    if (pr.runway === null) {
+      suppressing.push(notComputed(NOT_COMPUTED_BINDING.runway, "INCOMPLETE", pr.runwayCause ?? "not established"));
+    }
+  }
 
   if (triggerA.fired) qualifying.push({ flag: "MARGIN AT HISTORICAL HIGH", appliesTo: "operating margin" });
   if (reinvestmentRonic.capitalLight) qualifying.push({ flag: "CAPITAL-LIGHT", appliesTo: "reinvestment/RONIC" });
@@ -518,23 +550,28 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
   // exactly as successDefinitions itself already holds them. When no
   // definition qualifies, both bounds fall back to cashFloor (the one
   // figure guaranteed present) rather than being invented.
-  const qualifyingSuccessValues = fixture.preRevenue?.successDefinitions
-    .filter((d) => d.vSuccess.greaterThan(d.vFail))
-    .map((d) => d.vSuccess);
+  // vFail is always the acquired-run cash-per-share basis (methodology v2) —
+  // never a per-definition input — so "qualifies" compares against that one
+  // shared value, not a field the fixture's successDefinitions carry.
+  const cashPerShareBasis = fixture.preRevenue?.cashPerShare ?? null;
+  const qualifyingSuccessValues =
+    fixture.preRevenue !== null && cashPerShareBasis !== null
+      ? fixture.preRevenue.successDefinitions.filter((d) => d.vSuccess.greaterThan(cashPerShareBasis)).map((d) => d.vSuccess)
+      : undefined;
   const computedFairValueRange: AnalysisResult["fairValueRange"] =
     fixture.preRevenue !== null
       ? {
           kind: "pre-revenue-distribution",
-          failure: fixture.preRevenue.cashPerShare,
+          failure: cashPerShareBasis ?? new Decimal(NaN),
           successAsCommonlyDescribed:
             qualifyingSuccessValues && qualifyingSuccessValues.length > 0
               ? {
                   low: qualifyingSuccessValues.reduce((min, v) => (v.lessThan(min) ? v : min)),
                   high: qualifyingSuccessValues.reduce((max, v) => (v.greaterThan(max) ? v : max)),
                 }
-              : { low: fixture.preRevenue.cashPerShare, high: fixture.preRevenue.cashPerShare },
+              : { low: cashPerShareBasis ?? new Decimal(NaN), high: cashPerShareBasis ?? new Decimal(NaN) },
           successAsPriceRequires: fixture.price.value,
-          cashFloor: fixture.preRevenue.cashPerShare,
+          cashFloor: cashPerShareBasis ?? new Decimal(NaN),
         }
       : {
           kind: "range",
@@ -586,15 +623,32 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
             ? { suppressed: false, value: breakEven.breakEvenOutputPrice, qualification: { provenanceTokens: CLEAN_PROVENANCE, analyticFlags: [] } }
             : { suppressed: true, state: "INCOMPLETE" as SuppressingState, cause: breakEven.cause };
 
+          // V_fail is always the acquired-run cash-per-share basis — never a
+          // per-definition input (CalFinance Methodology v2). V_success is
+          // always a present value as of today (the basis rule's own words:
+          // "both a present value as of today") — the run's price timestamp,
+          // not a fixture-supplied date.
+          const vFail = p.cashPerShare ?? new Decimal(NaN);
+          const vFailAsOfDate = p.cashPerShare !== null ? p.cashPerShareAsOfDate : null;
+          const vSuccessAsOfDate = fixture.price.timestamp;
+          const dateCause = successWeightDateCause(vFailAsOfDate, vSuccessAsOfDate);
+
           const successDefinitions: SuccessDefinitionRow[] = p.successDefinitions
             .map((d) => ({
               definition: d.definition,
               vSuccess: d.vSuccess,
-              vFail: d.vFail,
+              vSuccessAsOfDate,
+              vFail,
+              vFailAsOfDate,
               rSuccess: d.rSuccess,
               rFail: d.rFail,
               rateCapped: d.rateCapped,
-              state: computeImpliedProbability(d.vSuccess, d.vFail, fixture.price.value),
+              // "may be computed only when V_fail and V_success are
+              // expressed on the same valuation date and otherwise
+              // comparable basis" — checked once per row (each row's V_fail
+              // is the same basis, but the check stays per-row so a future
+              // per-definition V_success date cannot silently skip it).
+              state: dateCause !== null ? ({ kind: "NOT COMPUTED / SUPPRESSED", cause: dateCause } as const) : computeImpliedProbability(d.vSuccess, vFail, fixture.price.value),
             }))
             .sort((a, b) => a.vSuccess.minus(b.vSuccess).toNumber());
 
@@ -604,9 +658,11 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
           };
 
           return {
-            cashPerShare: p.cashPerShare,
-            quarterlyBurn: p.quarterlyBurn,
-            runway: p.runway,
+            cashPerShare: vFail,
+            cashPerShareAsOfDate: vFailAsOfDate,
+            quarterlyBurn: p.quarterlyBurn ?? new Decimal(NaN),
+            quarterlyBurnAsOfDate: p.quarterlyBurn !== null ? p.quarterlyBurnAsOfDate : null,
+            runway: p.runway ?? new Decimal(NaN),
             unitEconomicsBreakeven,
             fundingStackByYear,
             dilutionRequired: ramps.back_loaded.dilutionRequired ?? new Decimal(0),

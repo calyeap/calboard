@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { CLEAN_PROVENANCE } from "../provenance";
 import { TAG_MAP } from "./tagMap";
 import { annualSeries, operatingMarginSeries, filedAnnualYearsCount, quarterlySeries } from "./history";
+import { computeAcquiredCashBasis } from "../modules/preRevenue";
 import type { AcquisitionResult } from "./acquire";
 import type { CompanyFactsDocument } from "./secClient";
 import type { CompanyFixture } from "../assemble";
@@ -119,6 +120,35 @@ export function buildCompanyInputs(
     const q = quarters[quarters.length - offset];
     return q === undefined ? null : { value: new Decimal(q.value), provenance: CLEAN_PROVENANCE };
   };
+
+  // CalFinance Methodology v2's acquired-run cash basis (§7.2 M16). Overrides
+  // the analyst bundle's own cashPerShare/quarterlyBurn/runway — which, where
+  // one exists at all, is carried from the M5/M7 validation fixture and is not
+  // filing data (analystInputs.ts) — with this run's own acquired facts.
+  // Everything else in the analyst's preRevenue block (unit economics, the
+  // funding stack, each success definition's V_success/rates) is not a fact
+  // and is untouched here.
+  const cashBasis = computeAcquiredCashBasis({
+    cashBalance: raw("cash-balance"),
+    cashBalanceAsOfDate: byId.get("cash-balance")?.asOfDate ?? null,
+    sharesOutstanding: raw("shares-outstanding"),
+    quarterlyBurnRaw: raw("quarterly-burn"),
+    quarterlyBurnAsOfDate: byId.get("quarterly-burn")?.asOfDate ?? null,
+  });
+  const preRevenue: CompanyFixture["preRevenue"] =
+    analyst.preRevenue === null
+      ? null
+      : {
+          ...analyst.preRevenue,
+          cashPerShare: cashBasis.cashPerShare,
+          cashPerShareAsOfDate: cashBasis.cashPerShareAsOfDate,
+          cashPerShareCause: cashBasis.cashPerShareCause,
+          quarterlyBurn: cashBasis.quarterlyBurn,
+          quarterlyBurnAsOfDate: cashBasis.quarterlyBurnAsOfDate,
+          quarterlyBurnCause: cashBasis.quarterlyBurnCause,
+          runway: cashBasis.runway,
+          runwayCause: cashBasis.runwayCause,
+        };
 
   const fixture: CompanyFixture = {
     schemaVersion: "v1.0.2",
@@ -281,7 +311,7 @@ export function buildCompanyInputs(
     scenarioValues: analyst.scenarioValues,
     revalueBaseCaseAtRate: analyst.revalueBaseCaseAtRate,
     configuredConstants: analyst.configuredConstants,
-    preRevenue: analyst.preRevenue,
+    preRevenue,
   };
 
   return { fixture, absentInputs };

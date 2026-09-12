@@ -386,3 +386,141 @@ describe("assembleAnalysisResult — OKLO fixture", () => {
     expect(weighted.toString()).not.toBe(bear.plus(base).plus(bull).toString());
   });
 });
+
+// ---------------------------------------------------------------------------
+// CB-H3-IMPLEMENT-01 — CalFinance Methodology v2's acquired-run cash basis
+// and success-weight date-consistency ruling. Synthetic variants of the
+// OKLO fixture, isolating each acceptance case at the assembly layer —
+// acquiredRun.test.ts covers the same rulings end to end against real
+// EDGAR facts.
+// ---------------------------------------------------------------------------
+
+describe("assembleAnalysisResult — H3 acquired-run cash basis", () => {
+  const basePreRevenue = OKLO_FIXTURE.preRevenue!;
+
+  it("an acquired cash basis that differs from the analyst fixture, on a comparable date, still interpolates — the boundary logic is not rewritten", () => {
+    // Deliberately NOT $3.10/8 quarters/the fixture's own numbers — a
+    // different acquired cash balance, on the SAME date as V_success
+    // (the run's own price timestamp), so the two endpoints are comparable.
+    const fixture = {
+      ...OKLO_FIXTURE,
+      preRevenue: {
+        ...basePreRevenue,
+        cashPerShare: new Decimal("6.25"),
+        cashPerShareAsOfDate: OKLO_FIXTURE.price.timestamp,
+        quarterlyBurn: new Decimal("12"),
+        quarterlyBurnAsOfDate: OKLO_FIXTURE.price.timestamp,
+        runway: new Decimal("6.25").dividedBy(12),
+      },
+    };
+    const r = assembleAnalysisResult(fixture);
+    expect(r.preRevenue).not.toBeNull();
+    const pr = r.preRevenue!;
+    expect(pr.cashPerShare.toString()).toBe("6.25");
+    for (const row of pr.successDefinitions) {
+      expect(row.vFail.toString()).toBe("6.25");
+      // Definitions 3/4 ($31/$48) still clear this new, different floor —
+      // real, distinct probabilities, not the suppressed state.
+      if (row.vSuccess.greaterThan("6.25")) {
+        expect(row.state.kind).toBe("probability");
+      }
+    }
+    expect(r.fairValueRange.kind).toBe("pre-revenue-distribution");
+    if (r.fairValueRange.kind === "pre-revenue-distribution") {
+      expect(r.fairValueRange.cashFloor.toString()).toBe("6.25");
+    }
+  });
+
+  it("a cash/burn date mismatch does not rewrite the cash balance to today — runway still computes from the raw acquired figures, and each figure discloses its own real date", () => {
+    const fixture = {
+      ...OKLO_FIXTURE,
+      preRevenue: {
+        ...basePreRevenue,
+        cashPerShare: new Decimal("6.25"),
+        cashPerShareAsOfDate: "2026-06-30",
+        quarterlyBurn: new Decimal("12"),
+        // A DIFFERENT date than the cash balance — the exact mismatch this
+        // ruling addresses. Runway is still computed (it's allowed to use
+        // "the latest available burn rate only as a clearly dated
+        // estimate" regardless of alignment); only the success weight's
+        // comparability rule cares about this mismatch.
+        quarterlyBurnAsOfDate: "2026-03-31 to 2026-06-30",
+        runway: new Decimal("6.25").dividedBy(12),
+      },
+    };
+    const r = assembleAnalysisResult(fixture);
+    const pr = r.preRevenue!;
+    expect(pr.cashPerShareAsOfDate).toBe("2026-06-30");
+    expect(pr.quarterlyBurnAsOfDate).toBe("2026-03-31 to 2026-06-30");
+    expect(pr.runway.toString()).toBe(new Decimal("6.25").dividedBy(12).toString());
+    // The cash figure is never silently reattributed to the burn's date.
+    expect(pr.cashPerShareAsOfDate).not.toBe(pr.quarterlyBurnAsOfDate);
+  });
+
+  it("missing acquired cash and shares: cash per share, runway and the fair-value range are all correctly INCOMPLETE — never zero, never NaN rendered as a number, never the analyst fixture's placeholder", () => {
+    const fixture = {
+      ...OKLO_FIXTURE,
+      preRevenue: {
+        ...basePreRevenue,
+        cashPerShare: null,
+        cashPerShareAsOfDate: null,
+        cashPerShareCause: "missing REQUIRED input: acquired cash balance, shares outstanding used by the acquired run",
+        runway: null,
+        runwayCause: "missing REQUIRED input: acquired cash balance",
+      },
+    };
+    const r = assembleAnalysisResult(fixture);
+    const pr = r.preRevenue!;
+
+    expect(pr.cashPerShare.isNaN()).toBe(true);
+    expect(pr.cashPerShareAsOfDate).toBeNull();
+    const cashState = boundState(r.states, NOT_COMPUTED_BINDING.cashPerShare);
+    expect(cashState?.state).toBe("INCOMPLETE");
+    expect(cashState?.cause).toMatch(/cash balance/);
+
+    expect(pr.runway.isNaN()).toBe(true);
+    expect(boundState(r.states, NOT_COMPUTED_BINDING.runway)?.state).toBe("INCOMPLETE");
+
+    // cashPerShare is a REQUIRED input of the fair-value range itself — its
+    // absence removes the range (never a NaN-valued cash floor).
+    expect(r.fairValueRange.kind).toBe("suppressed");
+
+    // vFail follows cashPerShare — never the fixture's placeholder $3.10 —
+    // and every success definition is suppressed for the same reason, never
+    // a computed weight built on an invented basis.
+    for (const row of pr.successDefinitions) {
+      expect(row.vFail.isNaN()).toBe(true);
+      expect(row.vFail.toString()).not.toBe("3.1");
+      expect(row.state.kind).toBe("NOT COMPUTED / SUPPRESSED");
+    }
+  });
+
+  it("missing acquired quarterly burn alone: quarterly burn and runway are INCOMPLETE, but cash per share (independently established) still computes and the success weight is unaffected by the burn gap", () => {
+    const fixture = {
+      ...OKLO_FIXTURE,
+      preRevenue: {
+        ...basePreRevenue,
+        cashPerShare: new Decimal("6.25"),
+        cashPerShareAsOfDate: OKLO_FIXTURE.price.timestamp,
+        quarterlyBurn: null,
+        quarterlyBurnAsOfDate: null,
+        quarterlyBurnCause: "missing REQUIRED input: acquired quarterly operating cash flow (burn)",
+        runway: null,
+        runwayCause: "missing REQUIRED input: acquired quarterly burn",
+      },
+    };
+    const r = assembleAnalysisResult(fixture);
+    const pr = r.preRevenue!;
+
+    expect(pr.cashPerShare.toString()).toBe("6.25");
+    expect(boundState(r.states, NOT_COMPUTED_BINDING.cashPerShare)).toBeNull();
+
+    expect(pr.quarterlyBurn.isNaN()).toBe(true);
+    expect(boundState(r.states, NOT_COMPUTED_BINDING.quarterlyBurn)?.state).toBe("INCOMPLETE");
+    expect(pr.runway.isNaN()).toBe(true);
+    expect(boundState(r.states, NOT_COMPUTED_BINDING.runway)?.state).toBe("INCOMPLETE");
+
+    // The fair-value range is NOT an input the burn feeds — it survives.
+    expect(r.fairValueRange.kind).toBe("pre-revenue-distribution");
+  });
+});

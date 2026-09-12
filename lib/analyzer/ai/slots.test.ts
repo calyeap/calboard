@@ -177,6 +177,77 @@ describe("buildSlotCatalogue", () => {
     expect(buildSlotCatalogue(oklo).has("fairValueRange.cashFloor")).toBe(true);
     expect(buildSlotCatalogue(msft).has("fairValueRange.bear")).toBe(true);
   });
+
+  // CB-H3-IMPLEMENT-01. The M5 OKLO_FIXTURE's own dates are aligned (its
+  // FactRecord already documents cash per share as "adjusted for burn to
+  // today"), so the weight still computes and every date slot is populated.
+  it("holds V_success and V_fail's own valuation dates for each success definition, on the fixture where the weight computes", () => {
+    const catalogue = buildSlotCatalogue(oklo);
+    expect(oklo.preRevenue!.successDefinitions.length).toBeGreaterThan(0);
+    oklo.preRevenue!.successDefinitions.forEach((_, i) => {
+      const key = `preRevenue.successDefinitions.${i}`;
+      expect(catalogue.get(`${key}.vSuccessAsOfDate`)?.formatted).toBeTruthy();
+      expect(catalogue.get(`${key}.vFailAsOfDate`)?.formatted).toBeTruthy();
+    });
+  });
+
+  it("cash per share, quarterly burn and runway are exposed as ordinary figures when the acquired basis is established", () => {
+    const catalogue = buildSlotCatalogue(oklo);
+    expect(catalogue.get("preRevenue.cashPerShare")?.suppressed).toBe(false);
+    expect(catalogue.get("preRevenue.quarterlyBurn")?.suppressed).toBe(false);
+    expect(catalogue.get("preRevenue.runway")?.suppressed).toBe(false);
+  });
+
+  describe("H3 — acquired cash basis not established", () => {
+    const missingBasisOklo = assembleAnalysisResult({
+      ...OKLO_FIXTURE,
+      preRevenue: {
+        ...OKLO_FIXTURE.preRevenue!,
+        cashPerShare: null,
+        cashPerShareAsOfDate: null,
+        cashPerShareCause: "missing REQUIRED input: acquired cash balance, shares outstanding used by the acquired run",
+        quarterlyBurn: null,
+        quarterlyBurnAsOfDate: null,
+        quarterlyBurnCause: "missing REQUIRED input: acquired quarterly operating cash flow (burn)",
+        runway: null,
+        runwayCause: "missing REQUIRED input: acquired cash balance, acquired quarterly burn",
+      },
+    });
+
+    it("cash per share, quarterly burn and runway carry their bound state, never a NaN or zero figure", () => {
+      const catalogue = buildSlotCatalogue(missingBasisOklo);
+      for (const id of ["preRevenue.cashPerShare", "preRevenue.quarterlyBurn", "preRevenue.runway"]) {
+        const slot = catalogue.get(id);
+        expect(slot?.suppressed).toBe(true);
+        expect(slot?.formatted).toBe("INCOMPLETE");
+        expect(slot?.formatted).not.toMatch(/\d/);
+        expect(slot?.formatted).not.toMatch(/NaN/);
+      }
+    });
+
+    it("every success definition's weight is suppressed — never a computed number built on the missing basis — and V_fail carries the same bound state rather than a NaN figure", () => {
+      const catalogue = buildSlotCatalogue(missingBasisOklo);
+      expect(missingBasisOklo.preRevenue!.successDefinitions.length).toBeGreaterThan(0);
+      missingBasisOklo.preRevenue!.successDefinitions.forEach((row, i) => {
+        expect(row.state.kind).toBe("NOT COMPUTED / SUPPRESSED");
+        const key = `preRevenue.successDefinitions.${i}`;
+        const weightSlot = catalogue.get(`${key}.breakEvenSuccessWeight`);
+        expect(weightSlot?.suppressed).toBe(true);
+        expect(weightSlot?.formatted).toBe("NOT COMPUTED / SUPPRESSED");
+        expect(weightSlot?.formatted).not.toMatch(/\d/);
+        const vFailSlot = catalogue.get(`${key}.vFail`);
+        expect(vFailSlot?.suppressed).toBe(true);
+        expect(vFailSlot?.formatted).toBe("INCOMPLETE");
+      });
+    });
+
+    it("the fair-value range itself is suppressed, never a NaN-valued cash floor reaching [C]", () => {
+      const catalogue = buildSlotCatalogue(missingBasisOklo);
+      expect(missingBasisOklo.fairValueRange.kind).toBe("suppressed");
+      expect(catalogue.has("fairValueRange.cashFloor")).toBe(false);
+      expect(catalogue.get("fairValueRange.state")?.formatted).toBe("INCOMPLETE");
+    });
+  });
 });
 
 describe("buildFactSlotCatalogue", () => {

@@ -492,6 +492,9 @@ export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; ai
 
   const rateSensitivityState = boundState(states, NOT_COMPUTED_BINDING.rateSensitivity);
   const rateAtWhichBaseEqualsPriceState = boundState(states, NOT_COMPUTED_BINDING.rateAtWhichBaseEqualsPrice);
+  const cashPerShareState = boundState(states, NOT_COMPUTED_BINDING.cashPerShare);
+  const quarterlyBurnState = boundState(states, NOT_COMPUTED_BINDING.quarterlyBurn);
+  const runwayState = boundState(states, NOT_COMPUTED_BINDING.runway);
 
   // Section H's right column restates the r = 8%, current-margin cell —
   // the same cell Section E's own base case reads from.
@@ -801,13 +804,26 @@ export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; ai
                       <td>{row.definition}</td>
                       <td>
                         <span className="v">${num(row.vSuccess)}</span>
+                        {row.vSuccessAsOfDate && <div className="sub">as of {row.vSuccessAsOfDate}</div>}
                       </td>
                       <td>
-                        <span className="v">${num(row.vFail)}</span>
+                        {cashPerShareState !== null ? (
+                          <BoundStateBlock bound={cashPerShareState} />
+                        ) : (
+                          <>
+                            <span className="v">${num(row.vFail)}</span>
+                            {row.vFailAsOfDate && <div className="sub">as of {row.vFailAsOfDate}</div>}
+                          </>
+                        )}
                       </td>
                       <td className={row.state.kind !== "probability" ? "state" : undefined}>
                         {row.state.kind === "probability" ? (
                           <span className="v">{pct(row.state.probability, 0)}</span>
+                        ) : row.state.kind === "NOT COMPUTED / SUPPRESSED" ? (
+                          <>
+                            <span className="name">{row.state.kind}</span>
+                            <span className="cause">{humanizeCause(row.state.cause)}</span>
+                          </>
                         ) : (
                           <span className="name">{row.state.kind}</span>
                         )}
@@ -828,15 +844,39 @@ export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; ai
                   <tr>
                     <td>Cash per share</td>
                     <td>
-                      <span className="v">${num(preRevenue.cashPerShare)}</span>
+                      {cashPerShareState !== null ? (
+                        <BoundStateBlock bound={cashPerShareState} />
+                      ) : (
+                        <>
+                          <span className="v">${num(preRevenue.cashPerShare)}</span>
+                          {preRevenue.cashPerShareAsOfDate && <div className="sub">as of {preRevenue.cashPerShareAsOfDate}</div>}
+                        </>
+                      )}
                     </td>
                   </tr>
                   <tr>
                     <td>Quarterly burn / runway</td>
                     <td>
-                      <span className="v">
-                        ${num(preRevenue.quarterlyBurn, 0)} / {num(preRevenue.runway, 0)} quarters
-                      </span>
+                      {quarterlyBurnState !== null || runwayState !== null ? (
+                        <>
+                          {quarterlyBurnState !== null ? (
+                            <BoundStateBlock bound={quarterlyBurnState} />
+                          ) : (
+                            <span className="v">${num(preRevenue.quarterlyBurn, 0)}</span>
+                          )}
+                          {" / "}
+                          {runwayState !== null ? (
+                            <BoundStateBlock bound={runwayState} />
+                          ) : (
+                            <span className="v">{num(preRevenue.runway, 0)} quarters</span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="v">
+                          ${num(preRevenue.quarterlyBurn, 0)} / {num(preRevenue.runway, 0)} quarters
+                        </span>
+                      )}
+                      {preRevenue.quarterlyBurnAsOfDate && <div className="sub">as of {preRevenue.quarterlyBurnAsOfDate}</div>}
                     </td>
                   </tr>
                   <tr>

@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import type { AnalysisResult } from "@/lib/analyzer/types";
+import { boundState, NOT_COMPUTED_BINDING } from "@/lib/analyzer/notComputed";
 
 // E1 — an authorised deviation from §17.16, not something either mock
 // shows (Calvin approved it directly; the frozen artefacts are pending
@@ -22,8 +23,9 @@ function formatRange(range: { low: Decimal; high: Decimal }): string {
 }
 
 export function ValuationStrip({ result, showLocation = false }: { result: AnalysisResult; showLocation?: boolean }) {
-  const { preRevenue, fairValueRange, scenarioOutputs } = result;
+  const { preRevenue, fairValueRange, scenarioOutputs, states } = result;
   const locationPct = scenarioOutputs.priceLocationWithinRange.mul(100).toFixed(0);
+  const cashPerShareState = boundState(states, NOT_COMPUTED_BINDING.cashPerShare);
 
   if (preRevenue) {
     return (
@@ -31,7 +33,7 @@ export function ValuationStrip({ result, showLocation = false }: { result: Analy
         <div className="atglance" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
           <div>
             <span className="lb">Failure — cash floor</span>
-            <span className="fig">${num(preRevenue.cashPerShare)}</span>
+            <span className="fig">{cashPerShareState !== null ? cashPerShareState.state : `$${num(preRevenue.cashPerShare)}`}</span>
           </div>
           <div>
             <span className="lb">Success as described</span>
