@@ -6,6 +6,7 @@ import { ValuationStrip } from "./ValuationStrip";
 import type { AiLayerReport } from "@/lib/analyzer/reportAnalysis";
 import { selectChallengerPoint } from "@/lib/analyzer/ai/challengerSelection";
 import { boundState, NOT_COMPUTED_BINDING, type BoundState } from "@/lib/analyzer/notComputed";
+import { combineProvenance } from "@/lib/analyzer/provenance";
 import type {
   AnalysisResult,
   ComputedValue,
@@ -812,6 +813,7 @@ export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; ai
                         ) : (
                           <>
                             <span className="v">${num(row.vFail)}</span>
+                            <ProvenanceMarks tokens={row.vFailProvenance ?? DEFAULT_PROVENANCE} />
                             {row.vFailAsOfDate && <div className="sub">as of {row.vFailAsOfDate}</div>}
                           </>
                         )}
@@ -849,6 +851,7 @@ export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; ai
                       ) : (
                         <>
                           <span className="v">${num(preRevenue.cashPerShare)}</span>
+                          <ProvenanceMarks tokens={preRevenue.cashPerShareProvenance ?? DEFAULT_PROVENANCE} />
                           {preRevenue.cashPerShareAsOfDate && <div className="sub">as of {preRevenue.cashPerShareAsOfDate}</div>}
                         </>
                       )}
@@ -875,6 +878,14 @@ export function AnalyzerReport({ result, aiLayer }: { result: AnalysisResult; ai
                         <span className="v">
                           ${num(preRevenue.quarterlyBurn, 0)} / {num(preRevenue.runway, 0)} quarters
                         </span>
+                      )}
+                      {quarterlyBurnState === null && runwayState === null && (
+                        <ProvenanceMarks
+                          tokens={combineProvenance(
+                            preRevenue.quarterlyBurnProvenance ?? DEFAULT_PROVENANCE,
+                            preRevenue.cashPerShareProvenance ?? DEFAULT_PROVENANCE
+                          )}
+                        />
                       )}
                       {preRevenue.quarterlyBurnAsOfDate && <div className="sub">as of {preRevenue.quarterlyBurnAsOfDate}</div>}
                     </td>

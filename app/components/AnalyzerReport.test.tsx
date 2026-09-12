@@ -252,6 +252,39 @@ describe("AnalyzerReport — OKLO, acquired cash basis not established (H3)", ()
   });
 });
 
+// H3 conformance correction — cash/burn provenance is inherited at the
+// point of use in Section D, never rendered as a bare number that hides a
+// non-default (SECONDARY / AI-extracted / not-confirmed) source.
+describe("AnalyzerReport — OKLO, non-default provenance behind the acquired cash basis (H3)", () => {
+  const nonDefaultProvenanceResult = assembleAnalysisResult({
+    ...OKLO_FIXTURE,
+    preRevenue: {
+      ...OKLO_FIXTURE.preRevenue!,
+      cashPerShareProvenance: { sourceClass: "SECONDARY", extractionType: "AI-EXTRACTED", verificationState: "SPOT-CHECK PENDING" },
+      quarterlyBurnProvenance: { sourceClass: "PRIMARY", extractionType: "DETERMINISTIC/STRUCTURED", verificationState: "NOT CONFIRMED" },
+    },
+  });
+
+  it("marks cash per share, quarterly burn/runway, and each V_fail cell with their inherited non-default provenance — never upgraded to clean/confirmed", () => {
+    const { container } = render(<AnalyzerReport result={nonDefaultProvenanceResult} />);
+    const sectionD = container.querySelector("section#D") as HTMLElement;
+    const cashRow = within(sectionD).getByText("Cash per share").closest("tr")!;
+    expect(within(cashRow).getByText("Secondary")).not.toBeNull();
+    expect(within(cashRow).getByText("AI-extracted")).not.toBeNull();
+    expect(within(cashRow).getByText("Spot-check pending")).not.toBeNull();
+
+    const burnRow = within(sectionD).getByText("Quarterly burn / runway").closest("tr")!;
+    expect(within(burnRow).getByText("Not confirmed")).not.toBeNull();
+
+    // Every V_fail cell in the probability table inherits the same cash
+    // provenance — the weakest-input rule, carried to every point of use.
+    for (const row of nonDefaultProvenanceResult.preRevenue!.successDefinitions) {
+      expect(row.vFailProvenance).toEqual(nonDefaultProvenanceResult.preRevenue!.cashPerShareProvenance);
+    }
+    expect(within(sectionD).getAllByText("Secondary").length).toBeGreaterThan(1);
+  });
+});
+
 // Second-pass IA audit (2026-09-05) — B2, B3, B6, B7.
 describe("AnalyzerReport — Section H two-column frame (defect B2)", () => {
   it("MSFT: renders both columns — driving inputs and the weighted marker moved into the left column, the right column restated from Section E, never shown alone", () => {

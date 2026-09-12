@@ -1,12 +1,12 @@
 import Decimal from "decimal.js";
-import { CLEAN_PROVENANCE } from "../provenance";
+import { CLEAN_PROVENANCE, combineProvenance } from "../provenance";
 import { TAG_MAP } from "./tagMap";
 import { annualSeries, operatingMarginSeries, filedAnnualYearsCount, quarterlySeries } from "./history";
 import { computeAcquiredCashBasis } from "../modules/preRevenue";
 import type { AcquisitionResult } from "./acquire";
 import type { CompanyFactsDocument } from "./secClient";
 import type { CompanyFixture } from "../assemble";
-import type { FactRecord, SourcedValue } from "../types";
+import type { FactRecord, ProvenanceTokens, SourcedValue } from "../types";
 
 // ---------------------------------------------------------------------------
 // Acquisition -> the assembly seam.
@@ -35,6 +35,15 @@ function sourcedFrom(fact: FactRecord | undefined): SourcedValue<Decimal> | null
       extractionType: fact.extractionType,
       verificationState: fact.verificationState,
     },
+  };
+}
+
+function tokensOf(fact: FactRecord | undefined): ProvenanceTokens | null {
+  if (fact === undefined) return null;
+  return {
+    sourceClass: fact.sourceClass,
+    extractionType: fact.extractionType,
+    verificationState: fact.verificationState,
   };
 }
 
@@ -128,13 +137,26 @@ export function buildCompanyInputs(
   // Everything else in the analyst's preRevenue block (unit economics, the
   // funding stack, each success definition's V_success/rates) is not a fact
   // and is untouched here.
+  const cashBalanceFact = byId.get("cash-balance");
+  const sharesOutstandingFact = byId.get("shares-outstanding");
+  const quarterlyBurnFact = byId.get("quarterly-burn");
   const cashBasis = computeAcquiredCashBasis({
     cashBalance: raw("cash-balance"),
-    cashBalanceAsOfDate: byId.get("cash-balance")?.asOfDate ?? null,
+    cashBalanceAsOfDate: cashBalanceFact?.asOfDate ?? null,
     sharesOutstanding: raw("shares-outstanding"),
     quarterlyBurnRaw: raw("quarterly-burn"),
-    quarterlyBurnAsOfDate: byId.get("quarterly-burn")?.asOfDate ?? null,
+    quarterlyBurnAsOfDate: quarterlyBurnFact?.asOfDate ?? null,
   });
+  // Weakest-input provenance (§3.3) behind each H3 output this acquisition
+  // seam derives — carried through to assembly rather than dropped at the
+  // acquired-fact boundary, so a SECONDARY / AI-EXTRACTED / not-confirmed
+  // input still qualifies the figure at every point of use (H3 conformance
+  // correction).
+  const cashPerShareProvenance =
+    cashBasis.cashPerShare !== null && cashBalanceFact !== undefined && sharesOutstandingFact !== undefined
+      ? combineProvenance(tokensOf(cashBalanceFact)!, tokensOf(sharesOutstandingFact)!)
+      : null;
+  const quarterlyBurnProvenance = cashBasis.quarterlyBurn !== null ? tokensOf(quarterlyBurnFact) : null;
   const preRevenue: CompanyFixture["preRevenue"] =
     analyst.preRevenue === null
       ? null
@@ -143,11 +165,30 @@ export function buildCompanyInputs(
           cashPerShare: cashBasis.cashPerShare,
           cashPerShareAsOfDate: cashBasis.cashPerShareAsOfDate,
           cashPerShareCause: cashBasis.cashPerShareCause,
+          cashPerShareProvenance,
           quarterlyBurn: cashBasis.quarterlyBurn,
           quarterlyBurnAsOfDate: cashBasis.quarterlyBurnAsOfDate,
           quarterlyBurnCause: cashBasis.quarterlyBurnCause,
+          quarterlyBurnProvenance,
           runway: cashBasis.runway,
           runwayCause: cashBasis.runwayCause,
+          // Step 7 (the real analyst-authored per-definition V_success date
+          // and comparable-basis evidence) does not exist yet, so
+          // analyst.preRevenue.successDefinitions here is always the M5
+          // illustrative validation bundle's own dollar figures, reused for
+          // lack of anything else (analystInputs.ts). That bundle's own
+          // vSuccessAsOfDate/vSuccessBasis are a deliberate claim about ITS
+          // OWN illustrative construction — never acquired evidence for a
+          // real run — so a real run explicitly nulls both back out here
+          // rather than reporting a fabricated date/basis as if it had been
+          // established for this company's actual filings (H3 conformance
+          // correction). This correctly leaves every success weight
+          // suppressed, honestly, on a real run until Step 7 exists.
+          successDefinitions: analyst.preRevenue.successDefinitions.map((d) => ({
+            ...d,
+            vSuccessAsOfDate: null,
+            vSuccessBasis: null,
+          })),
         };
 
   const fixture: CompanyFixture = {

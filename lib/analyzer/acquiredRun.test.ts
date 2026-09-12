@@ -13,6 +13,7 @@ import {
 import { constrainedAndPassedFactIds } from "./crosschecks/run";
 import { evaluateCompleteness } from "./requiredInputs";
 import { boundState, NOT_COMPUTED_BINDING } from "./notComputed";
+import { combineProvenance } from "./provenance";
 
 // ---------------------------------------------------------------------------
 // DONE-WHEN 1 and 2, end to end: a real run acquires its own fact set from SEC
@@ -241,6 +242,31 @@ describe("a real OKLO run — pre-revenue, thinner filings", () => {
       expect(row.vFailAsOfDate).toBe("2026-06-30");
     }
 
+    // H3 conformance correction — provenance is carried through the
+    // acquisition seam, not dropped at the raw-value boundary (companyInputs.ts
+    // used to obtain these via raw(), losing the sourceClass/extractionType/
+    // verificationState every other acquired input carries). The combined
+    // weakest-input tokens for cash per share must match combining the two
+    // underlying facts' own provenance directly — never CLEAN_PROVENANCE
+    // asserted independently of what was actually acquired.
+    const cashFact = run.fixture.facts.find((f) => f.id === "cash-balance")!;
+    const sharesFact = run.fixture.facts.find((f) => f.id === "shares-outstanding")!;
+    const burnFact = run.fixture.facts.find((f) => f.id === "quarterly-burn")!;
+    expect(pr.cashPerShareProvenance).toEqual(
+      combineProvenance(
+        { sourceClass: cashFact.sourceClass, extractionType: cashFact.extractionType, verificationState: cashFact.verificationState },
+        { sourceClass: sharesFact.sourceClass, extractionType: sharesFact.extractionType, verificationState: sharesFact.verificationState }
+      )
+    );
+    expect(pr.quarterlyBurnProvenance).toEqual({
+      sourceClass: burnFact.sourceClass,
+      extractionType: burnFact.extractionType,
+      verificationState: burnFact.verificationState,
+    });
+    for (const row of pr.successDefinitions) {
+      expect(row.vFailProvenance).toEqual(pr.cashPerShareProvenance);
+    }
+
     // No suppression bound to cashPerShare/quarterlyBurn/runway — every
     // input needed for them was actually acquired on this run.
     expect(boundState(result.states, NOT_COMPUTED_BINDING.cashPerShare)).toBeNull();
@@ -249,14 +275,19 @@ describe("a real OKLO run — pre-revenue, thinner filings", () => {
   });
 
   // CalFinance Methodology v2's second ruling: the success weight requires
-  // V_fail and V_success on the SAME valuation date. This run's V_fail is
-  // dated to the acquired cash balance (2026-06-30, an older 10-Q) while
-  // V_success is a present value as of the run's price date (2026-09-04) —
-  // the exact mismatch the ruling describes, since burn-adjustment-to-today
-  // is not implemented on this branch. Every success definition must be
-  // suppressed for this reason, never interpolated across the mismatch, and
-  // never fabricated as a fixture value.
-  it("suppresses the success weight for date mismatch — V_fail (2026-06-30) vs V_success (today) — never interpolating across unlike dates", async () => {
+  // V_fail and V_success on the SAME valuation date and comparable basis.
+  // This run's V_fail is dated to the real acquired cash balance
+  // (2026-06-30). V_success has no per-definition date or basis at all on a
+  // real run — Step 7 (the real analyst-authored per-definition valuation
+  // date/basis) does not exist yet, so companyInputs.ts explicitly nulls out
+  // the M5 illustrative fixture's own vSuccessAsOfDate/vSuccessBasis rather
+  // than reporting them as if they were this company's real acquired
+  // evidence (H3 conformance correction — a quote timestamp or "as of
+  // today" is not valuation-date evidence, and neither is an illustrative
+  // fixture's own reference date). Every success definition must be
+  // suppressed for this reason — "not established", never a fabricated
+  // date mismatch or an interpolated weight built on invented evidence.
+  it("suppresses the success weight — V_success has no per-definition date or basis on a real run (Step 7 not built) — never interpolating on invented evidence", async () => {
     const run = await oklo();
     const result = assembleAnalysisResult(run.fixture);
     const pr = result.preRevenue!;
@@ -264,13 +295,13 @@ describe("a real OKLO run — pre-revenue, thinner filings", () => {
     for (const row of pr.successDefinitions) {
       expect(row.state.kind).toBe("NOT COMPUTED / SUPPRESSED");
       if (row.state.kind === "NOT COMPUTED / SUPPRESSED") {
-        expect(row.state.cause).toMatch(/2026-06-30/);
-        expect(row.state.cause).toMatch(/not the same valuation date/);
+        expect(row.state.cause).toMatch(/V_success/);
+        expect(row.state.cause).toMatch(/not established/);
       }
-      // Each endpoint still renders individually, each with its own date
-      // (§7.2 M16's weight table) — the weight is withheld, not the figures.
+      // V_fail's own endpoint still renders with its real acquired date
+      // (§7.2 M16's weight table) — the weight is withheld, not the figure.
       expect(row.vFailAsOfDate).toBe("2026-06-30");
-      expect(row.vSuccessAsOfDate).not.toBeNull();
+      expect(row.vSuccessAsOfDate).toBeNull();
       expect(row.vSuccess.isNaN()).toBe(false);
     }
   });

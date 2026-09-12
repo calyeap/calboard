@@ -585,9 +585,26 @@ export interface AcquiredCashBasisResult {
  * cause — never a zero, and never one missing input silently taking down an
  * otherwise-computable sibling.
  */
+/**
+ * Whether a date string is actually established — never null, and never
+ * empty/whitespace. An empty string is not an established valuation date
+ * (H3 conformance correction): without this guard, two absent dates compared
+ * as equal strings and `successWeightDateCause` read them as a matching
+ * valuation date instead of two missing ones.
+ */
+function isEstablishedDate(value: string | null): value is string {
+  return value !== null && value.trim() !== "";
+}
+
 export function computeAcquiredCashBasis(input: AcquiredCashBasisInput): AcquiredCashBasisResult {
   const missing = (...names: string[]) => `missing REQUIRED input: ${names.join(", ")}`;
 
+  // A required cash/burn date absent or not established leaves the affected
+  // dated output unavailable — never a clean-looking figure computed off raw
+  // numbers whose date nobody established (H3 conformance correction). This
+  // is checked ONLY once the values it dates are themselves both present, so
+  // the cause names the actual gap rather than double-reporting a value
+  // that's already missing for its own reason.
   let cashPerShare: Decimal | null = null;
   let cashPerShareCause: string | null = null;
   if (input.cashBalance === null || input.sharesOutstanding === null) {
@@ -595,6 +612,8 @@ export function computeAcquiredCashBasis(input: AcquiredCashBasisInput): Acquire
     if (input.cashBalance === null) names.push("acquired cash balance");
     if (input.sharesOutstanding === null) names.push("shares outstanding used by the acquired run");
     cashPerShareCause = missing(...names);
+  } else if (!isEstablishedDate(input.cashBalanceAsOfDate)) {
+    cashPerShareCause = missing("the acquired cash balance's valuation date");
   } else if (input.sharesOutstanding.isZero()) {
     cashPerShareCause = "shares outstanding is zero — cash per share is not computable";
   } else {
@@ -606,11 +625,18 @@ export function computeAcquiredCashBasis(input: AcquiredCashBasisInput): Acquire
   let quarterlyBurnCause: string | null = null;
   if (input.quarterlyBurnRaw === null) {
     quarterlyBurnCause = missing("acquired quarterly operating cash flow (burn)");
+  } else if (!isEstablishedDate(input.quarterlyBurnAsOfDate)) {
+    quarterlyBurnCause = missing("the acquired quarterly burn's valuation date");
   } else {
     quarterlyBurn = input.quarterlyBurnRaw.abs();
   }
   const quarterlyBurnAsOfDate = quarterlyBurn !== null ? input.quarterlyBurnAsOfDate : null;
 
+  // Runway is a dated estimate off the cash balance too (not only the burn
+  // rate) — an unestablished cash date leaves it unavailable exactly as it
+  // leaves cashPerShare unavailable, on the same evidence gap. Missing burn
+  // alone never takes cash per share down with it, and missing cash's date
+  // alone never takes burn down with it — each fails closed on its own gap.
   let runway: Decimal | null = null;
   let runwayCause: string | null = null;
   if (input.cashBalance === null || quarterlyBurn === null) {
@@ -618,6 +644,8 @@ export function computeAcquiredCashBasis(input: AcquiredCashBasisInput): Acquire
     if (input.cashBalance === null) names.push("acquired cash balance");
     if (quarterlyBurn === null) names.push("acquired quarterly burn");
     runwayCause = missing(...names);
+  } else if (!isEstablishedDate(input.cashBalanceAsOfDate)) {
+    runwayCause = missing("the acquired cash balance's valuation date");
   } else if (quarterlyBurn.isZero()) {
     runwayCause = "quarterly burn is zero — runway is not computable";
   } else {
@@ -648,10 +676,10 @@ export function computeAcquiredCashBasis(input: AcquiredCashBasisInput): Acquire
  * proceed); otherwise the cause naming why not.
  */
 export function successWeightDateCause(vFailAsOfDate: string | null, vSuccessAsOfDate: string | null): string | null {
-  if (vFailAsOfDate === null) {
+  if (!isEstablishedDate(vFailAsOfDate)) {
     return "V_fail's valuation date is not established — the acquired cash-per-share basis is missing";
   }
-  if (vSuccessAsOfDate === null) {
+  if (!isEstablishedDate(vSuccessAsOfDate)) {
     return "V_success's valuation date is not established";
   }
   const calendarDate = (iso: string) => (iso.includes("T") ? iso.slice(0, iso.indexOf("T")) : iso);
@@ -659,6 +687,42 @@ export function successWeightDateCause(vFailAsOfDate: string | null, vSuccessAsO
   const successDate = calendarDate(vSuccessAsOfDate);
   if (failDate !== successDate) {
     return `V_fail is dated ${failDate} and V_success is dated ${successDate} — not the same valuation date`;
+  }
+  return null;
+}
+
+/**
+ * The acquired-run cash-per-share basis's own, fixed description of what it
+ * divides: the run's acquired cash balance over the shares outstanding that
+ * same acquired run used, with no dilution treatment of any kind applied.
+ * `computeAcquiredCashBasis` never varies this — it is not a policy choice a
+ * caller makes, so there is exactly one string, reused as V_fail's basis
+ * everywhere a comparability check needs it.
+ */
+export const ACQUIRED_CASH_SHARE_BASIS =
+  "the acquired run's shares outstanding, cash-balance basis, no dilution treatment applied";
+
+/**
+ * CalFinance Methodology v2 / CB-H3-ARCH-01's comparable-basis evidence: a
+ * matching valuation date alone does not establish that V_fail and V_success
+ * share a comparable share count or dilution treatment (§7.2 M16's weight
+ * table assumes one common denominator basis, which this codebase has never
+ * separately checked). Checked ONLY once `successWeightDateCause` above has
+ * already cleared the date — a basis mismatch is a second, independent
+ * reason to withhold interpolation, not a substitute for the date check.
+ *
+ * `vSuccessBasis` is analyst-authored evidence (Step 7, not yet built) — null
+ * where no such evidence has been recorded for this success definition, which
+ * is the honest default until a real basis is authored. No alignment
+ * tolerance is applied or invented: the two bases must name the identical
+ * treatment, exactly as the date check requires the identical calendar day.
+ */
+export function successWeightBasisCause(vFailBasis: string, vSuccessBasis: string | null): string | null {
+  if (vSuccessBasis === null || vSuccessBasis.trim() === "") {
+    return "V_success's share/dilution basis is not established — comparable-basis evidence is required before interpolation";
+  }
+  if (vSuccessBasis !== vFailBasis) {
+    return `V_fail's basis is "${vFailBasis}" and V_success's is "${vSuccessBasis}" — not a comparable share/dilution basis`;
   }
   return null;
 }
