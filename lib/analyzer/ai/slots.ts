@@ -375,6 +375,15 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
   );
 
   // --- §10 H — the fair-value range, in whichever form this profile takes ---
+  // `cashPerShareState`/`preRevenue.cashPerShareProvenance` are hoisted above
+  // the fair-value range so `failure`/`cashFloor` — both the same acquired
+  // cash-per-share basis as `preRevenue.cashPerShare` (assemble.ts) — carry
+  // its qualification too, rather than reaching [C] as a bare, unqualified
+  // number through these two alias slots while the canonical slot already
+  // qualifies (H3 conformance correction; reuses the existing binding, no new
+  // state/type).
+  const cashPerShareState =
+    preRevenue !== null ? boundState(result.states, NOT_COMPUTED_BINDING.cashPerShare) : null;
   if (fairValueRange.kind === "range") {
     b.value("fairValueRange.bear", "bottom of the fair-value range", fairValueRange.bear, bigMoney);
     b.value("fairValueRange.bull", "top of the fair-value range", fairValueRange.bull, bigMoney);
@@ -385,7 +394,14 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
       bigMoney
     );
   } else if (fairValueRange.kind === "pre-revenue-distribution") {
-    b.value("fairValueRange.failure", "value per share if this fails", fairValueRange.failure, money);
+    b.bound(
+      "fairValueRange.failure",
+      "value per share if this fails",
+      cashPerShareState,
+      fairValueRange.failure,
+      money,
+      preRevenue?.cashPerShareProvenance
+    );
     b.value(
       "fairValueRange.successAsCommonlyDescribed.low",
       "lowest value per share among the successes as commonly described",
@@ -404,14 +420,20 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
       fairValueRange.successAsPriceRequires,
       money
     );
-    b.value("fairValueRange.cashFloor", "cash floor per current share", fairValueRange.cashFloor, money);
+    b.bound(
+      "fairValueRange.cashFloor",
+      "cash floor per current share",
+      cashPerShareState,
+      fairValueRange.cashFloor,
+      money,
+      preRevenue?.cashPerShareProvenance
+    );
   } else {
     b.add("fairValueRange.state", "the state that replaced the fair-value range", fairValueRange.state, true, fairValueRange.state);
   }
 
   // --- §7.2 M16 — the pre-revenue module -----------------------------------
   if (preRevenue !== null) {
-    const cashPerShareState = boundState(result.states, NOT_COMPUTED_BINDING.cashPerShare);
     const quarterlyBurnState = boundState(result.states, NOT_COMPUTED_BINDING.quarterlyBurn);
     const runwayState = boundState(result.states, NOT_COMPUTED_BINDING.runway);
     b.bound(

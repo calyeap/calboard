@@ -282,3 +282,78 @@ describe("runInterpretation", () => {
     await expect(runInterpretation(msft, fakeCall(extra))).rejects.toThrow(/overallVerdict/);
   });
 });
+
+// H3 AI cash aliases, end to end (CB-H3-AI-CASH-ALIASES-01). slots.test.ts
+// proves the catalogue text; this proves the same qualifier survives the two
+// remaining hops named by the outcome — the actual prompt [C] is shown
+// (buildUserMessage's catalogueBlock) and the actual substitution into
+// rendered prose (traceability.ts's renderText) — through runInterpretation
+// end to end, never a formatting helper alone. Mocks the transport only;
+// makes no live/paid AI call.
+describe("runInterpretation — the two AI cash aliases (CB-H3-AI-CASH-ALIASES-01)", () => {
+  const nonDefaultOklo = assembleAnalysisResult({
+    ...OKLO_FIXTURE,
+    preRevenue: {
+      ...OKLO_FIXTURE.preRevenue!,
+      cashPerShareProvenance: { sourceClass: "SECONDARY", extractionType: "AI-EXTRACTED", verificationState: "SPOT-CHECK PENDING" },
+    },
+  });
+
+  it("shows [C] both aliases already qualified in the prompt itself, not only the canonical slot", async () => {
+    const seen: AnalystCallRequest[] = [];
+    await runInterpretation(nonDefaultOklo, fakeCall(statementsOf(["Nothing numeric here."]), seen));
+
+    const aliasLines = seen[0].user
+      .split("\n")
+      .filter((l) => l.includes("{{fairValueRange.cashFloor}}") || l.includes("{{fairValueRange.failure}}"));
+    expect(aliasLines).toHaveLength(2);
+    for (const line of aliasLines) {
+      expect(line).toContain("Secondary");
+      expect(line).toContain("AI-extracted");
+    }
+  });
+
+  it("substitutes the inherited qualifier into rendered prose that cites either alias", async () => {
+    const call = fakeCall(
+      statementsOf([
+        `The failure case is {{fairValueRange.failure}} and the cash floor is {{fairValueRange.cashFloor}}.`,
+      ])
+    );
+
+    const interpretation = await runInterpretation(nonDefaultOklo, call);
+
+    expect(interpretation.statements[0].statement).toContain("Secondary");
+    expect(interpretation.statements[0].statement).toContain("AI-extracted");
+  });
+
+  it("omits the qualifier for both aliases when provenance is clean — the same run this recovery must not over-mark", async () => {
+    const oklo = assembleAnalysisResult(OKLO_FIXTURE);
+    const call = fakeCall(
+      statementsOf([`The failure case is {{fairValueRange.failure}} and the floor is {{fairValueRange.cashFloor}}.`])
+    );
+
+    const interpretation = await runInterpretation(oklo, call);
+
+    expect(interpretation.statements[0].statement).not.toMatch(/Secondary|AI-extracted|Spot-check|Not confirmed/);
+  });
+
+  it("REFUSES either alias when the acquired cash basis is unavailable — the real unknown-slot guard, never a NaN/zero/clean substitute", async () => {
+    const missingBasisOklo = assembleAnalysisResult({
+      ...OKLO_FIXTURE,
+      preRevenue: {
+        ...OKLO_FIXTURE.preRevenue!,
+        cashPerShare: null,
+        cashPerShareAsOfDate: null,
+        cashPerShareCause: "missing REQUIRED input: acquired cash balance, shares outstanding used by the acquired run",
+      },
+    });
+    expect(missingBasisOklo.fairValueRange.kind).toBe("suppressed");
+
+    await expect(
+      runInterpretation(missingBasisOklo, fakeCall(statementsOf(["The failure case is {{fairValueRange.failure}}."])))
+    ).rejects.toThrow(/UNKNOWN SLOT/);
+    await expect(
+      runInterpretation(missingBasisOklo, fakeCall(statementsOf(["The cash floor is {{fairValueRange.cashFloor}}."])))
+    ).rejects.toThrow(/UNKNOWN SLOT/);
+  });
+});
