@@ -74,6 +74,9 @@ const preRevenue: PreRevenueFixture = {
   quarterlyBurnProvenance: null,
   runway: new Decimal(8), // quarters — illustrative; mock shows "XX quarters" placeholder
   runwayCause: null,
+  // Same reasoning as cashPerShareProvenance/quarterlyBurnProvenance above:
+  // no acquired FactRecord provenance behind this illustrative fixture.
+  runwayProvenance: null,
   unitEconomics: {
     annualOutputPerUnit: new Decimal("8760"), // MWh/yr per unit at 100% capacity factor, 1 MW nameplate
     operatingCostPerUnit: new Decimal("50000"),

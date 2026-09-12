@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import { CLEAN_PROVENANCE, combineProvenance } from "../provenance";
 import { TAG_MAP } from "./tagMap";
 import { annualSeries, operatingMarginSeries, filedAnnualYearsCount, quarterlySeries } from "./history";
-import { computeAcquiredCashBasis } from "../modules/preRevenue";
+import { computeAcquiredCashBasis, type AcquiredCashBasisResult } from "../modules/preRevenue";
 import type { AcquisitionResult } from "./acquire";
 import type { CompanyFactsDocument } from "./secClient";
 import type { CompanyFixture } from "../assemble";
@@ -91,6 +91,88 @@ export interface CompanyInputsResult {
   absentInputs: string[];
 }
 
+export interface H3CashBasis {
+  cashBasis: AcquiredCashBasisResult;
+  cashPerShareProvenance: ProvenanceTokens | null;
+  quarterlyBurnProvenance: ProvenanceTokens | null;
+  /**
+   * Runway's own weakest-input provenance — the acquired cash balance AND
+   * the acquired quarterly burn (§7.2 M16's runway dependency), never the
+   * shares-outstanding token cashPerShareProvenance carries (H3 conformance
+   * correction: runway does not depend on share count).
+   */
+  runwayProvenance: ProvenanceTokens | null;
+}
+
+/**
+ * The H3 acquired-cash-basis calculation (methodology v2), derived from
+ * whatever verification state a fact set's own three cash/share/burn facts
+ * currently carry.
+ *
+ * Called twice in a real run's life, over two different fact arrays, never
+ * two different mechanisms: once here in `buildCompanyInputs`, at
+ * acquisition time, before any human decision exists; again by
+ * `gate.ts:loadGateState`, over the SAME facts after `applyDecisions` has
+ * recorded this run's final decisions. A fact this run marked NOT CONFIRMED
+ * (a Cannot-verify decision) is treated exactly like one that was never
+ * acquired — its value must not keep computing beside a rejected input
+ * (H3 conformance correction, §3.8/§5.2). Reusing this one function for both
+ * calls is what keeps that a single decision derivation rather than a second,
+ * competing one.
+ */
+export function deriveH3CashBasis(facts: readonly FactRecord[]): H3CashBasis {
+  const byId = new Map(facts.map((f) => [f.id, f]));
+  const cashBalanceFact = byId.get("cash-balance");
+  const sharesOutstandingFact = byId.get("shares-outstanding");
+  const quarterlyBurnFact = byId.get("quarterly-burn");
+
+  const rejected = (f: FactRecord | undefined): boolean =>
+    f !== undefined && f.verificationState === "NOT CONFIRMED";
+
+  const usableRaw = (f: FactRecord | undefined): Decimal | null => {
+    if (f === undefined || f.value === null || rejected(f)) return null;
+    return f.value instanceof Decimal ? f.value : new Decimal(String(f.value));
+  };
+
+  const cashBasis = computeAcquiredCashBasis({
+    cashBalance: usableRaw(cashBalanceFact),
+    cashBalanceAsOfDate: cashBalanceFact?.asOfDate ?? null,
+    sharesOutstanding: usableRaw(sharesOutstandingFact),
+    quarterlyBurnRaw: usableRaw(quarterlyBurnFact),
+    quarterlyBurnAsOfDate: quarterlyBurnFact?.asOfDate ?? null,
+  });
+
+  // A value nulled by REJECTION, rather than absence, still deserves an
+  // accurate cause: "missing REQUIRED input" is not what happened to a fact
+  // that WAS acquired and then marked NOT CONFIRMED.
+  const rejectionCause = (name: string) =>
+    `${name} is NOT CONFIRMED (a Cannot-verify decision) — a rejected input is not computed`;
+  if (cashBasis.cashPerShare === null) {
+    if (rejected(cashBalanceFact)) cashBasis.cashPerShareCause = rejectionCause("the acquired cash balance");
+    else if (rejected(sharesOutstandingFact))
+      cashBasis.cashPerShareCause = rejectionCause("shares outstanding used by the acquired run");
+  }
+  if (cashBasis.quarterlyBurn === null && rejected(quarterlyBurnFact)) {
+    cashBasis.quarterlyBurnCause = rejectionCause("the acquired quarterly operating cash flow (burn)");
+  }
+  if (cashBasis.runway === null) {
+    if (rejected(cashBalanceFact)) cashBasis.runwayCause = rejectionCause("the acquired cash balance");
+    else if (rejected(quarterlyBurnFact)) cashBasis.runwayCause = rejectionCause("the acquired quarterly burn");
+  }
+
+  const cashPerShareProvenance =
+    cashBasis.cashPerShare !== null && cashBalanceFact !== undefined && sharesOutstandingFact !== undefined
+      ? combineProvenance(tokensOf(cashBalanceFact)!, tokensOf(sharesOutstandingFact)!)
+      : null;
+  const quarterlyBurnProvenance = cashBasis.quarterlyBurn !== null ? tokensOf(quarterlyBurnFact) : null;
+  const runwayProvenance =
+    cashBasis.runway !== null && cashBalanceFact !== undefined && quarterlyBurnFact !== undefined
+      ? combineProvenance(tokensOf(cashBalanceFact)!, tokensOf(quarterlyBurnFact)!)
+      : null;
+
+  return { cashBasis, cashPerShareProvenance, quarterlyBurnProvenance, runwayProvenance };
+}
+
 export function buildCompanyInputs(
   acquisition: AcquisitionResult,
   companyFacts: CompanyFactsDocument,
@@ -137,26 +219,16 @@ export function buildCompanyInputs(
   // Everything else in the analyst's preRevenue block (unit economics, the
   // funding stack, each success definition's V_success/rates) is not a fact
   // and is untouched here.
-  const cashBalanceFact = byId.get("cash-balance");
-  const sharesOutstandingFact = byId.get("shares-outstanding");
-  const quarterlyBurnFact = byId.get("quarterly-burn");
-  const cashBasis = computeAcquiredCashBasis({
-    cashBalance: raw("cash-balance"),
-    cashBalanceAsOfDate: cashBalanceFact?.asOfDate ?? null,
-    sharesOutstanding: raw("shares-outstanding"),
-    quarterlyBurnRaw: raw("quarterly-burn"),
-    quarterlyBurnAsOfDate: quarterlyBurnFact?.asOfDate ?? null,
-  });
   // Weakest-input provenance (§3.3) behind each H3 output this acquisition
   // seam derives — carried through to assembly rather than dropped at the
   // acquired-fact boundary, so a SECONDARY / AI-EXTRACTED / not-confirmed
   // input still qualifies the figure at every point of use (H3 conformance
-  // correction).
-  const cashPerShareProvenance =
-    cashBasis.cashPerShare !== null && cashBalanceFact !== undefined && sharesOutstandingFact !== undefined
-      ? combineProvenance(tokensOf(cashBalanceFact)!, tokensOf(sharesOutstandingFact)!)
-      : null;
-  const quarterlyBurnProvenance = cashBasis.quarterlyBurn !== null ? tokensOf(quarterlyBurnFact) : null;
+  // correction). At acquisition time no fact yet carries a human decision,
+  // so this is identical to the pre-decision state; gate.ts re-derives the
+  // same basis from this run's post-decision facts before assembly.
+  const { cashBasis, cashPerShareProvenance, quarterlyBurnProvenance, runwayProvenance } = deriveH3CashBasis(
+    acquisition.facts
+  );
   const preRevenue: CompanyFixture["preRevenue"] =
     analyst.preRevenue === null
       ? null
@@ -172,6 +244,7 @@ export function buildCompanyInputs(
           quarterlyBurnProvenance,
           runway: cashBasis.runway,
           runwayCause: cashBasis.runwayCause,
+          runwayProvenance,
           // Step 7 (the real analyst-authored per-definition V_success date
           // and comparable-basis evidence) does not exist yet, so
           // analyst.preRevenue.successDefinitions here is always the M5
