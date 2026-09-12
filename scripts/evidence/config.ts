@@ -7,7 +7,7 @@ export const DEFAULT_BASE_URL = "http://127.0.0.1:3000";
 /** Frozen artefacts, byte-exact. A missing file is a STOP, never a hash. */
 export const FROZEN_HASHES: Readonly<Record<string, string>> = {
   "calboard-stock-analyzer-v1-spec.md":
-    "2b836fd19d344a5360d439d734b3fc11ea91c20609a170884895c09ab13051fa",
+    "6a9cf282ce3808d0ebdedb3af71ebd0b3dfdfea3697cdaf9a17bbbd0298caf61",
   "calboard-stock-analyzer-v1-design.md":
     "49be40cafc1a07ccb093267acfc1bb86a5e71c34c531b9a911ec821aeed8150b",
   "mock-screen1-entry.html":
@@ -21,7 +21,7 @@ export const FROZEN_HASHES: Readonly<Record<string, string>> = {
   "calboard-valuation-methodology.md":
     "a4a39e33717993fe9558f263009cec3814555765ac69c69728d99354d4a5ec7c",
   "calfinance-methodology-v2.md":
-    "a85163a4eb4105e0e3de75067b3b945c635b16de05c2d96498ca1550f32ebba9",
+    "0fd8e205fe4cfbee6d934a4f3cfe9ebc017d2f18a5f0e4bb3f19825f7725635c",
 };
 
 /** Proves the reachability gate got Screen 1 and not merely a 200. */

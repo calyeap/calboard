@@ -709,7 +709,7 @@ The base-year rule (§3.1) fires where sequential revenue growth exceeds ~10%. *
 
 **M15 — Scenario outputs.** Scenario values; probability-weighted distribution **as display only, never a headline**; location of current price within the scenario range; the discount rate at which the base case equals the price; the fair-value range per §10.
 
-**M16 — Pre-revenue module.** Cash per share on the latest share count adjusted for burn to today; quarterly burn; runway; unit-economics breakeven; the four-line funding stack under **both ramps**; dilution required; the conditional price-implied break-even success weight per success definition.
+**M16 — Pre-revenue module.** Cash per share on the latest acquired cash-balance over the shares outstanding that acquired run used, reported as of its own date; a burn-adjusted-to-today cash/share figure is computed only where the cash and burn periods are sufficiently aligned and the transformation is explicit and reviewable, otherwise not computed / incomplete. The EV-bridge cash figure is a cross-check only, never the primary source for this basis. `V_fail` and the bear-case cash floor use the same established cash/share basis. Quarterly burn; runway, which may use the latest available burn rate only as a clearly dated estimate; unit-economics breakeven; the four-line funding stack under **both ramps**; dilution required; the conditional price-implied break-even success weight per success definition.
 
 Funding stack order, all four lines displayed:
 
@@ -732,6 +732,7 @@ Retained cash flow is computed after cash operating costs, corporate overhead, i
 
 | Condition | State returned |
 |---|---|
+| V_fail and V_success not expressed on the same valuation date and otherwise comparable basis | **NOT COMPUTED / SUPPRESSED** — endpoints may still be reported individually, each with its own date |
 | V_fail < Price < V_success | the weight, rounded to the nearest 5% |
 | Price ≥ V_success > V_fail | **PRICE NOT JUSTIFIABLE BY THIS OUTCOME** |
 | V_success ≤ V_fail | **THIS SUCCESS IS WORTH LESS THAN FAILURE** |
