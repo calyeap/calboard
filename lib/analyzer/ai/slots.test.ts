@@ -259,6 +259,58 @@ describe("buildSlotCatalogue", () => {
     });
   });
 
+  // H3 AI cash aliases (CB-H3-AI-CASH-ALIASES-01). `fairValueRange.failure`
+  // and `.cashFloor` (assemble.ts's pre-revenue-distribution branch) are the
+  // same cashPerShareBasis as `preRevenue.cashPerShare` and every
+  // `successDefinitions[].vFail`, but reached the catalogue through bare
+  // `CatalogueBuilder.value` — no provenance, no bound state. The owner's own
+  // control-flow diagnostic found identical alias substitution text ("Cash is
+  // $3.10; failure is $3.10") for clean versus SECONDARY + AI-EXTRACTED cash,
+  // even after CB-H3-CONSUMER-RECOVERY-01 fixed the canonical slot above.
+  describe("H3 — the two AI cash aliases inherit the acquired-cash qualifier (CB-H3-AI-CASH-ALIASES-01)", () => {
+    const nonDefaultOklo = assembleAnalysisResult({
+      ...OKLO_FIXTURE,
+      preRevenue: {
+        ...OKLO_FIXTURE.preRevenue!,
+        cashPerShareProvenance: { sourceClass: "SECONDARY", extractionType: "AI-EXTRACTED", verificationState: "SPOT-CHECK PENDING" },
+      },
+    });
+
+    it("does not produce identical alias text for clean versus SECONDARY + AI-EXTRACTED cash — the exact counterexample this follow-up fixes", () => {
+      const cleanCatalogue = buildSlotCatalogue(oklo);
+      const nonDefaultCatalogue = buildSlotCatalogue(nonDefaultOklo);
+      for (const id of ["fairValueRange.cashFloor", "fairValueRange.failure"]) {
+        expect(nonDefaultCatalogue.get(id)?.formatted, id).not.toBe(cleanCatalogue.get(id)?.formatted);
+      }
+    });
+
+    it("carries the same inherited cash qualifier onto both aliases, without suppressing the real figure", () => {
+      const catalogue = buildSlotCatalogue(nonDefaultOklo);
+      for (const id of ["fairValueRange.cashFloor", "fairValueRange.failure"]) {
+        const slot = catalogue.get(id);
+        expect(slot?.suppressed, id).toBe(false);
+        expect(slot?.formatted).toContain("Secondary");
+        expect(slot?.formatted).toContain("AI-extracted");
+        expect(slot?.formatted).toMatch(/^\$\d/);
+      }
+    });
+
+    it("adds no qualifier to either alias when provenance is clean — the omission rule, not an always-on stamp", () => {
+      const catalogue = buildSlotCatalogue(oklo);
+      for (const id of ["fairValueRange.cashFloor", "fairValueRange.failure"]) {
+        expect(catalogue.get(id)?.formatted).not.toMatch(/Secondary|AI-extracted|Spot-check|Not confirmed/);
+      }
+    });
+
+    it("both aliases carry exactly the canonical preRevenue.cashPerShare slot text, since they share one basis", () => {
+      const catalogue = buildSlotCatalogue(nonDefaultOklo);
+      const canonical = catalogue.get("preRevenue.cashPerShare")?.formatted;
+      expect(canonical).toBeTruthy();
+      expect(catalogue.get("fairValueRange.cashFloor")?.formatted).toBe(canonical);
+      expect(catalogue.get("fairValueRange.failure")?.formatted).toBe(canonical);
+    });
+  });
+
   describe("H3 — acquired cash basis not established", () => {
     const missingBasisOklo = assembleAnalysisResult({
       ...OKLO_FIXTURE,
@@ -318,10 +370,11 @@ describe("buildSlotCatalogue", () => {
       });
     });
 
-    it("the fair-value range itself is suppressed, never a NaN-valued cash floor reaching [C]", () => {
+    it("the fair-value range itself is suppressed, never a NaN-valued cash floor or failure alias reaching [C]", () => {
       const catalogue = buildSlotCatalogue(missingBasisOklo);
       expect(missingBasisOklo.fairValueRange.kind).toBe("suppressed");
       expect(catalogue.has("fairValueRange.cashFloor")).toBe(false);
+      expect(catalogue.has("fairValueRange.failure")).toBe(false);
       expect(catalogue.get("fairValueRange.state")?.formatted).toBe("INCOMPLETE");
     });
   });
