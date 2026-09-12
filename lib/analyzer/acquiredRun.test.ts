@@ -213,6 +213,68 @@ describe("a real OKLO run — pre-revenue, thinner filings", () => {
     expect(result.ticker).toBe("OKLO");
   });
 
+  // CB-H3-IMPLEMENT-01 — CalFinance Methodology v2's acquired-run cash basis
+  // (approved 11 Sep 2026). The real acquired cash balance ($1,644,704,000 as
+  // of 2026-06-30) over the real acquired shares outstanding (186,017,650)
+  // is ~$8.84/share — not the M5 validation fixture's illustrative $3.10 —
+  // and the real acquired quarterly burn ($17,867,000 for the quarter ended
+  // 2026-03-31) implies ~92 quarters of runway, not the fixture's 8.
+  it("reports cash per share and runway from the real acquired facts, not the M5 fixture's $3.10/8-quarter placeholders", async () => {
+    const run = await oklo();
+    const result = assembleAnalysisResult(run.fixture);
+    expect(result.preRevenue).not.toBeNull();
+    const pr = result.preRevenue!;
+
+    expect(pr.cashPerShare.toDecimalPlaces(2).toString()).toBe("8.84");
+    expect(pr.cashPerShare.toString()).not.toBe("3.1");
+    expect(pr.cashPerShareAsOfDate).toBe("2026-06-30");
+
+    expect(pr.runway.toDecimalPlaces(0).toString()).toBe("92");
+    expect(pr.runway.toString()).not.toBe("8");
+    expect(pr.quarterlyBurnAsOfDate).toMatch(/2026-01-01/);
+    expect(pr.quarterlyBurnAsOfDate).toMatch(/2026-03-31/);
+
+    // V_fail is the same acquired basis, on its own date — never the
+    // fixture's constant.
+    for (const row of pr.successDefinitions) {
+      expect(row.vFail.toDecimalPlaces(2).toString()).toBe("8.84");
+      expect(row.vFailAsOfDate).toBe("2026-06-30");
+    }
+
+    // No suppression bound to cashPerShare/quarterlyBurn/runway — every
+    // input needed for them was actually acquired on this run.
+    expect(boundState(result.states, NOT_COMPUTED_BINDING.cashPerShare)).toBeNull();
+    expect(boundState(result.states, NOT_COMPUTED_BINDING.quarterlyBurn)).toBeNull();
+    expect(boundState(result.states, NOT_COMPUTED_BINDING.runway)).toBeNull();
+  });
+
+  // CalFinance Methodology v2's second ruling: the success weight requires
+  // V_fail and V_success on the SAME valuation date. This run's V_fail is
+  // dated to the acquired cash balance (2026-06-30, an older 10-Q) while
+  // V_success is a present value as of the run's price date (2026-09-04) —
+  // the exact mismatch the ruling describes, since burn-adjustment-to-today
+  // is not implemented on this branch. Every success definition must be
+  // suppressed for this reason, never interpolated across the mismatch, and
+  // never fabricated as a fixture value.
+  it("suppresses the success weight for date mismatch — V_fail (2026-06-30) vs V_success (today) — never interpolating across unlike dates", async () => {
+    const run = await oklo();
+    const result = assembleAnalysisResult(run.fixture);
+    const pr = result.preRevenue!;
+    expect(pr.successDefinitions.length).toBeGreaterThan(0);
+    for (const row of pr.successDefinitions) {
+      expect(row.state.kind).toBe("NOT COMPUTED / SUPPRESSED");
+      if (row.state.kind === "NOT COMPUTED / SUPPRESSED") {
+        expect(row.state.cause).toMatch(/2026-06-30/);
+        expect(row.state.cause).toMatch(/not the same valuation date/);
+      }
+      // Each endpoint still renders individually, each with its own date
+      // (§7.2 M16's weight table) — the weight is withheld, not the figures.
+      expect(row.vFailAsOfDate).toBe("2026-06-30");
+      expect(row.vSuccessAsOfDate).not.toBeNull();
+      expect(row.vSuccess.isNaN()).toBe(false);
+    }
+  });
+
   // CB-AUDIT-FIX-01B / CB-AUDIT-01 H4c and H2. The validation set has no
   // growth, margin or reinvestment drivers for OKLO (it carries 0 as a
   // placeholder for all nine) and no revaluation of the base case at other

@@ -179,6 +179,77 @@ describe("AnalyzerReport — OKLO", () => {
       expect(row.querySelector("td:nth-child(2) .v")?.textContent).not.toBe("");
     }
   });
+
+  // CB-H3-IMPLEMENT-01. This fixture's dates are aligned (its own
+  // FactRecord already documents "adjusted for burn to today"), so both
+  // the acquired basis and each success definition's own valuation date
+  // render alongside the figures they qualify.
+  it("shows the acquired cash-per-share and burn dates, and each success definition's V_success/V_fail dates", () => {
+    const { container } = render(<AnalyzerReport result={result} />);
+    const sectionD = container.querySelector("section#D") as HTMLElement;
+    expect(within(sectionD).getAllByText(/as of/).length).toBeGreaterThan(0);
+    for (const row of result.preRevenue!.successDefinitions) {
+      expect(sectionD.textContent).toContain(row.vFailAsOfDate!);
+      expect(sectionD.textContent).toContain(row.vSuccessAsOfDate!);
+    }
+  });
+});
+
+// CB-H3-IMPLEMENT-01 — CalFinance Methodology v2's acquired-run cash basis
+// and success-weight date-consistency ruling. A synthetic variant of the
+// OKLO fixture with the acquired basis missing, exercising the renderer's
+// suppression path rather than the M5 fixture's always-established one.
+describe("AnalyzerReport — OKLO, acquired cash basis not established (H3)", () => {
+  const missingBasisResult = assembleAnalysisResult({
+    ...OKLO_FIXTURE,
+    preRevenue: {
+      ...OKLO_FIXTURE.preRevenue!,
+      cashPerShare: null,
+      cashPerShareAsOfDate: null,
+      cashPerShareCause: "missing REQUIRED input: acquired cash balance, shares outstanding used by the acquired run",
+      quarterlyBurn: null,
+      quarterlyBurnAsOfDate: null,
+      quarterlyBurnCause: "missing REQUIRED input: acquired quarterly operating cash flow (burn)",
+      runway: null,
+      runwayCause: "missing REQUIRED input: acquired cash balance, acquired quarterly burn",
+    },
+  });
+
+  it("renders INCOMPLETE — never $NaN or a bare zero — for cash per share, quarterly burn and runway", () => {
+    const { container } = render(<AnalyzerReport result={missingBasisResult} />);
+    const sectionD = container.querySelector("section#D") as HTMLElement;
+    expect(within(sectionD).getAllByText("INCOMPLETE").length).toBeGreaterThan(0);
+    expect(sectionD.textContent).not.toMatch(/NaN/);
+    const cashPerShareRow = within(sectionD).getByText("Cash per share").closest("tr");
+    const burnRunwayRow = within(sectionD).getByText("Quarterly burn / runway").closest("tr");
+    expect(cashPerShareRow?.textContent).not.toMatch(/\$/);
+    expect(burnRunwayRow?.textContent).not.toMatch(/\$/);
+    expect(cashPerShareRow?.textContent).toContain("INCOMPLETE");
+    expect(burnRunwayRow?.textContent).toContain("INCOMPLETE");
+  });
+
+  it("renders NOT COMPUTED / SUPPRESSED for every success definition's weight, with its cause, never a percentage", () => {
+    const { container } = render(<AnalyzerReport result={missingBasisResult} />);
+    const sectionD = container.querySelector("section#D") as HTMLElement;
+    expect(missingBasisResult.preRevenue!.successDefinitions.length).toBeGreaterThan(0);
+    expect(within(sectionD).getAllByText("NOT COMPUTED / SUPPRESSED").length).toBe(
+      missingBasisResult.preRevenue!.successDefinitions.length
+    );
+    for (const row of missingBasisResult.preRevenue!.successDefinitions) {
+      if (row.state.kind === "NOT COMPUTED / SUPPRESSED") {
+        expect(sectionD.textContent).toContain(row.state.cause);
+      }
+    }
+    // V_success itself still renders — the endpoint is not withheld, only
+    // the weight is.
+    expect(within(sectionD).queryAllByText(/^\d+%$/).length).toBe(0);
+  });
+
+  it("the closing distribution summary is replaced by the suppressed state, never a NaN-valued cash floor", () => {
+    render(<AnalyzerReport result={missingBasisResult} />);
+    expect(screen.queryByText("Distribution summary")).toBeNull();
+    expect(screen.getAllByText("INCOMPLETE").length).toBeGreaterThan(0);
+  });
 });
 
 // Second-pass IA audit (2026-09-05) — B2, B3, B6, B7.

@@ -585,12 +585,25 @@ export type FairValueRange =
 export type SuccessDefinitionState =
   | { kind: "probability"; probability: Decimal }
   | { kind: "PRICE NOT JUSTIFIABLE BY THIS OUTCOME" }
-  | { kind: "THIS SUCCESS IS WORTH LESS THAN FAILURE" };
+  | { kind: "THIS SUCCESS IS WORTH LESS THAN FAILURE" }
+  // CalFinance Methodology v2, "Pre-revenue success-weight date consistency"
+  // (approved 12 Sep 2026) / §7.2 M16's weight table, fourth row: V_fail and
+  // V_success are each individually valid but not expressed on the same
+  // valuation date and otherwise comparable basis, so the interpolation is
+  // withheld rather than computed across unlike endpoints. The endpoints
+  // themselves still render, each with its own date (vFailAsOfDate /
+  // vSuccessAsOfDate below) — only the weight is suppressed.
+  | { kind: "NOT COMPUTED / SUPPRESSED"; cause: string };
 
 export interface SuccessDefinitionRow {
   definition: string;
   vSuccess: Decimal;
+  // null only where the basis that would date it is itself not established
+  // (§9.5 — a suppressed weight's endpoints are still shown with their own
+  // dates where they have one).
+  vSuccessAsOfDate: string | null;
   vFail: Decimal;
+  vFailAsOfDate: string | null;
   rSuccess: Decimal;
   rFail: Decimal;
   // I12 — the 30% levered cost-of-equity cap.
@@ -610,8 +623,24 @@ export type FundingStackLine =
 export type FundingRamp = "back_loaded" | "steady";
 
 export interface PreRevenueModule {
+  // CalFinance Methodology v2, "Pre-revenue acquired-run cash basis"
+  // (approved 11 Sep 2026): the latest acquired cash balance over the
+  // shares outstanding that acquired run used, reported as of the cash
+  // balance's own date — never adjusted to today on this branch. NaN with
+  // an INCOMPLETE state bound under NOT_COMPUTED_BINDING.cashPerShare
+  // (notComputed.ts) where the acquired basis is not established — this
+  // field cannot otherwise say "not computed" (see notComputed.ts's own
+  // header).
   cashPerShare: Decimal;
+  cashPerShareAsOfDate: string | null;
+  // A separately dated input (methodology v2); never adjusted using the
+  // cash balance's date. NaN + NOT_COMPUTED_BINDING.quarterlyBurn where
+  // absent.
   quarterlyBurn: Decimal;
+  quarterlyBurnAsOfDate: string | null;
+  // A clearly dated estimate off the latest available burn — it does not
+  // imply the cash balance itself is current. NaN + NOT_COMPUTED_BINDING.runway
+  // where either input is absent.
   runway: Decimal;
   // Runs before the scale solve; a value-destroying unit returns
   // NOT ACHIEVABLE AT ANY SCALE, never a very large number.

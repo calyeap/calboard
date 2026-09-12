@@ -36,6 +36,11 @@ export const NOT_COMPUTED_BINDING = {
   rateAtWhichBaseEqualsPrice: "the discount rate at which the base case equals the price",
   rateSensitivity: "±1% rate sensitivity",
   scenarioDrivers: (scenario: ScenarioKey) => `${scenario} scenario drivers`,
+  // §7.2 M16 / CalFinance Methodology v2's acquired-run cash basis — see
+  // PreRevenueModule in types.ts for what each binds.
+  cashPerShare: "pre-revenue cash per share",
+  quarterlyBurn: "pre-revenue quarterly burn",
+  runway: "pre-revenue runway",
 } as const;
 
 const SEPARATOR = " — ";

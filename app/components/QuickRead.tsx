@@ -278,6 +278,72 @@ function buildQuickRead(result: AnalysisResult): QuickReadItem[] {
     ];
   }
 
+  // --- Pre-revenue, acquired cash-per-share basis not established ---------
+  //
+  // CalFinance Methodology v2's acquired-run cash basis is a REQUIRED input
+  // of the fair-value range itself (assemble.ts), so its absence removes the
+  // range — distinct from every other reason the range can be gone, and
+  // checked first so a pre-revenue run never falls through to the
+  // mature-company reading below.
+  if (preRevenue !== null && fairValueRange.kind === "suppressed") {
+    return [
+      {
+        label: "Main finding",
+        body: (
+          <p className="qlead">
+            Calboard cannot show a fair-value distribution for {result.companyName} on this run —{" "}
+            <b>{fairValueRange.state}</b> (<SecLink id="D">Section D</SecLink>).
+          </p>
+        ),
+      },
+      {
+        label: "Price vs scenarios",
+        body: (
+          <p className="t">
+            {fairValueRange.cause} <SecLink id="D">Section D</SecLink>
+          </p>
+        ),
+      },
+      {
+        label: "What today's price requires",
+        body: (
+          <p className="t">
+            Not shown — no fair-value distribution survives this state. See <SecLink id="D">Section D</SecLink>.
+          </p>
+        ),
+      },
+      {
+        label: "What supports the case",
+        body: (
+          <p className="t">
+            Whichever success definitions and funding-stack figures remain independently computable are still shown
+            — see <SecLink id="D">Section D</SecLink>.
+          </p>
+        ),
+      },
+      {
+        label: "What worries Calboard",
+        body: (
+          <p className="t">
+            The acquired cash-per-share basis is not established, so the failure floor and any success weight built
+            on it are withheld rather than shown on an invented basis — see <SecLink id="D">Section D</SecLink>.
+          </p>
+        ),
+      },
+      {
+        label: "Biggest uncertainty",
+        body: (
+          <p className="t">
+            Whether a later run can acquire the missing cash, share or burn evidence this basis needs — see{" "}
+            <SecLink id="D">Section D</SecLink>.
+          </p>
+        ),
+      },
+      { label: "Strongest challenger point", body: challengerItemBody },
+      { label: "Data and model quality", body: dataQualityBody },
+    ];
+  }
+
   // --- Pre-revenue --------------------------------------------------------
   if (preRevenue !== null && fairValueRange.kind === "pre-revenue-distribution") {
     const anyWorthLessThanFailure = preRevenue.successDefinitions.some(
