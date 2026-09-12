@@ -10,6 +10,8 @@ import {
   computeUnitExitEconomicsGrid,
   computeAcquiredCashBasis,
   successWeightDateCause,
+  successWeightBasisCause,
+  ACQUIRED_CASH_SHARE_BASIS,
   type FundingStackYearParams,
   type UnitExitEconomicsInput,
 } from "./preRevenue";
@@ -477,6 +479,40 @@ describe("computeAcquiredCashBasis", () => {
     expect(result.cashPerShare).toBeNull();
     expect(result.cashPerShareCause).toMatch(/zero/);
   });
+
+  // H3 conformance correction: a required cash/burn date absent or not
+  // established must leave the affected dated output unavailable — never a
+  // clean-looking figure computed off raw numbers whose date nobody
+  // established.
+  it("cash per share is null, with a cause naming the missing date, when the cash balance's date is not established — even though cash and shares are both present", () => {
+    const result = computeAcquiredCashBasis({ ...FULL, cashBalanceAsOfDate: null });
+    expect(result.cashPerShare).toBeNull();
+    expect(result.cashPerShareCause).toMatch(/valuation date/);
+    expect(result.cashPerShareAsOfDate).toBeNull();
+  });
+
+  it("cash per share is null when the cash balance's date is an empty string — never treated as established", () => {
+    const result = computeAcquiredCashBasis({ ...FULL, cashBalanceAsOfDate: "" });
+    expect(result.cashPerShare).toBeNull();
+    expect(result.cashPerShareCause).toMatch(/valuation date/);
+  });
+
+  it("quarterly burn is null, with a cause naming the missing date, when the burn's own date is not established — even though the raw burn figure is present", () => {
+    const result = computeAcquiredCashBasis({ ...FULL, quarterlyBurnAsOfDate: null });
+    expect(result.quarterlyBurn).toBeNull();
+    expect(result.quarterlyBurnCause).toMatch(/valuation date/);
+    // Cash per share is independently established — one input's missing
+    // date never takes an otherwise-computable sibling down with it.
+    expect(result.cashPerShare).not.toBeNull();
+  });
+
+  it("runway is null when the cash balance's date is not established, even though cash, burn and burn's date are all present — runway is a dated estimate off the cash balance too", () => {
+    const result = computeAcquiredCashBasis({ ...FULL, cashBalanceAsOfDate: null });
+    expect(result.runway).toBeNull();
+    expect(result.runwayCause).toMatch(/valuation date/);
+    // Burn itself is unaffected — it has its own, separately established date.
+    expect(result.quarterlyBurn).not.toBeNull();
+  });
 });
 
 describe("successWeightDateCause", () => {
@@ -503,5 +539,34 @@ describe("successWeightDateCause", () => {
   it("names V_success's own missing basis when its date is not established", () => {
     const cause = successWeightDateCause("2026-06-30", null);
     expect(cause).toMatch(/V_success/);
+  });
+
+  // H3 conformance correction. An empty string is not an established
+  // valuation date — without this guard, two absent dates compared as equal
+  // empty strings and this function wrongly read them as a matching date.
+  it("treats an empty string as not established, on either side — never a false match between two absent dates", () => {
+    expect(successWeightDateCause("", "")).not.toBeNull();
+    expect(successWeightDateCause("", "2026-09-04")).toMatch(/V_fail/);
+    expect(successWeightDateCause("2026-06-30", "")).toMatch(/V_success/);
+  });
+});
+
+// H3 conformance correction — CB-H3-ARCH-01's comparable-basis evidence.
+describe("successWeightBasisCause", () => {
+  it("returns null when V_success's basis names the identical treatment as V_fail's", () => {
+    expect(successWeightBasisCause(ACQUIRED_CASH_SHARE_BASIS, ACQUIRED_CASH_SHARE_BASIS)).toBeNull();
+  });
+
+  it("names V_success's missing basis when none has been authored", () => {
+    const cause = successWeightBasisCause(ACQUIRED_CASH_SHARE_BASIS, null);
+    expect(cause).toMatch(/V_success/);
+    expect(cause).toMatch(/not established/);
+  });
+
+  it("names both bases when they do not match — no alignment tolerance applied", () => {
+    const cause = successWeightBasisCause(ACQUIRED_CASH_SHARE_BASIS, "fully diluted, including unexercised options");
+    expect(cause).toContain(ACQUIRED_CASH_SHARE_BASIS);
+    expect(cause).toContain("fully diluted, including unexercised options");
+    expect(cause).toMatch(/not a comparable/);
   });
 });

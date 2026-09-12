@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { CLEAN_PROVENANCE } from "../provenance";
+import { ACQUIRED_CASH_SHARE_BASIS } from "../modules/preRevenue";
 import type { CompanyFixture, PreRevenueFixture } from "../assemble";
 import type { SourcedValue } from "../types";
 
@@ -61,9 +62,16 @@ const preRevenue: PreRevenueFixture = {
   // its own dates are aligned, not a general rule.
   cashPerShareAsOfDate: priceTimestamp,
   cashPerShareCause: null,
+  // No acquired FactRecord provenance behind this illustrative fixture's own
+  // hand-authored numbers — null, never CLEAN_PROVENANCE claimed on its
+  // behalf (assemble.ts supplies CLEAN_PROVENANCE itself once cashPerShare is
+  // established, exactly as every other fixture-authored figure in this
+  // validation bundle is treated).
+  cashPerShareProvenance: null,
   quarterlyBurn,
   quarterlyBurnAsOfDate: priceTimestamp,
   quarterlyBurnCause: null,
+  quarterlyBurnProvenance: null,
   runway: new Decimal(8), // quarters — illustrative; mock shows "XX quarters" placeholder
   runwayCause: null,
   unitEconomics: {
@@ -93,11 +101,28 @@ const preRevenue: PreRevenueFixture = {
   // vFail is not listed per definition — it is always the acquired-run
   // cash-per-share basis above (CalFinance Methodology v2), which assembly
   // applies uniformly to every row.
+  //
+  // vSuccessAsOfDate / vSuccessBasis: authored here, deliberately, on the
+  // SAME footing as cashPerShareAsOfDate above — this M5 validation
+  // fixture's own construction treats these four reference values as
+  // comparable to the acquired cash basis, exactly as its FactRecord already
+  // documents cash per share as "adjusted for burn to today". This is a
+  // fixture-authored claim, not evidence assembly manufactures on its own —
+  // assemble.ts no longer defaults every run's V_success to the run's price
+  // timestamp (H3 conformance correction); it only reads what a fixture
+  // actually supplies.
+  //
+  // Real acquired runs must NOT inherit this: Step 7 (the real analyst-
+  // authored per-definition date/basis) does not exist yet, and this
+  // illustrative bundle is reused as the acquired-run analyst input in its
+  // absence (analystInputs.ts). companyInputs.ts therefore explicitly nulls
+  // both fields back out when it builds a real run's fixture, rather than
+  // passing this illustrative claim through as if it were acquired evidence.
   successDefinitions: [
-    { definition: "Definition 1 — early deployment, base tariff", vSuccess: new Decimal(0), rSuccess: new Decimal("0.30"), rFail: new Decimal("0.10"), rateCapped: true },
-    { definition: "Definition 2 — early deployment, contracted tariff", vSuccess: new Decimal(1), rSuccess: new Decimal("0.284"), rFail: new Decimal("0.10"), rateCapped: false },
-    { definition: "Definition 3 — 8 GW, utility multiple, back-loaded ramp", vSuccess: new Decimal(31), rSuccess: new Decimal("0.30"), rFail: new Decimal("0.10"), rateCapped: true },
-    { definition: "Definition 4 — 8 GW, utility multiple, steady ramp", vSuccess: new Decimal(48), rSuccess: new Decimal("0.226"), rFail: new Decimal("0.10"), rateCapped: false },
+    { definition: "Definition 1 — early deployment, base tariff", vSuccess: new Decimal(0), vSuccessAsOfDate: priceTimestamp, vSuccessBasis: ACQUIRED_CASH_SHARE_BASIS, rSuccess: new Decimal("0.30"), rFail: new Decimal("0.10"), rateCapped: true },
+    { definition: "Definition 2 — early deployment, contracted tariff", vSuccess: new Decimal(1), vSuccessAsOfDate: priceTimestamp, vSuccessBasis: ACQUIRED_CASH_SHARE_BASIS, rSuccess: new Decimal("0.284"), rFail: new Decimal("0.10"), rateCapped: false },
+    { definition: "Definition 3 — 8 GW, utility multiple, back-loaded ramp", vSuccess: new Decimal(31), vSuccessAsOfDate: priceTimestamp, vSuccessBasis: ACQUIRED_CASH_SHARE_BASIS, rSuccess: new Decimal("0.30"), rFail: new Decimal("0.10"), rateCapped: true },
+    { definition: "Definition 4 — 8 GW, utility multiple, steady ramp", vSuccess: new Decimal(48), vSuccessAsOfDate: priceTimestamp, vSuccessBasis: ACQUIRED_CASH_SHARE_BASIS, rSuccess: new Decimal("0.226"), rFail: new Decimal("0.10"), rateCapped: false },
   ],
 };
 

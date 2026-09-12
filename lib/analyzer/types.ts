@@ -604,6 +604,11 @@ export interface SuccessDefinitionRow {
   vSuccessAsOfDate: string | null;
   vFail: Decimal;
   vFailAsOfDate: string | null;
+  // Weakest-input provenance behind vFail (the acquired cash-per-share
+  // basis) — same value as PreRevenueModule.cashPerShareProvenance, carried
+  // onto each row so a consumer reading rows in isolation still sees it.
+  // null on the same terms as that field.
+  vFailProvenance: ProvenanceTokens | null;
   rSuccess: Decimal;
   rFail: Decimal;
   // I12 — the 30% levered cost-of-equity cap.
@@ -633,11 +638,18 @@ export interface PreRevenueModule {
   // header).
   cashPerShare: Decimal;
   cashPerShareAsOfDate: string | null;
+  // Weakest-input provenance behind cashPerShare (§3.3 propagation) — the
+  // acquired cash balance and shares outstanding it was divided by. null
+  // exactly where cashPerShare is itself unavailable (nothing to qualify) or
+  // where the run has no acquired-fact provenance to report — never upgraded
+  // to CLEAN/CONFIRMED on its behalf.
+  cashPerShareProvenance: ProvenanceTokens | null;
   // A separately dated input (methodology v2); never adjusted using the
   // cash balance's date. NaN + NOT_COMPUTED_BINDING.quarterlyBurn where
   // absent.
   quarterlyBurn: Decimal;
   quarterlyBurnAsOfDate: string | null;
+  quarterlyBurnProvenance: ProvenanceTokens | null;
   // A clearly dated estimate off the latest available burn — it does not
   // imply the cash balance itself is current. NaN + NOT_COMPUTED_BINDING.runway
   // where either input is absent.

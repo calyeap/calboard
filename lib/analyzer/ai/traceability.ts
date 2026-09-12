@@ -46,6 +46,18 @@ export interface FigureSlot {
   formatted: string;
   suppressed: boolean;
   state?: SuppressingState;
+  /**
+   * Why a suppressed slot has no figure, where one is available. NEVER read
+   * by [C] and never substituted into rendered prose — only `formatted` is
+   * (interpretation.ts's prompt, traceability.ts's substitution). Folding
+   * this into `formatted` instead would feed free text (which can contain
+   * real digits, e.g. a valuation date) into systemVocabularyOf's exempt
+   * set, smuggling it past the figure-injection scan under the guise of a
+   * closed-vocabulary state name — exactly what that scan exists to catch.
+   * This field exists so the cause is still inspectable by a non-[C]
+   * consumer, never silently dropped.
+   */
+  cause?: string;
 }
 
 export type SlotCatalogue = Map<string, FigureSlot>;

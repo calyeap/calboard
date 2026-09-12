@@ -28,6 +28,8 @@ import {
   computeImpliedProbability,
   computeUnitExitBreakEvenPrice,
   successWeightDateCause,
+  successWeightBasisCause,
+  ACQUIRED_CASH_SHARE_BASIS,
   type FundingStackYearParams,
   type UnitExitEconomicsInput,
 } from "./modules/preRevenue";
@@ -48,6 +50,7 @@ import type {
   OverrideRecord,
   Profile,
   ProfileClassificationInputs,
+  ProvenanceTokens,
   QualifyingFlag,
   ScenarioDriverSet,
   ScenarioSet,
@@ -196,9 +199,16 @@ export interface PreRevenueFixture {
   cashPerShare: Decimal | null;
   cashPerShareAsOfDate: string | null;
   cashPerShareCause: string | null;
+  // Weakest-input provenance behind cashPerShare (§3.3 propagation) — the
+  // acquired cash balance and shares outstanding it was divided by. null
+  // where cashPerShare itself is null (nothing to qualify) or where the
+  // fixture has no acquired-fact provenance to report (the illustrative
+  // validation bundle) — never upgraded to CLEAN/CONFIRMED on its behalf.
+  cashPerShareProvenance: ProvenanceTokens | null;
   quarterlyBurn: Decimal | null;
   quarterlyBurnAsOfDate: string | null;
   quarterlyBurnCause: string | null;
+  quarterlyBurnProvenance: ProvenanceTokens | null;
   runway: Decimal | null;
   runwayCause: string | null;
   unitEconomics: UnitExitEconomicsInput;
@@ -208,6 +218,20 @@ export interface PreRevenueFixture {
   successDefinitions: {
     definition: string;
     vSuccess: Decimal;
+    // Analyst-authored valuation date for THIS success definition's own
+    // V_success figure (Step 7, not yet built) — null where no such date has
+    // actually been recorded. Never defaulted to the run's price timestamp
+    // or any other "as of today" attribution (H3 conformance correction):
+    // a quote timestamp is not evidence that this specific dollar figure was
+    // revalued as of that moment, and a stale illustrative number must not
+    // be dressed up as freshly current.
+    vSuccessAsOfDate: string | null;
+    // Analyst-authored comparable-basis evidence (Step 7) — a description of
+    // the share count / dilution treatment this V_success figure assumes.
+    // null where not recorded. Must name the IDENTICAL treatment as
+    // ACQUIRED_CASH_SHARE_BASIS (preRevenue.ts) to be treated as comparable
+    // to V_fail — no alignment tolerance.
+    vSuccessBasis: string | null;
     rSuccess: Decimal;
     rFail: Decimal;
     rateCapped: boolean;
@@ -624,32 +648,40 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
             : { suppressed: true, state: "INCOMPLETE" as SuppressingState, cause: breakEven.cause };
 
           // V_fail is always the acquired-run cash-per-share basis — never a
-          // per-definition input (CalFinance Methodology v2). V_success is
-          // always a present value as of today (the basis rule's own words:
-          // "both a present value as of today") — the run's price timestamp,
-          // not a fixture-supplied date.
+          // per-definition input (CalFinance Methodology v2). V_success's
+          // valuation date and comparable-basis evidence are each authored
+          // per definition (Step 7, not yet built) and read as-is — assembly
+          // never substitutes the run's price timestamp or any other "as of
+          // today" attribution for a date nobody actually recorded (H3
+          // conformance correction): doing so let a later, unrelated price
+          // quote silently redate an unchanged success valuation.
           const vFail = p.cashPerShare ?? new Decimal(NaN);
           const vFailAsOfDate = p.cashPerShare !== null ? p.cashPerShareAsOfDate : null;
-          const vSuccessAsOfDate = fixture.price.timestamp;
-          const dateCause = successWeightDateCause(vFailAsOfDate, vSuccessAsOfDate);
 
           const successDefinitions: SuccessDefinitionRow[] = p.successDefinitions
-            .map((d) => ({
-              definition: d.definition,
-              vSuccess: d.vSuccess,
-              vSuccessAsOfDate,
-              vFail,
-              vFailAsOfDate,
-              rSuccess: d.rSuccess,
-              rFail: d.rFail,
-              rateCapped: d.rateCapped,
+            .map((d) => {
               // "may be computed only when V_fail and V_success are
               // expressed on the same valuation date and otherwise
-              // comparable basis" — checked once per row (each row's V_fail
-              // is the same basis, but the check stays per-row so a future
-              // per-definition V_success date cannot silently skip it).
-              state: dateCause !== null ? ({ kind: "NOT COMPUTED / SUPPRESSED", cause: dateCause } as const) : computeImpliedProbability(d.vSuccess, vFail, fixture.price.value),
-            }))
+              // comparable basis" — both checked per row, since a future
+              // per-definition V_success date/basis must not silently skip
+              // either. The basis is only checked once the date has already
+              // cleared — it is a second, independent reason to withhold,
+              // not a substitute finding.
+              const dateCause = successWeightDateCause(vFailAsOfDate, d.vSuccessAsOfDate);
+              const cause = dateCause ?? successWeightBasisCause(ACQUIRED_CASH_SHARE_BASIS, d.vSuccessBasis);
+              return {
+                definition: d.definition,
+                vSuccess: d.vSuccess,
+                vSuccessAsOfDate: d.vSuccessAsOfDate,
+                vFail,
+                vFailAsOfDate,
+                vFailProvenance: p.cashPerShare !== null ? (p.cashPerShareProvenance ?? CLEAN_PROVENANCE) : null,
+                rSuccess: d.rSuccess,
+                rFail: d.rFail,
+                rateCapped: d.rateCapped,
+                state: cause !== null ? ({ kind: "NOT COMPUTED / SUPPRESSED", cause } as const) : computeImpliedProbability(d.vSuccess, vFail, fixture.price.value),
+              };
+            })
             .sort((a, b) => a.vSuccess.minus(b.vSuccess).toNumber());
 
           const fundingStackByYear = {
@@ -660,8 +692,10 @@ export function assembleAnalysisResult(fixture: CompanyFixture): AnalysisResult 
           return {
             cashPerShare: vFail,
             cashPerShareAsOfDate: vFailAsOfDate,
+            cashPerShareProvenance: p.cashPerShare !== null ? (p.cashPerShareProvenance ?? CLEAN_PROVENANCE) : null,
             quarterlyBurn: p.quarterlyBurn ?? new Decimal(NaN),
             quarterlyBurnAsOfDate: p.quarterlyBurn !== null ? p.quarterlyBurnAsOfDate : null,
+            quarterlyBurnProvenance: p.quarterlyBurn !== null ? (p.quarterlyBurnProvenance ?? CLEAN_PROVENANCE) : null,
             runway: p.runway ?? new Decimal(NaN),
             unitEconomicsBreakeven,
             fundingStackByYear,

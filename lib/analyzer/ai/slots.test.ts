@@ -241,6 +241,22 @@ describe("buildSlotCatalogue", () => {
       });
     });
 
+    // H3 conformance correction. The cause is never dropped — it travels as
+    // its own field, never folded into `formatted` (which feeds [C]'s prompt
+    // directly and the figure-injection scan's exempt vocabulary — folding
+    // free text in there would smuggle real digits, like a valuation date,
+    // past that scan under cover of a "state name").
+    it("carries the suppression cause as its own field on the weight slot, never inside formatted", () => {
+      const catalogue = buildSlotCatalogue(missingBasisOklo);
+      missingBasisOklo.preRevenue!.successDefinitions.forEach((row, i) => {
+        if (row.state.kind !== "NOT COMPUTED / SUPPRESSED") return;
+        const key = `preRevenue.successDefinitions.${i}`;
+        const weightSlot = catalogue.get(`${key}.breakEvenSuccessWeight`);
+        expect(weightSlot?.cause).toBe(row.state.cause);
+        expect(weightSlot?.formatted).not.toContain(row.state.cause);
+      });
+    });
+
     it("the fair-value range itself is suppressed, never a NaN-valued cash floor reaching [C]", () => {
       const catalogue = buildSlotCatalogue(missingBasisOklo);
       expect(missingBasisOklo.fairValueRange.kind).toBe("suppressed");

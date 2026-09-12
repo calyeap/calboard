@@ -431,6 +431,92 @@ describe("assembleAnalysisResult — H3 acquired-run cash basis", () => {
     }
   });
 
+  // H3 conformance correction — the exact defect this outcome corrects.
+  // Assembly used to default every V_success date to the run's OWN price
+  // timestamp (assemble.ts:633 at the merged head), so a later, unrelated
+  // price quote silently redated an unchanged success valuation. A run's
+  // success weight must depend only on what the fixture actually authored.
+  it("a later price timestamp does not silently redate an unchanged success valuation — the weight is identical whichever quote the run carries", () => {
+    const asOfEarlierQuote = assembleAnalysisResult(OKLO_FIXTURE);
+    const asOfLaterQuote = assembleAnalysisResult({
+      ...OKLO_FIXTURE,
+      price: { value: OKLO_FIXTURE.price.value, timestamp: "2027-01-01T00:00:00-04:00" },
+    });
+    expect(asOfLaterQuote.preRevenue!.successDefinitions).toEqual(asOfEarlierQuote.preRevenue!.successDefinitions);
+  });
+
+  // When no per-definition date has been authored at all, the weight is
+  // unavailable with cause — never computed against a manufactured date.
+  it("suppresses the success weight, naming V_success's own missing date, when no per-definition valuation date has been authored", () => {
+    const fixture = {
+      ...OKLO_FIXTURE,
+      preRevenue: {
+        ...basePreRevenue,
+        successDefinitions: basePreRevenue.successDefinitions.map((d) => ({ ...d, vSuccessAsOfDate: null })),
+      },
+    };
+    const r = assembleAnalysisResult(fixture);
+    for (const row of r.preRevenue!.successDefinitions) {
+      expect(row.state.kind).toBe("NOT COMPUTED / SUPPRESSED");
+      if (row.state.kind === "NOT COMPUTED / SUPPRESSED") {
+        expect(row.state.cause).toMatch(/V_success/);
+        expect(row.state.cause).toMatch(/not established/);
+      }
+      expect(row.vSuccessAsOfDate).toBeNull();
+    }
+  });
+
+  // CB-H3-ARCH-01's comparable-basis evidence: a matching date alone does not
+  // establish a comparable share/dilution basis, so a mismatch there must
+  // suppress the weight even though the dates themselves line up.
+  it("suppresses the success weight on a share/dilution basis mismatch, even though V_fail and V_success share the same valuation date", () => {
+    const fixture = {
+      ...OKLO_FIXTURE,
+      preRevenue: {
+        ...basePreRevenue,
+        cashPerShare: new Decimal("6.25"),
+        cashPerShareAsOfDate: OKLO_FIXTURE.price.timestamp,
+        successDefinitions: basePreRevenue.successDefinitions.map((d) => ({
+          ...d,
+          vSuccessAsOfDate: OKLO_FIXTURE.price.timestamp,
+          vSuccessBasis: "fully diluted, including unexercised options",
+        })),
+      },
+    };
+    const r = assembleAnalysisResult(fixture);
+    for (const row of r.preRevenue!.successDefinitions) {
+      expect(row.state.kind).toBe("NOT COMPUTED / SUPPRESSED");
+      if (row.state.kind === "NOT COMPUTED / SUPPRESSED") {
+        expect(row.state.cause).toMatch(/not a comparable/);
+      }
+    }
+  });
+
+  // Missing basis evidence entirely (no date problem at all) must also
+  // suppress — a date match is necessary but never sufficient.
+  it("suppresses the success weight when no comparable-basis evidence has been authored, even with matching dates", () => {
+    const fixture = {
+      ...OKLO_FIXTURE,
+      preRevenue: {
+        ...basePreRevenue,
+        cashPerShare: new Decimal("6.25"),
+        cashPerShareAsOfDate: OKLO_FIXTURE.price.timestamp,
+        successDefinitions: basePreRevenue.successDefinitions.map((d) => ({
+          ...d,
+          vSuccessAsOfDate: OKLO_FIXTURE.price.timestamp,
+          vSuccessBasis: null,
+        })),
+      },
+    };
+    const r = assembleAnalysisResult(fixture);
+    for (const row of r.preRevenue!.successDefinitions) {
+      expect(row.state.kind).toBe("NOT COMPUTED / SUPPRESSED");
+      if (row.state.kind === "NOT COMPUTED / SUPPRESSED") {
+        expect(row.state.cause).toMatch(/basis is not established/);
+      }
+    }
+  });
+
   it("a cash/burn date mismatch does not rewrite the cash balance to today — runway still computes from the raw acquired figures, and each figure discloses its own real date", () => {
     const fixture = {
       ...OKLO_FIXTURE,

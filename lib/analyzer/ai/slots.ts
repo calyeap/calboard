@@ -73,9 +73,16 @@ type Formatter = (v: Decimal) => string;
 class CatalogueBuilder {
   private readonly slots: SlotCatalogue = new Map();
 
-  add(id: string, label: string, formatted: string, suppressed = false, state?: FigureSlot["state"]): void {
+  add(
+    id: string,
+    label: string,
+    formatted: string,
+    suppressed = false,
+    state?: FigureSlot["state"],
+    cause?: string
+  ): void {
     if (formatted.trim() === "") return;
-    this.slots.set(id, { id, label, formatted, suppressed, ...(state ? { state } : {}) });
+    this.slots.set(id, { id, label, formatted, suppressed, ...(state ? { state } : {}), ...(cause ? { cause } : {}) });
   }
 
   value(id: string, label: string, v: Decimal | null, format: Formatter): void {
@@ -438,12 +445,26 @@ export function buildSlotCatalogue(result: AnalysisResult): SlotCatalogue {
         // not a §9.3 SuppressingState (FigureSlot.state's type) — the slot
         // still carries it as its formatted value (never a number), just
         // without the optional state tag the other two kinds get.
+        //
+        // The cause is NEVER folded into `formatted` here: every suppressed
+        // slot's formatted value feeds systemVocabularyOf (traceability.ts),
+        // which exempts exactly that text from the figure-injection scan and
+        // hands it to [C] directly in the prompt (interpretation.ts) — a
+        // free-text cause (which can and does contain digits, e.g. a
+        // valuation date) folded in there would smuggle real figures past
+        // the scan under the guise of a "state name" (slots.test.ts's own
+        // "exempts only the frozen state vocabulary" invariant exists to
+        // catch exactly this). The cause is still carried, never dropped —
+        // as its own `cause` field alongside `formatted`, readable by any
+        // consumer that isn't the closed [C]-facing vocabulary (H3
+        // conformance correction; no new AI call, verdict or transport).
         b.add(
           `${key}.breakEvenSuccessWeight`,
           `conditional price-implied break-even success weight for "${row.definition}"`,
           row.state.kind,
           true,
-          row.state.kind === "NOT COMPUTED / SUPPRESSED" ? undefined : row.state.kind
+          row.state.kind === "NOT COMPUTED / SUPPRESSED" ? undefined : row.state.kind,
+          row.state.kind === "NOT COMPUTED / SUPPRESSED" ? row.state.cause : undefined
         );
       }
     });
