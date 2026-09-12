@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
-import { render, cleanup, screen } from "@testing-library/react";
+import { render, cleanup, screen, within } from "@testing-library/react";
 import Decimal from "decimal.js";
 import { QuickRead } from "./QuickRead";
 import { assembleAnalysisResult } from "@/lib/analyzer/assemble";
@@ -257,5 +257,35 @@ describe("QuickRead — OKLO, acquired cash basis not established (H3)", () => {
     expect(/\bbuy\b/i.test(text)).toBe(false);
     expect(/\bsell\b/i.test(text)).toBe(false);
     expect(/target price/i.test(text)).toBe(false);
+  });
+});
+
+// H3 consumer-provenance recovery (CB-H3-CONSUMER-RECOVERY-01) — Quick
+// Read's own cash-floor display (ValuationStrip, E1) rendered
+// `preRevenue.cashPerShare` as a bare number with no marks at all, so a
+// SECONDARY + AI-EXTRACTED acquired cash basis was indistinguishable from a
+// clean one on the page most readers see first.
+describe("QuickRead — cash-floor figure inherits non-default provenance (H3 consumer-provenance recovery)", () => {
+  const nonDefaultCashResult = assembleAnalysisResult({
+    ...OKLO_FIXTURE,
+    preRevenue: {
+      ...OKLO_FIXTURE.preRevenue!,
+      cashPerShareProvenance: { sourceClass: "SECONDARY", extractionType: "AI-EXTRACTED", verificationState: "CONFIRMED" },
+    },
+  });
+
+  it("marks the cash-floor figure Secondary/AI-extracted rather than rendering it identically to a clean basis", () => {
+    const { container } = render(<QuickRead result={nonDefaultCashResult} />);
+    const cashFloorItem = screen.getByText("Failure — cash floor").closest("div") as HTMLElement;
+    expect(within(cashFloorItem).getByText("Secondary")).not.toBeNull();
+    expect(within(cashFloorItem).getByText("AI-extracted")).not.toBeNull();
+    expect(container.textContent).toMatch(/\$3\.10/);
+  });
+
+  it("shows no qualifier on the cash-floor item itself for OKLO's own clean cash basis — the omission rule, not an always-on stamp", () => {
+    render(<QuickRead result={assembleAnalysisResult(OKLO_FIXTURE)} />);
+    const cashFloorItem = screen.getByText("Failure — cash floor").closest("div") as HTMLElement;
+    expect(within(cashFloorItem).queryByText("Secondary")).toBeNull();
+    expect(within(cashFloorItem).queryByText("AI-extracted")).toBeNull();
   });
 });

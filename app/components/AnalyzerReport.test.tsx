@@ -624,3 +624,39 @@ describe("AnalyzerReport — closing recap 'Investment case — at a glance' is 
     expect(section.querySelector(".striploc")).toBeNull();
   });
 });
+
+// H3 consumer-provenance recovery (CB-H3-CONSUMER-RECOVERY-01) — the
+// closing recap reuses ValuationStrip (E1), and E1 authorises reusing this
+// component's placement and figures, never an exemption from §3.3/§5.2's
+// never-hidden-provenance rule. Before this correction the strip rendered
+// `preRevenue.cashPerShare` as a bare number with no marks at all, so a
+// SECONDARY + AI-EXTRACTED cash basis and a clean one produced identical
+// text in the one place many readers stop: the report's own closing
+// synthesis.
+describe("AnalyzerReport — closing recap inherits non-default cash provenance (H3 consumer-provenance recovery)", () => {
+  const nonDefaultCashResult = assembleAnalysisResult({
+    ...OKLO_FIXTURE,
+    preRevenue: {
+      ...OKLO_FIXTURE.preRevenue!,
+      cashPerShareProvenance: { sourceClass: "SECONDARY", extractionType: "AI-EXTRACTED", verificationState: "CONFIRMED" },
+    },
+  });
+
+  it("marks the closing recap's cash floor Secondary/AI-extracted — the same figure Section D marks, not a clean-looking duplicate", () => {
+    const { container } = render(<AnalyzerReport result={nonDefaultCashResult} />);
+    const atGlance = container.querySelector("section#atglance") as HTMLElement;
+    expect(within(atGlance).getByText("Failure — cash floor")).not.toBeNull();
+    expect(within(atGlance).getByText("Secondary")).not.toBeNull();
+    expect(within(atGlance).getByText("AI-extracted")).not.toBeNull();
+    // The real figure is still shown — a qualifier is added, never a
+    // replacement for the number.
+    expect(atGlance.textContent).toMatch(/\$3\.10/);
+  });
+
+  it("does not mark the closing recap at all for OKLO's own clean cash basis — the omission rule, not an always-on stamp", () => {
+    const { container } = render(<AnalyzerReport result={assembleAnalysisResult(OKLO_FIXTURE)} />);
+    const atGlance = container.querySelector("section#atglance") as HTMLElement;
+    expect(within(atGlance).queryByText("Secondary")).toBeNull();
+    expect(within(atGlance).queryByText("AI-extracted")).toBeNull();
+  });
+});

@@ -198,6 +198,67 @@ describe("buildSlotCatalogue", () => {
     expect(catalogue.get("preRevenue.runway")?.suppressed).toBe(false);
   });
 
+  // H3 consumer-provenance recovery (CB-H3-CONSUMER-RECOVERY-01). Before this
+  // correction, CatalogueBuilder.bound() passed H3 cash/burn/runway into the
+  // catalogue as bare numbers: an independent control-flow probe of the
+  // merged CatalogueBuilder found IDENTICAL slot objects and prompt text for
+  // clean versus SECONDARY + AI-EXTRACTED cash. [C] reads `label = formatted`
+  // straight out of this catalogue (interpretation.ts's catalogueBlock), and
+  // the renderer substitutes `formatted` verbatim into the page (traceability
+  // .ts's renderText) — so an unqualified `formatted` here is exactly where
+  // §3.3/§5.2's never-hidden-provenance rule was silently losing the
+  // qualifier, at the one seam neither Section D's table nor the closing
+  // strip's own fix could reach.
+  describe("H3 — non-default provenance behind the acquired cash basis reaches the AI catalogue (CB-H3-CONSUMER-RECOVERY-01)", () => {
+    const nonDefaultOklo = assembleAnalysisResult({
+      ...OKLO_FIXTURE,
+      preRevenue: {
+        ...OKLO_FIXTURE.preRevenue!,
+        cashPerShareProvenance: { sourceClass: "SECONDARY", extractionType: "AI-EXTRACTED", verificationState: "SPOT-CHECK PENDING" },
+        quarterlyBurnProvenance: { sourceClass: "PRIMARY", extractionType: "DETERMINISTIC/STRUCTURED", verificationState: "SPOT-CHECK NOT REQUIRED" },
+      },
+    });
+
+    it("does not produce identical slot text for clean versus SECONDARY + AI-EXTRACTED cash — the exact counterexample this recovery fixes", () => {
+      const cleanCatalogue = buildSlotCatalogue(oklo);
+      const nonDefaultCatalogue = buildSlotCatalogue(nonDefaultOklo);
+      expect(nonDefaultCatalogue.get("preRevenue.cashPerShare")?.formatted).not.toBe(
+        cleanCatalogue.get("preRevenue.cashPerShare")?.formatted
+      );
+    });
+
+    it("carries the cash-per-share qualifier into the slot, without suppressing the real figure", () => {
+      const slot = buildSlotCatalogue(nonDefaultOklo).get("preRevenue.cashPerShare");
+      expect(slot?.suppressed).toBe(false);
+      expect(slot?.formatted).toContain("Secondary");
+      expect(slot?.formatted).toContain("AI-extracted");
+      expect(slot?.formatted).toMatch(/^\$\d/);
+    });
+
+    it("carries the burn qualifier independently of cash's, including a verification state that must never look like a human confirmation", () => {
+      const slot = buildSlotCatalogue(nonDefaultOklo).get("preRevenue.quarterlyBurn");
+      expect(slot?.suppressed).toBe(false);
+      expect(slot?.formatted).toContain("Spot-check not required");
+      expect(slot?.formatted).not.toContain("Secondary");
+    });
+
+    it("carries the same inherited cash qualifier onto every V_fail slot, mirroring row.vFailProvenance", () => {
+      const catalogue = buildSlotCatalogue(nonDefaultOklo);
+      nonDefaultOklo.preRevenue!.successDefinitions.forEach((row, i) => {
+        const slot = catalogue.get(`preRevenue.successDefinitions.${i}.vFail`);
+        expect(slot?.suppressed).toBe(false);
+        expect(slot?.formatted).toContain("Secondary");
+        expect(slot?.formatted).toContain("AI-extracted");
+        expect(row.vFailProvenance).toEqual(nonDefaultOklo.preRevenue!.cashPerShareProvenance);
+      });
+    });
+
+    it("adds no qualifier when provenance is clean — the omission rule, not an always-on stamp", () => {
+      const slot = buildSlotCatalogue(oklo).get("preRevenue.cashPerShare");
+      expect(slot?.formatted).not.toMatch(/Secondary|AI-extracted|Spot-check|Not confirmed/);
+    });
+  });
+
   describe("H3 — acquired cash basis not established", () => {
     const missingBasisOklo = assembleAnalysisResult({
       ...OKLO_FIXTURE,

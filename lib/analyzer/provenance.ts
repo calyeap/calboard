@@ -69,3 +69,30 @@ export const CLEAN_PROVENANCE: ProvenanceTokens = {
   // state, and those are different claims about a figure.
   verificationState: "CONFIRMED",
 };
+
+// §3.2's four values, exhaustively. UNVERIFIED is absent — since amendment M7
+// it names only the §5.1 propagation state, not a value of this field.
+const VERIFICATION_STATE_LABELS: Record<VerificationState, string> = {
+  CONFIRMED: "Confirmed",
+  "NOT CONFIRMED": "Not confirmed",
+  "SPOT-CHECK PENDING": "Spot-check pending",
+  "SPOT-CHECK NOT REQUIRED": "Spot-check not required",
+};
+
+// R4's own omission rule (AnalyzerReport.tsx's ProvenanceMarks, non-full
+// form): the words naming what makes a figure's provenance non-default, in
+// fixed order, empty for clean provenance. §3.3/§5.2 require these to travel
+// to every point of use a figure reaches — this is the one place that
+// vocabulary is derived, so an H3 consumer outside the report renderer (an
+// AI slot, a Quick Read/recap strip) states the same words rather than
+// re-deriving its own and risking a different, silently laxer, rule.
+export function provenanceQualifierParts(tokens: ProvenanceTokens): string[] {
+  const parts: string[] = [];
+  if (tokens.sourceClass === "SECONDARY") parts.push("Secondary");
+  if (tokens.extractionType === "AI-EXTRACTED") parts.push("AI-extracted");
+  // Anything that is not a human confirmation qualifies the figure —
+  // including SPOT-CHECK NOT REQUIRED, which §3.2 says must never be
+  // displayed as one.
+  if (tokens.verificationState !== "CONFIRMED") parts.push(VERIFICATION_STATE_LABELS[tokens.verificationState]);
+  return parts;
+}
