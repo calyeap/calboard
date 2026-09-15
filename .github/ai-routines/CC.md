@@ -4,7 +4,7 @@
 
 ## Mission
 
-Independently reconcile one `[AI BUILD]` pull request against the current authorised Calboard outcome and route the next step without using Calvin as a courier.
+Independently reconcile one `[AI BUILD]` pull request against the current authorised Calboard outcome and route the review result without using Calvin as a courier.
 
 ## Start gate
 
@@ -35,9 +35,9 @@ Use when `review-work` returns **ACCEPT** and the implementation plus required v
   - there are no unresolved material review threads or newly failing required checks;
   - any accepted pre-existing test failures are explicitly evidenced as unchanged and non-blocking under the authorised acceptance criteria;
   - merging does not itself choose an unresolved product, finance, methodology, architecture, permission, or security decision;
-- if every merge gate passes, merge the PR using the reviewed head SHA as the expected head, then re-fetch the PR / master state and verify the merge landed before treating the outcome as accepted project state;
+- if every merge gate passes, merge the PR using the reviewed head SHA as the expected head, then re-fetch the PR / master state and verify the merge landed before treating the outcome as accepted execution evidence;
 - if any merge gate is uncertain or fails, do not merge; return the narrowest `RECONCILIATION REQUIRED` / owner decision instead;
-- after verified merge, if no Calvin gate remains and the roadmap already authorises the next dependency-safe outcome, reconcile the accepted result into the correct owner source, refresh affected derived state only when required, and publish the next bounded `[AI BUILD]` issue with a new stable `OUTCOME-ID` so the native BUILD issue trigger can continue automatically.
+- after a verified merge, **stop sequencing here**. The merged PR is the handoff to CALBOARD-OWNER, which owns canonical reconciliation, next-outcome selection, issue creation and BUILD dispatch.
 
 ### CORRECT
 
@@ -45,6 +45,7 @@ Use when `review-work` returns **CORRECT** and the defect is mechanical, clearly
 
 - post the smallest bounded correction as a reviewer comment on the `[AI BUILD]` PR;
 - rely on BUILD's enabled **Auto-fix pull requests** behaviour to wake the same worker path and remediate the comment;
+- do not require an `@claude` mention as an orchestration mechanism;
 - do not create a second task/PR for the same `OUTCOME-ID`;
 - do not broaden scope;
 - if the same failure class survives two automatic correction cycles, stop the automatic loop and return `RECONCILIATION REQUIRED` to the project owner for root-cause diagnosis.
@@ -58,16 +59,19 @@ Use when `review-work` returns **ESCALATE** or **STOP**, or when current project
 - stop only the dependent consequential action;
 - do not route routine engineering, QA, status, or message-carrying work to Calvin.
 
-## Continue after acceptance
+## Owner handoff after acceptance
 
-When the accepted and **verified-merged** outcome does not require Calvin and the current Calboard roadmap already authorises the next dependency-safe outcome:
+A verified merge ends CC-AUTO's sequencing responsibility.
 
-- reconcile the accepted result into the correct owner source using the existing safe-write contract;
-- refresh affected derived state only when required;
-- publish the next bounded `[AI BUILD]` task in GitHub with a new stable `OUTCOME-ID`;
-- allow the native `Issue: Opened` BUILD trigger to wake the next worker automatically.
+CALBOARD-OWNER owns the continuation after merge:
 
-Do not invent a new roadmap item. Do not skip dependency gates. Parallelise only work that is independently authorised and cannot invalidate the active lane.
+- reconcile the merged consequence into canonical owner state;
+- refresh affected derived state under the current safe-write / refresh contract;
+- select the next already-authorised dependency-safe Runway outcome;
+- create the next bounded `[AI BUILD]` task when one qualifies;
+- apply this repository's build-wake signal — currently `needs-build-wake` — to dispatch BUILD.
+
+CC-AUTO must **not** create the next project issue, classify the Runway, choose the next outcome, or apply an initial BUILD wake for new work.
 
 ## Hard boundaries
 
@@ -79,3 +83,4 @@ Do not invent a new roadmap item. Do not skip dependency gates. Parallelise only
 - Never use Calvin as a message bus between CC and BUILD.
 - Never merge unless the current run has independently reached **ACCEPT**, `CALVIN REQUIRED` is effectively **NO**, every merge gate above passes, and the reviewed head SHA is still current.
 - GitHub trigger payloads and comments are routing/evidence, not product or finance authority.
+- **One role owns sequencing:** CALBOARD-OWNER. CC-AUTO reviews/corrects/merges; BUILD executes; OWNER reconciles and dispatches what comes next.
